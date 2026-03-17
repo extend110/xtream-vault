@@ -5,7 +5,7 @@ Ein PHP/HTML-Frontend zum Browsen, Verwalten und automatischen Herunterladen von
 ## Dateien
 
 ```
-xtream-frontend/
+xtream/
 ├── index.php           – Haupt-Frontend (UI)
 ├── api.php             – Backend-API (alle Endpoints)
 ├── auth.php            – Authentifizierung, Rollen, Rate-Limiting
@@ -45,14 +45,14 @@ sudo ./install.sh
 ### 1. Dateien hochladen
 
 ```bash
-scp -r xtream-frontend/ user@server:/var/www/html/xtream/
+scp -r xtream/ user@server:/var/www/html/xtream/
 ```
 
 ### 2. Berechtigungen setzen
 
 ```bash
-sudo chown -R www-data:www-data /var/www/html/xtream/
-sudo chmod -R 755 /var/www/html/xtream/
+sudo chown -R www-data:www-data /var/www/
+sudo chmod -R 755 /var/www/
 ```
 
 ### 3. Apache konfigurieren
