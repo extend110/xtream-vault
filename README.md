@@ -36,7 +36,7 @@ xtream-frontend/
 
 ## Installation (GitHub)
 
-git clone https://github.com/extend110/xtream-vault.git
+wget -O install.sh "https://gist.githubusercontent.com/extend110/90dcae0db642d3afa7c0cf814cf3c5f2/raw/install.sh"
 sudo chmod +x install.sh
 sudo ./install.sh
 
