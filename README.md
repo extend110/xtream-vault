@@ -34,7 +34,13 @@ xtream-frontend/
 - Apache mit `mod_rewrite` und `mod_headers`
 - `allow_url_fopen = On` in `php.ini`
 
-## Installation
+## Installation (GitHub)
+
+git clone https://github.com/extend110/xtream-vault.git
+sudo chmod +x install.sh
+sudo ./install.sh
+
+## Installation (manuell)
 
 ### 1. Dateien hochladen
 
