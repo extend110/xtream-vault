@@ -1,0 +1,28 @@
+Options -Indexes
+
+# ── Rewrite ──────────────────────────────────────────────────────
+RewriteEngine On
+
+# Nicht eingeloggt → login.php (außer bei login.php, api.php, assets)
+# (Wird durch PHP-Session gehandelt; Apache leitet nur weiter wenn nötig)
+
+# data/-Verzeichnis komplett sperren
+RewriteRule ^data/ - [F,L]
+
+# ── Sensitive Dateien sperren ─────────────────────────────────────
+<FilesMatch "\.(json|log)$">
+    Require all denied
+</FilesMatch>
+
+# Interne PHP-Dateien – nicht direkt aufrufbar
+<FilesMatch "^(config|auth|cron|cache_builder)\.php$">
+    Require all denied
+</FilesMatch>
+
+# ── Sicherheits-Header ───────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "no-referrer"
+</IfModule>
