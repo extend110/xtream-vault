@@ -16,7 +16,7 @@ define('RATELIMIT_FILE', DATA_DIR . '/rate_limits.json');
 // ── Rollen-Berechtigungen ─────────────────────────────────────────────────────
 const ROLE_PERMISSIONS = [
     'admin'  => ['browse', 'queue_view', 'queue_add', 'queue_remove', 'queue_remove_own', 'queue_clear', 'cron_log', 'settings', 'users'],
-    'editor' => ['browse', 'queue_view', 'queue_add', 'queue_remove_own'],
+    'editor' => ['browse', 'queue_view', 'queue_add'],
     'viewer' => ['browse'],
 ];
 

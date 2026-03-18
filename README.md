@@ -1,61 +1,60 @@
 # Xtream Vault
 
-Ein PHP/HTML-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs von einem Xtream-Codes-Server.
+Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs von einem Xtream-Codes-Server. Unterstützt lokale Speicherung sowie direktes Streaming in Cloud-Speicher via rclone (Google Drive, MEGA, OneDrive, etc.).
 
-## Dateien
+---
 
-```
-xtream/
-├── index.php           – Haupt-Frontend (UI)
-├── api.php             – Backend-API (alle Endpoints)
-├── auth.php            – Authentifizierung, Rollen, Rate-Limiting
-├── config.php          – Zentrale Konfiguration & Hilfsfunktionen
-├── login.php           – Login-Seite & Ersteinrichtungs-Wizard
-├── cache_builder.php   – Hintergrundprozess für Medien-Cache
-├── cron.php            – Download-Worker (läuft als Cronjob)
-├── .htaccess           – Sicherheitsregeln, sperrt sensitive Dateien
-└── data/               – Alle Datendateien (automatisch erstellt)
-    ├── config.json         – Server-Konfiguration
-    ├── users.json          – Benutzerdatenbank
-    ├── queue.json          – Download-Queue
-    ├── downloaded.json     – Liste heruntergeladener VODs
-    ├── activity.json       – Aktivitätslog
-    ├── rate_limits.json    – Rate-Limit-Tracking
-    ├── api_keys.json       – API-Keys für externe Zugriffe
-    ├── library_cache.json  – Film-Metadaten-Cache
-    ├── series_cache.json   – Serien-Metadaten-Cache
-    ├── progress.json       – Aktueller Download-Fortschritt
-    └── cron.log            – Download-Log
-```
+## Inhaltsverzeichnis
+
+1. [Voraussetzungen](#voraussetzungen)
+2. [Installation](#installation)
+3. [Ersteinrichtung](#ersteinrichtung)
+4. [Konfiguration](#konfiguration)
+5. [rclone — Cloud-Speicher](#rclone--cloud-speicher)
+6. [Ordnerstruktur der Downloads](#ordnerstruktur-der-downloads)
+7. [Rollen & Berechtigungen](#rollen--berechtigungen)
+8. [Download-Queue](#download-queue)
+9. [Favoriten](#favoriten)
+10. [Externer API-Endpoint](#externer-api-endpoint)
+11. [Sicherheit](#sicherheit)
+12. [Dateistruktur](#dateistruktur)
+
+---
 
 ## Voraussetzungen
 
-- PHP 8.0+ mit den Extensions: `curl`, `json`, `session`, `posix`
-- Apache mit `mod_rewrite` und `mod_headers`
-- `allow_url_fopen = On` in `php.ini`
+| Anforderung | Mindestversion / Hinweis |
+|---|---|
+| PHP | 8.0+ mit Extensions `curl`, `json`, `session`, `posix` |
+| Webserver | Apache mit `mod_rewrite` und `mod_headers` |
+| php.ini | `allow_url_fopen = On` |
+| Optional: rclone | Für Cloud-Speicher-Integration |
 
-## Installation (GitHub)
+---
 
-wget -O install.sh "https://gist.githubusercontent.com/extend110/90dcae0db642d3afa7c0cf814cf3c5f2/raw/install.sh"
-sudo chmod +x install.sh
-sudo ./install.sh
-
-## Installation (manuell)
+## Installation
 
 ### 1. Dateien hochladen
 
 ```bash
-scp -r xtream/ user@server:/var/www/html/xtream/
+scp -r xtream-frontend/ user@server:/var/www/html/xtream/
 ```
 
 ### 2. Berechtigungen setzen
 
 ```bash
-sudo chown -R www-data:www-data /var/www/
-sudo chmod -R 755 /var/www/
+sudo chown -R www-data:www-data /var/www/html/xtream/
+sudo chmod -R 755 /var/www/html/xtream/
+sudo chmod -R 775 /var/www/html/xtream/data/
 ```
 
 ### 3. Apache konfigurieren
+
+Neue Konfigurationsdatei anlegen:
+
+```bash
+sudo nano /etc/apache2/sites-available/xtream.conf
+```
 
 ```apache
 <VirtualHost *:80>
@@ -79,49 +78,194 @@ sudo a2enmod rewrite headers
 sudo systemctl reload apache2
 ```
 
-### 4. Cronjobs einrichten
+> **HTTPS empfohlen:** Mit Let's Encrypt und Certbot:
+> ```bash
+> sudo apt install certbot python3-certbot-apache
+> sudo certbot --apache -d deine-domain.de
+> ```
+
+### 4. Cronjobs
+
+Die Cronjobs werden beim ersten Login **automatisch eingerichtet** (sofern `www-data` Crontab-Rechte hat). Zur manuellen Überprüfung:
+
+```bash
+sudo -u www-data crontab -l
+```
+
+Erwartete Einträge:
+```
+*/30 * * * * flock -n /tmp/xtream_cron.lock /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
+0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
+```
+
+Falls die automatische Einrichtung fehlschlägt, manuell hinzufügen:
 
 ```bash
 sudo crontab -e -u www-data
 ```
 
+---
+
+## Ersteinrichtung
+
+1. Im Browser `https://deine-domain.de` aufrufen
+2. Den **Setup-Wizard** ausfüllen — Admin-Benutzername und Passwort vergeben
+3. Nach dem Login zu **Einstellungen** navigieren
+4. **Xtream-Server** konfigurieren: IP/Domain, Port, Benutzername, Passwort
+5. **Verbindung testen** — bei Erfolg speichern
+6. **Ziel-Pfad** angeben (lokaler Speicher) oder rclone aktivieren (Cloud)
+7. Über das Dashboard → **Cache aufbauen** die Mediathek zum ersten Mal laden
+
+---
+
+## Konfiguration
+
+Alle Einstellungen sind über **Einstellungen** im Frontend erreichbar.
+
+### Xtream-Server
+
+| Feld | Beschreibung |
+|---|---|
+| Server IP / Domain | Adresse des Xtream-Codes-Servers |
+| Port | Standard: 80 |
+| Benutzername | Xtream-Zugangsdaten |
+| Passwort | Xtream-Zugangsdaten |
+
+### Download-Ziel
+
+| Modus | Beschreibung |
+|---|---|
+| Lokal | Absoluter Pfad auf dem Server, z.B. `/mnt/nas/media` |
+| rclone | Direktes Streaming in Cloud-Speicher (kein lokaler Zwischenspeicher) |
+
+### Editor / Viewer — Sichtbarkeit
+
+Admins können Movies und Serien für editor/viewer-Accounts separat ausblenden.
+
+### API-Keys
+
+Externe Systeme können über API-Keys neue Benutzer anlegen. Verwaltung unter **Einstellungen → API-Keys**.
+
+---
+
+## rclone — Cloud-Speicher
+
+rclone ermöglicht das direkte Streamen von VODs in einen Cloud-Speicher ohne lokale Zwischenspeicherung.
+
+### rclone installieren
+
+```bash
+curl https://rclone.org/install.sh | sudo bash
+rclone version
 ```
-# Downloads alle 30 Minuten verarbeiten
-*/30 * * * * flock -n /tmp/xtream_cron.lock php /var/www/html/xtream/cron.php
 
-# Medien-Cache täglich um 4 Uhr neu aufbauen
-0 4 * * * php /var/www/html/xtream/cache_builder.php
+### Remote konfigurieren
+
+Die Konfiguration muss als `www-data`-User erfolgen:
+
+```bash
+sudo -u www-data rclone config
 ```
 
-### 5. Ersteinrichtung
+Beispiel für MEGA:
+```
+n) New remote
+name> mega
+Storage> mega
+user> deine@email.de
+password> [Passwort eingeben]
+```
 
-1. `https://deine-domain.de` aufrufen
-2. Admin-Account anlegen (Setup-Wizard)
-3. In den Einstellungen den Xtream-Server konfigurieren
-4. Verbindung testen
-5. Ersten Medien-Cache aufbauen (Einstellungen → Medien-Cache → "Cache jetzt aufbauen")
+Beispiel für Google Drive:
+```
+n) New remote
+name> gdrive
+Storage> drive
+# Browser-Authentifizierung folgen
+```
+
+Verbindung testen:
+```bash
+sudo -u www-data rclone lsd mega:
+```
+
+> **Konfigurationsdatei:** `/var/www/.config/rclone/rclone.conf`
+
+### rclone in Xtream Vault aktivieren
+
+1. **Einstellungen → rclone** öffnen
+2. **rclone aktivieren** anhaken
+3. **Remote-Name** eingeben (z.B. `mega`)
+4. **Ziel-Pfad** eingeben (z.B. `Media/VOD`)
+5. Mit **Verbindung testen** prüfen
+6. **Speichern**
+
+### Fortschrittsanzeige
+
+Im rclone-Modus zeigt die Progress-Card echten Fortschritt mit Bytes, Geschwindigkeit und ETA. Davor erscheint ein pulsierender Ladebalken.
+
+---
+
+## Ordnerstruktur der Downloads
+
+### Filme
+
+```
+Movies/
+  DE/
+    Action/
+      Der Pate.1972.mkv
+  US/
+    Action/
+      Inception.2010.mkv
+```
+
+### Serien
+
+```
+TV Shows/
+  DE/
+    Drama/
+      Dark/
+        Staffel 1/
+          Dark.S01E01.mkv
+        Staffel 2/
+          Dark.S02E01.mkv
+```
+
+**Länderkürzel** werden automatisch aus Titel oder Kategorie extrahiert (`DE`, `US`, `DACH`, `MULTI` etc.). Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
+
+**Dateinamen:**
+- Filme: `Titel.Jahr.ext`
+- Episoden: `Serienname.SxxExx.ext` — alles nach dem Episode-Code wird entfernt
 
 ---
 
 ## Rollen & Berechtigungen
 
-| Berechtigung              | admin | editor | viewer |
-|---------------------------|:-----:|:------:|:------:|
-| Browsen (Movies/Serien)   | ✅    | ✅     | ✅     |
-| Mediathek (Dashboard)     | –     | ✅     | ✅     |
-| Suche (Film + Serien)     | ✅    | ✅     | ✅     |
-| Queue ansehen             | ✅    | ✅     | ❌     |
-| Queue hinzufügen          | ✅    | ✅ (3/h)| ❌    |
-| Eigene Queue-Einträge entfernen | ✅ | ✅ | ❌  |
-| Queue leeren / verwalten  | ✅    | ❌     | ❌     |
-| Cron-Log                  | ✅    | ❌     | ❌     |
-| Einstellungen             | ✅    | ❌     | ❌     |
-| Benutzerverwaltung        | ✅    | ❌     | ❌     |
+| Berechtigung | admin | editor | viewer |
+|---|:---:|:---:|:---:|
+| Movies browsen | ✅ | ✅* | ✅* |
+| Serien browsen | ✅ | ✅* | ✅* |
+| Suche | ✅ | ✅ | ✅ |
+| Favoriten | ✅ | ✅ | ✅ |
+| Mediathek | ✅ | ✅ | ✅ |
+| Queue ansehen | ✅ | ✅ | ❌ |
+| Queue hinzufügen | ✅ | ✅ (3/h) | ❌ |
+| Queue verwalten / leeren | ✅ | ❌ | ❌ |
+| Absender in Queue sehen | ✅ | ❌ | ❌ |
+| Download abbrechen | ✅ | ❌ | ❌ |
+| Cron-Log | ✅ | ❌ | ❌ |
+| Einstellungen | ✅ | ❌ | ❌ |
+| Benutzerverwaltung | ✅ | ❌ | ❌ |
+
+*\* Kann vom Admin pro Inhaltstyp deaktiviert werden*
 
 Das stündliche Queue-Limit für `editor` ist in `auth.php` konfigurierbar:
+
 ```php
 const QUEUE_ADD_HOURLY_LIMIT = [
-    'admin'  => null,   // unbegrenzt
+    'admin'  => null,  // unbegrenzt
     'editor' => 3,
     'viewer' => 0,
 ];
@@ -129,14 +273,49 @@ const QUEUE_ADD_HOURLY_LIMIT = [
 
 ---
 
+## Download-Queue
+
+### Prioritäten
+
+🔴 Hoch (1) / 🟡 Normal (2) / 🔵 Niedrig (3) — Admins können die Priorität direkt in der Queue-Ansicht ändern.
+
+### Speicherplatz-Prüfung (lokaler Modus)
+
+Vor jedem Download wird per HEAD-Request die Dateigröße ermittelt und mit dem freien Speicherplatz verglichen. Benötigt: Dateigröße + 512 MB Puffer. Bei zu wenig Platz wird der Run abgebrochen.
+
+### Download abbrechen
+
+Laufende Downloads können über **✕ Abbrechen** in der Progress-Card gestoppt werden (nur Admins). Das Item wird zurück auf `pending` gesetzt.
+
+### Fehlerbehandlung
+
+Fehlgeschlagene Downloads werden als `error` markiert. Admins können sie über **↻ Retry** manuell neu einreihen.
+
+---
+
+## Favoriten
+
+Jeder Benutzer kann Filme und Serien mit dem ♥-Button als Favoriten markieren. Erreichbar unter **Favoriten** in der Navigation, filterbar nach Typ und durchsuchbar.
+
+Favoriten werden pro User in `data/users.json` gespeichert.
+
+---
+
 ## Externer API-Endpoint
 
-Benutzer können über einen API-Key von externen Systemen angelegt werden.
+Benutzer können von externen Systemen über einen API-Key angelegt werden.
 
-**API-Key erstellen:** Einstellungen → API-Keys → "+ API-Key erstellen"
+**API-Key erstellen:** Einstellungen → API-Keys → „+ API-Key erstellen"
 
-**Endpoint:**
+### Per GET
+
 ```
+GET /api.php?action=external_create_user&api_key=xv_...&username=max&password=sicher123&role=viewer
+```
+
+### Per POST mit JSON-Body
+
+```http
 POST /api.php?action=external_create_user
 X-API-Key: xv_...
 Content-Type: application/json
@@ -148,86 +327,50 @@ Content-Type: application/json
 }
 ```
 
-**Antwort:**
+**Mögliche Rollen:** `viewer`, `editor`, `admin`
+
+**Antwort (Erfolg):**
 ```json
 { "ok": true, "id": "abc123", "username": "max", "role": "viewer" }
 ```
 
 ---
 
-## Medien-Cache
-
-Der Cache speichert Titel, Cover und Kategorien aller VODs lokal in `data/library_cache.json` und `data/series_cache.json`.
-
-- Wird **automatisch** nach jedem Download-Run durch `cron.php` neu aufgebaut
-- Kann **manuell** über Einstellungen → Medien-Cache angestoßen werden
-- Für viewer/editor ist das Dashboard eine persönliche Mediathek mit Such- und Kategoriefilter
-
----
-
 ## Sicherheit
 
-- Alle sensitiven Dateien (`data/`, `config.php`, `auth.php`, `cron.php`, `cache_builder.php`) sind per `.htaccess` vor direktem HTTP-Zugriff geschützt
-- `stream_url` (enthält Xtream-Zugangsdaten) wird nur an Admins ausgeliefert; viewer/editor empfangen sie nie im JSON
-- Gesperrte Benutzer (`suspended: true`) können sich nicht einloggen
-- Jede Aktion wird im Aktivitätslog (`data/activity.json`) protokolliert
+- **`data/`-Verzeichnis** ist per `.htaccess` vollständig vor HTTP-Zugriff geschützt
+- **Stream-URLs** (enthalten Xtream-Zugangsdaten) werden nur serverseitig aufgebaut
+- **Gesperrte Benutzer** können sich nicht einloggen
+- **Aktivitätslog** protokolliert alle relevanten Aktionen
+- **Rate-Limiting** für editor-Accounts: max. 3 Queue-Adds/Stunde (konfigurierbar)
+- **API-Keys** können jederzeit widerrufen oder gelöscht werden
 
 ---
 
-## rclone — Cloud-Speicher Integration
+## Dateistruktur
 
-rclone ermöglicht das direkte Streamen von VODs in einen Cloud-Speicher (Google Drive, OneDrive, Dropbox, S3, etc.) ohne lokale Zwischenspeicherung.
-
-### Installation
-
-```bash
-# Automatische Installation (empfohlen)
-curl https://rclone.org/install.sh | sudo bash
-
-# Version prüfen
-rclone version
 ```
-
-### Remote konfigurieren
-
-```bash
-# Interaktiver Setup-Assistent
-sudo -u www-data rclone config
-
-# Beispiel für Google Drive:
-# Name: gdrive
-# Type: drive
-# → Browser-Authentifizierung folgen
-
-# Verbindung testen
-sudo -u www-data rclone lsd gdrive:
+xtream-frontend/
+├── index.php              — Haupt-Frontend (gesamte UI)
+├── api.php                — Backend-API (alle Endpoints)
+├── auth.php               — Authentifizierung, Rollen, Rate-Limiting
+├── config.php             — Zentrale Konfiguration & Hilfsfunktionen
+├── login.php              — Login & Ersteinrichtungs-Wizard
+├── cache_builder.php      — Hintergrundprozess für Medien-Cache
+├── cron.php               — Download-Worker (Cronjob)
+├── .htaccess              — Sicherheitsregeln
+└── data/                  — Datendateien (automatisch erstellt)
+    ├── config.json            — Server- & App-Konfiguration
+    ├── users.json             — Benutzerdatenbank inkl. Favoriten
+    ├── queue.json             — Download-Queue
+    ├── downloaded.json        — IDs heruntergeladener VODs
+    ├── downloaded_index.json  — Metadaten heruntergeladener VODs
+    ├── download_history.json  — Permanenter Download-Verlauf (max. 200)
+    ├── library_cache.json     — Film-Metadaten-Cache
+    ├── activity.json          — Aktivitätslog
+    ├── rate_limits.json       — Rate-Limit-Tracking
+    ├── api_keys.json          — API-Keys
+    ├── progress.json          — Aktueller Download-Fortschritt
+    ├── cancel.lock            — Abbruch-Signal (temporär)
+    └── cron.log               — Download-Log
 ```
-
-### In Xtream Vault aktivieren
-
-1. **Einstellungen → rclone** öffnen
-2. **rclone aktivieren** anhaken
-3. **Remote-Name** eingeben (z.B. `gdrive`)
-4. **Ziel-Pfad** eingeben (z.B. `Media/VOD`)
-5. **rclone testen** — prüft Binary und Remote-Verbindung
-6. **Speichern**
-
-### Ordnerstruktur im Cloud-Speicher
-
-Downloads landen unter:
-```
-{Remote}:{Pfad}/{Movies|TV Shows}/{Kategorie}/{Titel}.{ext}
-```
-
-Beispiel mit Remote `gdrive`, Pfad `Media`:
-```
-gdrive:Media/Movies/Action/Inception.mkv
-gdrive:Media/TV Shows/Drama/Breaking Bad S01E01.mkv
-```
-
-### Hinweise
-
-- Im rclone-Modus wird `DEST_PATH` ignoriert
-- Die Progress-Anzeige zeigt „☁️ Streaming…" statt Bytes/Geschwindigkeit (rclone liefert keinen Byte-Fortschritt beim Streamen)
-- rclone muss als `www-data`-User konfiguriert sein: `sudo -u www-data rclone config`
-- Konfigurationsdatei liegt unter `/var/www/.config/rclone/rclone.conf`

@@ -10,6 +10,11 @@ $can_queue_clear  = in_array('queue_clear',  ROLE_PERMISSIONS[$role]);
 $can_cron_log     = in_array('cron_log',     ROLE_PERMISSIONS[$role]);
 $can_settings     = in_array('settings',     ROLE_PERMISSIONS[$role]);
 $can_users        = in_array('users',        ROLE_PERMISSIONS[$role]);
+
+// Feature-Flags für editor/viewer (Admins sehen immer alles)
+$_cfg = load_config();
+$show_movies = $can_settings || (bool)($_cfg['editor_movies_enabled'] ?? true);
+$show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -35,9 +40,8 @@ $can_users        = in_array('users',        ROLE_PERMISSIONS[$role]);
   --muted:     #5a5a70;
   --sidebar-w: 280px;
 }
-html { font-size: 14px; }
+html { font-size: 15.5px; overflow-x: hidden; }
 body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
-html { overflow-x: hidden; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -138,6 +142,14 @@ body::before {
 .card:hover { transform: translateY(-3px); border-color: rgba(232,255,71,.3); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
 .card.downloaded { border-color: rgba(71,212,255,.2); }
 .card.queued     { border-color: rgba(255,159,67,.35); }
+.btn-fav {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(0,0,0,.6); border: none; border-radius: 50%;
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: .85rem; transition: transform .15s; color: var(--muted); z-index: 2;
+}
+.btn-fav:hover { transform: scale(1.15); background: rgba(0,0,0,.85); }
+.btn-fav.active { color: #ff4f6d; }
 .card-thumb { width: 100%; aspect-ratio: 2/3; background: var(--bg3); overflow: hidden; position: relative; }
 .card-thumb img { width: 100%; height: 100%; object-fit: cover; transition: opacity .3s; opacity: 0; }
 .card-thumb img.loaded { opacity: 1; }
@@ -333,8 +345,12 @@ body::before {
   /* Grids — force single column on anything with a large minmax */
   .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
   .settings-grid { grid-template-columns: 1fr !important; max-width: 100%; }
-  #dash-stat-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+  #dash-stat-grid   { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
   #dash-server-info { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  /* Queue+Disk+System row — stack all to 2 cols */
+  #dash-stat-grid ~ div[style*="repeat(4,1fr)"] { grid-template-columns: 1fr 1fr !important; }
+  .dkpi-n { font-size: 1.2rem; }
+  .dkpi { padding: 10px 12px; }
 
   /* Override inline style grids (dashboard, rclone fields, etc.) */
   [style*="minmax(260px"] { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
@@ -404,6 +420,7 @@ body::before {
   /* Dashboard dash-info */
   .dash-info-card { padding: 10px 12px; }
   .dic-val { font-size: .8rem; }
+  #dash-bottom-grid { grid-template-columns: 1fr !important; }
 }
 /* ── Settings ── */
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; max-width: 900px; }
@@ -531,6 +548,15 @@ body::before {
 }
 .queue-pill:hover { transform: scale(1.05); }
 .queue-pill.show { display: inline-block; }
+.qi-prio {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font-size: .65rem; padding: 3px 6px; cursor: pointer; outline: none;
+}
+.qi-prio-badge { font-size: .65rem; color: var(--muted); }
+.prio-1 { color: var(--red); }
+.prio-2 { color: var(--orange); }
+.prio-3 { color: var(--accent2); }
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: .4; }
@@ -564,6 +590,12 @@ body::before {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 7px;
   padding: 14px 16px;
 }
+.dkpi { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.dkpi-l { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px; }
+.dkpi-v { font-size: .875rem; color: var(--text); }
+.dkpi-n { font-size: 1.5rem; font-weight: 500; line-height: 1.1; margin-top: 2px; }
+.btn-secondary.danger { border-color: rgba(255,71,87,.3); color: var(--red); }
+.btn-secondary.danger:hover { background: rgba(255,71,87,.1); border-color: var(--red); }
 .dic-label {
   font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted);
   letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px;
@@ -620,11 +652,16 @@ body::before {
   <nav class="nav">
     <div class="nav-section-title">Navigate</div>
     <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">⬛</span> Dashboard</div>
+    <?php if ($show_movies): ?>
     <div class="nav-item" data-view="movies" onclick="toggleCats('movies')"><span class="nav-icon">🎬</span> Movies</div>
     <div class="category-list" id="cats-movies"></div>
+    <?php endif; ?>
+    <?php if ($show_series): ?>
     <div class="nav-item" data-view="series" onclick="toggleCats('series')"><span class="nav-icon">📺</span> Series</div>
     <div class="category-list" id="cats-series"></div>
+    <?php endif; ?>
     <div class="nav-section-title" style="margin-top:8px">Tools</div>
+    <div class="nav-item" onclick="showView('favourites')"><span class="nav-icon">♥</span> Favoriten <span class="nav-badge" id="fav-badge" style="display:none">0</span></div>
     <div class="nav-item" onclick="showView('search')"><span class="nav-icon">🔍</span> Suche</div>
     <?php if ($can_queue_view): ?>
     <div class="nav-item queue-nav" onclick="showView('queue')">
@@ -687,49 +724,58 @@ body::before {
     <!-- Dashboard -->
     <div id="view-dashboard">
       <?php if ($can_settings): ?>
-      <!-- Admin Dashboard: Serverinfos -->
+      <!-- Admin Dashboard -->
       <div id="unconfigured-banner" class="unconfigured-banner" style="display:none" onclick="showView('settings')">
         <span class="ub-icon">⚠️</span>
         <div><strong>Nicht konfiguriert</strong> — Bitte zuerst Server-Zugangsdaten in den Einstellungen hinterlegen.</div>
       </div>
-      <div id="dash-stat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-bottom:28px">
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:24px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px">Server</div>
-          <div style="font-size:.9rem" id="dash-server">–</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:24px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px">Account</div>
-          <div style="font-size:.9rem" id="dash-user">–</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:24px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px">Destination</div>
-          <div style="font-size:.9rem;word-break:break-all" id="dash-dest">–</div>
-        </div>
-        <div style="background:var(--bg2);border:1px solid rgba(255,159,67,.2);border-radius:8px;padding:24px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:8px">Cronjob (Beispiel)</div>
-          <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--orange);word-break:break-all">*/30 * * * * php <?= __DIR__ ?>/cron.php</div>
-        </div>
+
+      <!-- Zeile 1: Verbindung + Downloads gesamt -->
+      <div id="dash-stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px">
+        <div class="dkpi"><div class="dkpi-l">Server</div><div class="dkpi-v" id="dash-server">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Account</div><div class="dkpi-v" id="dash-user">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Destination</div><div class="dkpi-v" style="word-break:break-all;font-size:.8rem" id="dash-dest">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" style="color:var(--green)" id="dash-total-dl">–</div></div>
       </div>
 
-      <!-- Xtream Server Info -->
-      <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:12px">Xtream Server Info</div>
-      <div id="dash-server-info" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:28px">
-        <div class="dash-info-card"><div class="dic-label">Status</div><div class="dic-val" id="si-status">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Läuft ab</div><div class="dic-val" id="si-exp">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Verbindungen</div><div class="dic-val" id="si-cons">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Trial</div><div class="dic-val" id="si-trial">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Formate</div><div class="dic-val" id="si-formats">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Zeitzone</div><div class="dic-val" id="si-tz">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Serverzeit</div><div class="dic-val" id="si-time">–</div></div>
-        <div class="dash-info-card"><div class="dic-label">Protokoll</div><div class="dic-val" id="si-proto">–</div></div>
+      <!-- Zeile 2: Queue-Zahlen + Disk + System in einer Zeile -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr) 1.6fr 1.6fr;gap:10px;margin-bottom:10px">
+        <div class="dkpi"><div class="dkpi-l">Ausstehend</div><div class="dkpi-n" style="color:var(--accent)" id="dqs-pending">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Lädt</div><div class="dkpi-n" style="color:var(--orange)" id="dqs-downloading">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Fertig</div><div class="dkpi-n" style="color:var(--green)" id="dqs-done">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Fehler</div><div class="dkpi-n" style="color:var(--red)" id="dqs-error">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Speicher</div><div id="dash-disk"><div style="color:var(--muted);font-size:.75rem">Lade…</div></div></div>
+        <div class="dkpi"><div class="dkpi-l">System</div><div id="dash-system" style="font-size:.78rem;line-height:1.75"><div style="color:var(--muted)">Lade…</div></div></div>
       </div>
 
-      <!-- Live Progress Card (inline, same as Queue view) -->
-      <div class="progress-card" id="dash-progress-card" style="margin-bottom:20px">
+      <!-- Zeile 3: Xtream Server Info (6 kompakte Kacheln) -->
+      <div id="dash-server-info" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px">
+        <div class="dkpi"><div class="dkpi-l">Status</div><div class="dkpi-v" id="si-status">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Läuft ab</div><div class="dkpi-v" id="si-exp">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Verbindungen</div><div class="dkpi-n" style="font-size:1.2rem" id="si-cons">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Trial</div><div class="dkpi-v" id="si-trial">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Formate</div><div class="dkpi-v" id="si-formats">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Serverzeit</div><div class="dkpi-v" style="font-family:'DM Mono',monospace;font-size:.72rem" id="si-time">–</div></div>
+      </div>
+
+      <!-- Schnellzugriff -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn-secondary" onclick="dashRebuildCache()">↻ Cache aufbauen</button>
+        <button class="btn-secondary" onclick="dashClearDone()">Erledigte leeren</button>
+        <button class="btn-secondary danger" onclick="dashClearAll()">Queue leeren</button>
+        <button class="btn-secondary" onclick="showView('settings')">Einstellungen</button>
+        <button class="btn-secondary" onclick="showView('log')">Cron Log</button>
+      </div>
+
+      <!-- Live Progress Card (nur sichtbar wenn aktiver Download) -->
+      <div class="progress-card" id="dash-progress-card" style="margin-bottom:12px">
         <div class="pc-header">
           <div class="pc-dot"></div>
           <div class="pc-title" id="dash-pc-title">–</div>
           <div class="pc-pos"   id="dash-pc-pos"></div>
+          <?php if ($can_queue_remove): ?>
+          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()">✕ Abbrechen</button>
+          <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="dash-pc-bar"></div></div>
         <div class="pc-stats">
@@ -741,13 +787,23 @@ body::before {
         </div>
       </div>
 
-      <!-- Queue Preview -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase">Download Queue</div>
-        <button class="btn-sm" onclick="showView('queue')">Alle anzeigen →</button>
-      </div>
-      <div class="queue-list" id="dash-queue-list">
-        <div class="state-box" style="padding:32px"><div class="spinner"></div></div>
+      <!-- Letzte Downloads + Queue nebeneinander -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="dash-bottom-grid">
+        <div>
+          <div class="dkpi-l" style="margin-bottom:8px">Letzte Downloads</div>
+          <div id="dash-recent" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+            <div style="padding:24px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="dkpi-l">Queue</div>
+            <button class="btn-sm" onclick="showView('queue')">Alle →</button>
+          </div>
+          <div class="queue-list" id="dash-queue-list">
+            <div style="padding:32px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
+          </div>
+        </div>
       </div>
 
       <?php else: ?>
@@ -790,9 +846,8 @@ body::before {
     </div>
 
     <!-- Movies -->
-    <div id="view-movies" style="display:none"><div class="grid" id="movie-grid"></div></div>
-    <!-- Series -->
-    <div id="view-series" style="display:none"><div class="grid" id="series-grid"></div></div>
+    <?php if ($show_movies): ?><div id="view-movies" style="display:none"><div class="grid" id="movie-grid"></div></div><?php endif; ?>
+    <?php if ($show_series): ?><div id="view-series" style="display:none"><div class="grid" id="series-grid"></div></div><?php endif; ?>
     <!-- Search -->
     <div id="view-search" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
@@ -819,6 +874,9 @@ body::before {
           <div class="pc-dot"></div>
           <div class="pc-title" id="pc-title">–</div>
           <div class="pc-pos" id="pc-pos"></div>
+          <?php if ($can_queue_remove): ?>
+          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()">✕ Abbrechen</button>
+          <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="pc-bar"></div></div>
         <div class="pc-stats">
@@ -843,6 +901,29 @@ body::before {
 
     <?php if ($can_cron_log): ?>
     <!-- Log -->
+    <div id="view-favourites" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em">Favoriten</div>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px">
+            <span id="fav-count">–</span> gespeichert
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="filter-btn active" id="fav-tab-all"    onclick="switchFavTab('all',this)">Alle</button>
+          <button class="filter-btn"        id="fav-tab-movies" onclick="switchFavTab('movie',this)">🎬 Filme</button>
+          <button class="filter-btn"        id="fav-tab-series" onclick="switchFavTab('series',this)">📺 Serien</button>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
+        <div class="search-wrap" style="max-width:300px">
+          <input type="text" id="fav-search" placeholder="Favoriten durchsuchen…" oninput="renderFavourites()">
+          <span class="search-icon">🔍</span>
+        </div>
+      </div>
+      <div class="grid" id="fav-grid"></div>
+    </div>
+
     <div id="view-log" style="display:none">
       <div class="queue-toolbar">
         <div class="queue-toolbar-title">Cron Log</div>
@@ -886,6 +967,26 @@ body::before {
               <input type="text" id="cfg-dest-path" placeholder="/var/www/html/xtream/downloads">
               <span class="hint">Wird ignoriert wenn rclone aktiviert ist</span>
             </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>Editor / Viewer — Sichtbarkeit</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            Steuert welche Bereiche für editor- und viewer-Accounts sichtbar sind.<br>
+            Admins sehen immer alles.
+          </div>
+          <div class="field" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="cfg-editor-movies" style="width:16px;height:16px;accent-color:var(--accent)">
+              🎬 Movies anzeigen
+            </label>
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="cfg-editor-series" style="width:16px;height:16px;accent-color:var(--accent)">
+              📺 Series anzeigen
+            </label>
           </div>
         </div>
 
@@ -950,9 +1051,10 @@ body::before {
           <h3>API-Keys (Externe Benutzerverwaltung)</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             API-Keys ermöglichen externe Systeme, Benutzer anzulegen.<br>
-            Endpoint: <code style="color:var(--accent2);font-family:'DM Mono',monospace">POST api.php?action=external_create_user</code><br>
-            Header: <code style="color:var(--accent2);font-family:'DM Mono',monospace">X-API-Key: &lt;key&gt;</code><br>
-            Body: <code style="color:var(--accent2);font-family:'DM Mono',monospace">{"username":"…","password":"…","role":"viewer|editor|admin"}</code>
+            <strong>POST:</strong> <code style="color:var(--accent2);font-family:'DM Mono',monospace">POST api.php?action=external_create_user</code>
+            mit Header <code style="color:var(--accent2);font-family:'DM Mono',monospace">X-API-Key: &lt;key&gt;</code>
+            und Body <code style="color:var(--accent2);font-family:'DM Mono',monospace">{"username":"…","password":"…","role":"viewer|editor|admin"}</code><br>
+            <strong>GET:</strong> <code style="color:var(--accent2);font-family:'DM Mono',monospace">api.php?action=external_create_user&amp;api_key=xv_...&amp;username=…&amp;password=…&amp;role=viewer</code>
           </div>
           <div id="apikey-new-reveal" style="display:none" class="key-new-reveal">
             <strong>⚠️ Einmalig sichtbar — jetzt kopieren!</strong>
@@ -1112,6 +1214,7 @@ const API = 'api.php';
 const canQueueAdd       = <?= $can_queue_add        ? 'true' : 'false' ?>;
 const canQueueRemove    = <?= $can_queue_remove     ? 'true' : 'false' ?>;
 const canQueueRemoveOwn = <?= $can_queue_remove_own ? 'true' : 'false' ?>;
+const canSeeAddedBy     = <?= $can_settings         ? 'true' : 'false' ?>;
 const currentUsername   = <?= json_encode($user['username']) ?>;
 let currentView   = 'dashboard';
 let currentFilter = 'all';
@@ -1136,7 +1239,11 @@ let queueRefreshInterval;
   document.getElementById('stat-episodes').textContent = stats.episodes ?? '–';
   if (stats.queued != null) updateQueuePill(stats.queued);
   refreshDashboard();
-  await Promise.all([loadMovieCats(), loadSeriesCats()]);
+  const catLoaders = [];
+  <?php if ($show_movies): ?>catLoaders.push(loadMovieCats());<?php endif; ?>
+  <?php if ($show_series): ?>catLoaders.push(loadSeriesCats());<?php endif; ?>
+  catLoaders.push(loadFavourites());
+  await Promise.all(catLoaders);
   <?php if ($can_queue_view): ?>updateQueueBadge();<?php endif; ?>
   <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?>
   <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?>
@@ -1231,11 +1338,14 @@ function movieCard(m) {
     ? `<div class="select-check" onclick="event.stopPropagation();toggleSelectItem('${m.stream_id}',${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))"></div>`
     : '';
 
+  const isFav = favourites.has('movie:' + m.stream_id);
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+
   return `
   <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}">
     <div class="card-thumb">
       <div class="card-thumb-placeholder">🎬</div>
-      ${thumb}${badge}${selectBox}
+      ${thumb}${badge}${selectBox}${favBtn}
     </div>
     <div class="card-body">
       <div class="card-title">${m.clean_title}</div>
@@ -1260,9 +1370,11 @@ async function loadSeriesCat(catId, catName, el) {
 
 function seriesCard(s) {
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
+  const isFav = favourites.has('series:' + s.series_id);
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
   return `
   <div class="card" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">
-    <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}</div>
+    <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
     <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div></div>
     <div class="card-actions"><button class="btn-q add" onclick="event.stopPropagation();openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">📋 Episodes</button></div>
   </div>`;
@@ -1283,8 +1395,9 @@ async function openSeriesModal(id, title, cover) {
   let html = '';
   for (const season of seasons) {
     const eps = episodes[season];
+    const seasonNum = parseInt(season, 10) || 1;
     html += `<div class="season-header">Season ${season}
-      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},'${esc(title)}')">⏳ All queuen</span>
+      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}')">⏳ All queuen</span>
     </div>`;
     for (const ep of eps) {
       const epBtn = ep.downloaded
@@ -1294,7 +1407,7 @@ async function openSeriesModal(id, title, cover) {
           : ep.queued
             ? `<button class="ep-btn done" disabled>⏳</button>`
             : canQueueAdd
-              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},'${esc(title)}',this)">+ Q</button>`
+              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}',this)">+ Q</button>`
               : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
@@ -1309,7 +1422,7 @@ async function openSeriesModal(id, title, cover) {
 }
 function closeModal() { document.getElementById('series-modal').classList.remove('open'); }
 
-async function queueEpisode(ep, seriesTitle, btn) {
+async function queueEpisode(ep, season, seriesTitle, btn) {
   await queueItem({
     stream_id:           ep.id,
     type:                'episode',
@@ -1318,6 +1431,7 @@ async function queueEpisode(ep, seriesTitle, btn) {
     cover:               '',
     dest_subfolder:      'TV Shows',
     category:            seriesTitle,
+    season:              season,
   });
   if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; btn.onclick = () => removeEpFromQueue(ep.id, btn); }
 }
@@ -1326,7 +1440,7 @@ async function removeEpFromQueue(id, btn) {
   if (btn) { btn.textContent = '+ Q'; btn.className = 'ep-btn add'; btn.onclick = null; }
   updateQueueBadge(); loadStats();
 }
-async function queueAllSeason(eps, seriesTitle) {
+async function queueAllSeason(eps, season, seriesTitle) {
   let count = 0;
   for (const ep of eps) {
     if (!ep.downloaded && !ep.queued) {
@@ -1335,8 +1449,9 @@ async function queueAllSeason(eps, seriesTitle) {
         title: ep.clean_title || ep.title,
         container_extension: ep.container_extension ?? 'mp4',
         cover: '', dest_subfolder: 'TV Shows', category: seriesTitle,
+        season: season,
       });
-      if (!result) break; // Rate limit erreicht – Toast wurde bereits gezeigt
+      if (!result) break;
       count++;
       const btn = document.getElementById('epbtn-' + ep.id);
       if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; }
@@ -1492,13 +1607,30 @@ function queueItemHTML(item) {
   const thumb = item.cover ? `<img class="qi-thumb" src="${item.cover}" alt="">` : `<div class="qi-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">🎬</div>`;
   const isOwn = item.added_by === currentUsername;
   const canDel = item.status !== 'downloading' && (
-    canQueueRemove ||                              // Admin: alles
-    (canQueueRemoveOwn && isOwn && item.status === 'pending')  // Editor: nur eigene pending
+    canQueueRemove ||
+    (canQueueRemoveOwn && isOwn && item.status === 'pending')
   );
   const delBtn = canDel
     ? `<button class="qi-del" onclick="removeQueueItem('${item.stream_id}',this.closest('.queue-item'))">✕</button>`
     : '';
-  const addedBy = item.added_by ? `· ${item.added_by}` : '';
+  const addedBy = canSeeAddedBy && item.added_by ? `· ${item.added_by}` : '';
+
+  // Priorität
+  const prioLabels = {1:'🔴 Hoch', 2:'🟡 Normal', 3:'🔵 Niedrig'};
+  const prio = item.priority ?? 2;
+  const prioBtn = canQueueRemove && item.status === 'pending'
+    ? `<select class="qi-prio" onchange="setPriority('${item.stream_id}',this.value)" title="Priorität">
+        <option value="1"${prio===1?' selected':''}>🔴 Hoch</option>
+        <option value="2"${prio===2?' selected':''}>🟡 Normal</option>
+        <option value="3"${prio===3?' selected':''}>🔵 Niedrig</option>
+      </select>`
+    : `<span class="qi-prio-badge prio-${prio}">${prioLabels[prio] ?? ''}</span>`;
+
+  // Retry-Button für Fehler (Admin)
+  const retryBtn = item.status === 'error' && canQueueRemove
+    ? `<button class="btn-icon" style="font-size:.65rem;padding:3px 8px;margin-left:6px" onclick="retryQueueItem('${item.stream_id}')">↻ Retry</button>`
+    : '';
+
   return `
   <div class="queue-item status-${item.status}" id="qi-${item.stream_id}">
     ${thumb}
@@ -1507,9 +1639,92 @@ function queueItemHTML(item) {
       <div class="qi-meta">${item.type} · ${item.container_extension?.toUpperCase()} · ${item.added_at ?? ''} ${addedBy}</div>
       ${item.error ? `<div style="font-size:.7rem;color:var(--red);margin-top:3px">${item.error}</div>` : ''}
     </div>
-    <span class="qi-status ${item.status}">${statusLabel}</span>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+      <span class="qi-status ${item.status}">${statusLabel}${retryBtn}</span>
+      ${prioBtn}
+    </div>
     ${delBtn}
   </div>`;
+}
+
+// ── Favourites ────────────────────────────────────────────────
+let favourites = new Set();    // 'movie:123' | 'series:456'
+let favouriteData = [];        // full objects for rendering
+
+async function loadFavourites() {
+  const d = await api('get_favourites');
+  favouriteData = d.favourites ?? [];
+  favourites = new Set(favouriteData.map(f => f.type + ':' + f.stream_id));
+  updateFavBadge();
+}
+
+function updateFavBadge() {
+  const badge = document.getElementById('fav-badge');
+  if (!badge) return;
+  const n = favourites.size;
+  badge.textContent = n;
+  badge.style.display = n > 0 ? '' : 'none';
+}
+
+async function toggleFav(type, sid, title, cover, category, btn) {
+  const key = type + ':' + sid;
+  const d = await apiPost('favourite_toggle', {stream_id: sid, type, title, cover, category});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  if (d.action === 'added') {
+    favourites.add(key);
+    favouriteData.push({stream_id: sid, type, title, cover, category, added_at: new Date().toISOString().slice(0,10)});
+    btn.classList.add('active');
+    showToast('Zu Favoriten hinzugefügt', 'success');
+  } else {
+    favourites.delete(key);
+    favouriteData = favouriteData.filter(f => !(f.type === type && f.stream_id === sid));
+    btn.classList.remove('active');
+    showToast('Aus Favoriten entfernt', 'info');
+  }
+  updateFavBadge();
+  if (currentView === 'favourites') renderFavourites();
+}
+
+let favTab = 'all';
+function switchFavTab(tab, el) {
+  favTab = tab;
+  document.querySelectorAll('#view-favourites .filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderFavourites();
+}
+
+function renderFavourites() {
+  const query = (document.getElementById('fav-search')?.value ?? '').toLowerCase();
+  let items = favouriteData;
+  if (favTab !== 'all') items = items.filter(f => f.type === favTab);
+  if (query) items = items.filter(f => f.title.toLowerCase().includes(query));
+
+  const count = document.getElementById('fav-count');
+  if (count) count.textContent = items.length;
+
+  const grid = document.getElementById('fav-grid');
+  if (!grid) return;
+  if (!items.length) { grid.innerHTML = emptyHTML('Keine Favoriten gefunden'); return; }
+
+  grid.innerHTML = items.map(f => {
+    const icon = f.type === 'series' ? '📺' : '🎬';
+    const thumb = f.cover
+      ? `<img src="${esc(f.cover)}" alt="" class="loaded" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">`
+      : '';
+    return `
+    <div class="card">
+      <div class="card-thumb">
+        <div class="card-thumb-placeholder">${icon}</div>
+        ${thumb}
+        <button class="btn-fav active" onclick="event.stopPropagation();toggleFav('${f.type}','${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}',this)">♥</button>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${esc(f.title)}</div>
+        <div class="card-meta">${f.type === 'series' ? 'Serie' : 'Film'} · ${esc(f.category||'')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  lazyLoadImages();
 }
 
 async function removeQueueItem(sid, el) {
@@ -1522,6 +1737,28 @@ async function removeQueueItem(sid, el) {
   if (el) el.remove();
   updateQueueBadge(); loadStats();
   showToast('Entfernt', 'info');
+}
+
+async function setPriority(sid, priority) {
+  const r = await fetch(`${API}?action=set_priority`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({stream_id: sid, priority: parseInt(priority)})
+  });
+  const d = await r.json();
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('Priorität geändert', 'info');
+  refreshQueue();
+}
+
+async function retryQueueItem(sid) {
+  const r = await fetch(`${API}?action=queue_retry`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({stream_id: sid})
+  });
+  const d = await r.json();
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('Wird erneut versucht', 'success');
+  refreshQueue();
 }
 async function clearDone() {
   await api('queue_clear_done');
@@ -1610,7 +1847,7 @@ async function doSearch(q) {
 function showView(v) {
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
-  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile'].forEach(name => {
+  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites'].forEach(name => {
     const el = document.getElementById('view-' + name);
     if (el) el.style.display = name === v ? '' : 'none';
   });
@@ -1630,6 +1867,7 @@ function showView(v) {
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
+  if (v === 'favourites')   { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); }
   clearInterval(queueRefreshInterval);
   if (v === 'queue') {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
@@ -1658,6 +1896,9 @@ async function loadConfig() {
   document.getElementById('cfg-rclone-path').value      = c.rclone_path   ?? '';
   document.getElementById('cfg-rclone-bin').value       = c.rclone_bin    ?? 'rclone';
   toggleRcloneFields(rcloneEnabled);
+  // Editor feature flags
+  document.getElementById('cfg-editor-movies').checked = c.editor_movies_enabled ?? true;
+  document.getElementById('cfg-editor-series').checked = c.editor_series_enabled ?? true;
   setSettingsMsg('', '');
 }
 
@@ -1677,6 +1918,8 @@ function collectConfig() {
     rclone_remote:  document.getElementById('cfg-rclone-remote').value.trim(),
     rclone_path:    document.getElementById('cfg-rclone-path').value.trim(),
     rclone_bin:     document.getElementById('cfg-rclone-bin').value.trim() || 'rclone',
+    editor_movies_enabled: document.getElementById('cfg-editor-movies').checked,
+    editor_series_enabled: document.getElementById('cfg-editor-series').checked,
   };
 }
 
@@ -1787,15 +2030,109 @@ async function refreshDashboard() {
   const dd = document.getElementById('dash-dest');
   if (ds) ds.textContent = c.server_ip ? `${c.server_ip}:${c.port}` : '–';
   if (du) du.textContent = c.username  ?? '–';
-  if (dd) dd.textContent = c.dest_path ?? '–';
+  if (dd) dd.textContent = c.dest_path || (c.rclone_enabled ? c.rclone_remote + ':' + c.rclone_path : '–');
   if (ub) ub.style.display = c.configured ? 'none' : '';
-  if (c.configured) loadServerInfo();
+  if (c.configured) {
+    loadServerInfo();
+    loadDashboardData();
+  }
   <?php else: ?>
   if (ub) ub.style.display = 'none';
   <?php endif; ?>
 }
 
 <?php if ($can_settings): ?>
+async function loadDashboardData() {
+  const d = await api('dashboard_data');
+  if (!d || d.error) return;
+
+  // Queue-Statistiken
+  const qs = d.queue_stats ?? {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('dqs-pending',     qs.pending     ?? 0);
+  set('dqs-downloading', qs.downloading ?? 0);
+  set('dqs-done',        qs.done        ?? 0);
+  set('dqs-error',       qs.error       ?? 0);
+  set('dash-total-dl',   d.total_downloaded ?? 0);
+
+  // Speicherplatz
+  const disk = document.getElementById('dash-disk');
+  if (disk && d.disk) {
+    if (d.disk.rclone) {
+      disk.innerHTML = `<div style="font-size:.85rem">☁️ rclone</div><div style="color:var(--muted);font-size:.75rem;margin-top:4px">${esc(d.disk.remote)}</div>`;
+    } else {
+      const pct  = d.disk.percent ?? 0;
+      const col  = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
+      disk.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:.85rem">${fmtBytes(d.disk.used)} / ${fmtBytes(d.disk.total)}</span>
+          <span style="color:${col};font-size:.85rem">${pct}%</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:3px;height:6px;overflow:hidden">
+          <div style="background:${col};width:${pct}%;height:100%;border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div style="color:var(--muted);font-size:.7rem;margin-top:6px">${fmtBytes(d.disk.free)} frei</div>`;
+    }
+  } else if (disk) {
+    disk.innerHTML = `<div style="color:var(--muted);font-size:.8rem">–</div>`;
+  }
+
+  // System-Status
+  const sys = document.getElementById('dash-system');
+  if (sys && d.system) {
+    const s = d.system;
+    sys.innerHTML = `
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(s.php_version)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${fmtBytes(s.mem_used)}</span></div>
+      ${s.uptime ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Uptime</span><span>${esc(s.uptime)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Downloads</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
+  }
+
+  // Letzte Downloads
+  const recent = document.getElementById('dash-recent');
+  if (recent) {
+    if (!d.recent_downloads?.length) {
+      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">Noch keine Downloads</div>`;
+    } else {
+      recent.innerHTML = d.recent_downloads.map(item => {
+        const icon = item.type === 'episode' ? '📺' : '🎬';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
+          ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
+            <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ── Dashboard Schnellzugriff ──────────────────────────────────
+async function cancelDownload() {
+  if (!confirm('Laufenden Download wirklich abbrechen?')) return;
+  const d = await fetch(`${API}?action=queue_cancel`, {method:'POST'});
+  const r = await d.json();
+  if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
+  showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
+}
+
+async function dashRebuildCache() {
+  const d = await api('rebuild_library_cache');
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('Cache-Rebuild gestartet', 'success');
+}
+async function dashClearDone() {
+  await api('queue_clear_done');
+  showToast('Erledigte Einträge entfernt', 'info');
+  loadDashboardData();
+}
+async function dashClearAll() {
+  if (!confirm('Wirklich die gesamte Queue löschen?')) return;
+  const r = await fetch(`${API}?action=queue_clear_all`, {method:'POST'});
+  showToast('Queue geleert', 'info');
+  loadDashboardData();
+}
 // ── Xtream Server Info ────────────────────────────────────────
 async function loadServerInfo() {
   const d = await api('get_server_info');
@@ -1934,16 +2271,17 @@ function applyProgress(p, prefix, cardId) {
   const setA = (id, val) => { const el = document.getElementById(prefix + id); if (el) el.style.animation = val; };
   set('title', p.title ?? '–');
   set('pos',   p.queue_total > 1 ? `${p.queue_pos} / ${p.queue_total}` : '');
-  if (p.mode === 'rclone') {
-    // rclone-Modus: kein Byte-Fortschritt verfügbar → pulsierender Balken
+  if (p.mode === 'rclone' && (p.percent ?? 0) === 0 && (p.bytes_done ?? 0) === 0) {
+    // Noch keine Stats vom rclone — pulsierender Balken
     setW('bar', '100%');
     setA('bar', 'pulse 1.5s ease-in-out infinite');
-    set('pct',   '☁️ Streaming…');
+    set('pct',   '☁️ Verbinde…');
     set('done',  '–');
     set('total', '–');
     set('speed', '–');
     set('eta',   '–');
   } else {
+    // Lokaler Download oder rclone mit echten Stats
     setA('bar', '');
     setW('bar',  (p.percent ?? 0) + '%');
     set('pct',   (p.percent ?? 0) + '%');
@@ -2023,7 +2361,7 @@ function dashQueueItemHTML(item) {
   const thumb = item.cover
     ? `<img class="qi-thumb" src="${item.cover}" alt="" onerror="this.style.display='none'">`
     : `<div class="qi-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">🎬</div>`;
-  const addedBy = item.added_by ? `· von ${item.added_by}` : '';
+  const addedBy = canSeeAddedBy && item.added_by ? `· von ${item.added_by}` : '';
   return `
   <div class="queue-item status-${item.status}" id="dqi-${item.stream_id}">
     ${thumb}

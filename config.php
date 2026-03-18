@@ -50,6 +50,8 @@ define('PROGRESS_FILE',      DATA_DIR . '/progress.json');
 define('LIBRARY_CACHE_FILE',   DATA_DIR . '/library_cache.json');
 define('SERIES_CACHE_FILE',    DATA_DIR . '/series_cache.json');
 define('DOWNLOADED_INDEX_FILE', DATA_DIR . '/downloaded_index.json');
+define('DOWNLOAD_HISTORY_FILE', DATA_DIR . '/download_history.json');
+define('CANCEL_FILE',        DATA_DIR . '/cancel.lock');
 define('API_KEYS_FILE',      DATA_DIR . '/api_keys.json');
 define('ACTIVITY_LOG_FILE',  DATA_DIR . '/activity.json');
 
@@ -60,12 +62,68 @@ function is_configured(): bool {
 
 // ── Titel-Bereinigung ─────────────────────────────────────────────────────────
 
+// Bekannte Länderkürzel — nur diese werden ohne Trennzeichen erkannt
+define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', 'PT',
+                         'NL', 'BE', 'PL', 'RU', 'TR', 'AR', 'MX', 'BR', 'JP', 'CN',
+                         'KR', 'IN', 'AU', 'CA', 'SE', 'NO', 'DK', 'FI', 'CZ', 'HU',
+                         'RO', 'GR', 'IL', 'ZA', 'AE', 'SA', 'DACH', 'LATAM', 'MULTI']);
+
 /**
- * Entfernt führende Länderkürzel: 'IT ', 'DE ', 'FR |', 'EN: ', 'DACH- ' …
+ * Extrahiert das führende Länderkürzel aus einem Titel.
+ * Erkennt sowohl mit Trennzeichen ('DE | Film', 'US: Movie')
+ * als auch ohne ('DEFilm', 'USMovie') – aber nur bekannte Kürzel.
+ * Gibt das Kürzel zurück (z.B. 'DE') oder '' wenn keins gefunden.
+ */
+function extract_country_prefix(string $name): string {
+    // Mit Trennzeichen (Leerzeichen, |, :, -)  z.B. 'DE | Film', 'US: Movie'
+    if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) {
+        return $m[1];
+    }
+    // Ohne Trennzeichen: nur bekannte Kürzel, gefolgt von Großbuchstabe
+    // z.B. 'DEDer Pate' → 'DE', 'USTitanic' → 'US'
+    foreach (COUNTRY_CODES as $code) {
+        $len = strlen($code);
+        if (strncmp($name, $code, $len) === 0) {
+            $rest = substr($name, $len);
+            // Nächstes Zeichen muss Großbuchstabe oder Leerzeichen sein
+            if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) {
+                return $code;
+            }
+        }
+    }
+    return '';
+}
+
+/**
+ * Entfernt führende Länderkürzel (mit und ohne Trennzeichen).
  * Nur beim Download/Dateinamen verwenden.
  */
 function remove_country_prefix(string $name): string {
-    return trim(preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name));
+    // Mit Trennzeichen
+    $stripped = preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name);
+    if ($stripped !== $name) return trim($stripped);
+    // Ohne Trennzeichen: bekannte Kürzel
+    foreach (COUNTRY_CODES as $code) {
+        $len = strlen($code);
+        if (strncmp($name, $code, $len) === 0) {
+            $rest = substr($name, $len);
+            if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) {
+                return trim($rest);
+            }
+        }
+    }
+    return $name;
+}
+
+/**
+ * Extrahiert eine Jahreszahl aus dem Titel (erste vierstellige 19xx/20xx Zahl).
+ * Gibt das Jahr als String zurück (z.B. '2010') oder '' wenn keins gefunden.
+ */
+function extract_year(string $name): string {
+    if (preg_match('/\b((?:19|20)\d{2})\b/', $name, $m)) {
+        return $m[1];
+    }
+    return '';
 }
 
 /**
@@ -78,17 +136,24 @@ function remove_year_suffix(string $name): string {
 
 /**
  * Für die ANZEIGE im Browser: gibt den Originaltitel unverändert zurück.
- * Kein Entfernen von Länderkürzel oder Jahreszahl.
  */
 function display_title(string $name): string {
     return trim($name);
 }
 
 /**
- * Für DATEINAMEN beim Download: entfernt Länderkürzel und Jahreszahl.
+ * Für DATEINAMEN beim Download:
+ * - Entfernt Länderkürzel
+ * - Behält Jahreszahl (wird als .YYYY ans Ende gestellt, Plex/Jellyfin-kompatibel)
+ * Beispiel: 'DE Der Pate - 1972' → 'Der Pate.1972'
  */
 function clean_title(string $name): string {
-    $name = remove_country_prefix($name);
-    $name = remove_year_suffix($name);
-    return trim($name);
+    $year  = extract_year($name);
+    $name  = remove_country_prefix($name);
+    $name  = remove_year_suffix($name);
+    $name  = trim($name);
+    if ($year !== '') {
+        $name .= '.' . $year;
+    }
+    return $name;
 }

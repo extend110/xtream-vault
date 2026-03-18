@@ -225,16 +225,18 @@ switch ($action) {
         require_permission('settings');
         $c = load_config();
         echo json_encode([
-            'server_ip'      => $c['server_ip']      ?? '',
-            'port'           => $c['port']            ?? '80',
-            'username'       => $c['username']        ?? '',
-            'password'       => isset($c['password']) && $c['password'] !== '' ? '••••••••' : '',
-            'dest_path'      => $c['dest_path']       ?? '',
-            'configured'     => is_configured(),
-            'rclone_enabled' => (bool)($c['rclone_enabled'] ?? false),
-            'rclone_remote'  => $c['rclone_remote']  ?? '',
-            'rclone_path'    => $c['rclone_path']    ?? '',
-            'rclone_bin'     => $c['rclone_bin']     ?? 'rclone',
+            'server_ip'              => $c['server_ip']              ?? '',
+            'port'                   => $c['port']                   ?? '80',
+            'username'               => $c['username']               ?? '',
+            'password'               => isset($c['password']) && $c['password'] !== '' ? '••••••••' : '',
+            'dest_path'              => $c['dest_path']              ?? '',
+            'configured'             => is_configured(),
+            'rclone_enabled'         => (bool)($c['rclone_enabled']  ?? false),
+            'rclone_remote'          => $c['rclone_remote']          ?? '',
+            'rclone_path'            => $c['rclone_path']            ?? '',
+            'rclone_bin'             => $c['rclone_bin']             ?? 'rclone',
+            'editor_movies_enabled'  => (bool)($c['editor_movies_enabled']  ?? true),
+            'editor_series_enabled'  => (bool)($c['editor_series_enabled']  ?? true),
         ]);
         break;
 
@@ -244,14 +246,16 @@ switch ($action) {
         $current = load_config();
 
         $new = [
-            'server_ip'      => trim($d['server_ip']      ?? $current['server_ip']     ?? ''),
-            'port'           => trim($d['port']            ?? $current['port']          ?? '80'),
-            'username'       => trim($d['username']        ?? $current['username']      ?? ''),
-            'dest_path'      => trim($d['dest_path']       ?? $current['dest_path']     ?? ''),
-            'rclone_enabled' => isset($d['rclone_enabled']) ? (bool)$d['rclone_enabled'] : (bool)($current['rclone_enabled'] ?? false),
-            'rclone_remote'  => trim($d['rclone_remote']  ?? $current['rclone_remote']  ?? ''),
-            'rclone_path'    => trim($d['rclone_path']    ?? $current['rclone_path']    ?? ''),
-            'rclone_bin'     => trim($d['rclone_bin']     ?? $current['rclone_bin']     ?? 'rclone'),
+            'server_ip'             => trim($d['server_ip']      ?? $current['server_ip']     ?? ''),
+            'port'                  => trim($d['port']            ?? $current['port']          ?? '80'),
+            'username'              => trim($d['username']        ?? $current['username']      ?? ''),
+            'dest_path'             => trim($d['dest_path']       ?? $current['dest_path']     ?? ''),
+            'rclone_enabled'        => isset($d['rclone_enabled'])       ? (bool)$d['rclone_enabled']       : (bool)($current['rclone_enabled']       ?? false),
+            'rclone_remote'         => trim($d['rclone_remote']  ?? $current['rclone_remote']  ?? ''),
+            'rclone_path'           => trim($d['rclone_path']    ?? $current['rclone_path']    ?? ''),
+            'rclone_bin'            => trim($d['rclone_bin']     ?? $current['rclone_bin']     ?? 'rclone'),
+            'editor_movies_enabled' => isset($d['editor_movies_enabled']) ? (bool)$d['editor_movies_enabled'] : (bool)($current['editor_movies_enabled'] ?? true),
+            'editor_series_enabled' => isset($d['editor_series_enabled']) ? (bool)$d['editor_series_enabled'] : (bool)($current['editor_series_enabled'] ?? true),
         ];
         if (!empty($d['password']) && $d['password'] !== '••••••••') {
             $new['password'] = $d['password'];
@@ -417,14 +421,13 @@ switch ($action) {
         $items = json_decode(file_get_contents('php://input'), true) ?? [];
         if (!is_array($items) || empty($items)) { echo json_encode(['error' => 'No items']); break; }
 
-        $queue   = load_queue();
-        $qids    = array_map('strval', array_column($queue, 'stream_id'));
-        $added   = 0;
-        $skipped = 0;
-        $limited = false;
+        $queue      = load_queue();
+        $qids       = array_map('strval', array_column($queue, 'stream_id'));
+        $added      = 0;
+        $skipped    = 0;
+        $limited    = false;
 
         foreach ($items as $d) {
-            // Rate-Limit vor jedem Item prüfen
             $limitCheck = check_queue_rate_limit($current_user);
             if (!$limitCheck['allowed']) { $limited = true; break; }
 
@@ -439,6 +442,8 @@ switch ($action) {
                 'title'               => sanitize($d['title'] ?? 'Unknown'),
                 'container_extension' => $ext,
                 'category'            => $d['category'] ?? '',
+                'season'              => isset($d['season']) ? (int)$d['season'] : null,
+                'priority'            => 2,
                 'stream_url'          => stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext),
                 'cover'               => $d['cover'] ?? '',
                 'dest_subfolder'      => $d['dest_subfolder'] ?? ($type === 'episode' ? 'TV Shows' : 'Movies'),
@@ -521,6 +526,8 @@ switch ($action) {
             'title'               => sanitize($d['title'] ?? 'Unknown'),
             'container_extension' => $ext,
             'category'            => $d['category'] ?? '',
+            'season'              => isset($d['season']) ? (int)$d['season'] : null,
+            'priority'            => 2, // Standard: normal
             'stream_url'          => $server_stream_url,
             'cover'               => $d['cover'] ?? '',
             'dest_subfolder'      => $d['dest_subfolder'] ?? '',
@@ -541,10 +548,107 @@ switch ($action) {
         ]);
         break;
 
+    case 'queue_cancel':
+        require_permission('queue_remove');
+        // Schreibt cancel.lock — cron.php prüft diese Datei und bricht ab
+        file_put_contents(CANCEL_FILE, date('Y-m-d H:i:s'));
+        log_activity($current_user['id'], $current_user['username'], 'queue_cancel', []);
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'queue_limit_status':
-        // Gibt den aktuellen Rate-Limit-Status zurück (für alle Rollen nutzbar)
         echo json_encode(get_queue_limit_status($current_user));
         break;
+
+    case 'favourite_toggle':
+        // Favorit hinzufügen oder entfernen
+        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid  = (string)($d['stream_id'] ?? '');
+        $type = $d['type'] ?? 'movie'; // 'movie' oder 'series'
+        if ($sid === '') { echo json_encode(['error' => 'Missing stream_id']); break; }
+
+        $users = load_users();
+        $uid   = $current_user['id'];
+        foreach ($users as &$u) {
+            if ($u['id'] !== $uid) continue;
+            $favs = $u['favourites'] ?? [];
+            $key  = $type . ':' . $sid;
+            if (isset($favs[$key])) {
+                unset($favs[$key]);
+                $action = 'removed';
+            } else {
+                $favs[$key] = [
+                    'stream_id' => $sid,
+                    'type'      => $type,
+                    'title'     => sanitize($d['title']  ?? ''),
+                    'cover'     => $d['cover']  ?? '',
+                    'category'  => $d['category'] ?? '',
+                    'added_at'  => date('Y-m-d H:i:s'),
+                ];
+                $action = 'added';
+            }
+            $u['favourites'] = $favs;
+            break;
+        }
+        unset($u);
+        save_users($users);
+        echo json_encode(['ok' => true, 'action' => $action]);
+        break;
+
+    case 'get_favourites':
+        $users = load_users();
+        $uid   = $current_user['id'];
+        $favs  = [];
+        foreach ($users as $u) {
+            if ($u['id'] === $uid) { $favs = $u['favourites'] ?? []; break; }
+        }
+        echo json_encode(['favourites' => array_values($favs)]);
+        break;
+
+
+
+    case 'set_priority':
+        // Admin-only: Priorität eines Queue-Eintrags ändern
+        require_permission('queue_remove');
+        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid = (string)($d['stream_id'] ?? '');
+        $prio = (int)($d['priority'] ?? 2);
+        if (!in_array($prio, [1, 2, 3])) { echo json_encode(['error' => 'Ungültige Priorität (1/2/3)']); break; }
+        $queue = load_queue();
+        $found = false;
+        foreach ($queue as &$qi) {
+            if ((string)$qi['stream_id'] === $sid) {
+                $qi['priority'] = $prio;
+                $found = true;
+                break;
+            }
+        }
+        unset($qi);
+        if (!$found) { echo json_encode(['error' => 'Item nicht gefunden']); break; }
+        save_queue($queue);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'queue_retry':
+        // Admin-only: fehlgeschlagenes Item sofort neu einreihen
+        require_permission('queue_remove');
+        $sid   = (string)(json_decode(file_get_contents('php://input'), true)['stream_id'] ?? '');
+        $queue = load_queue();
+        $found = false;
+        foreach ($queue as &$qi) {
+            if ((string)$qi['stream_id'] === $sid && $qi['status'] === 'error') {
+                $qi['status']        = 'pending';
+                $qi['error']         = null;
+                $found = true;
+                break;
+            }
+        }
+        unset($qi);
+        if (!$found) { echo json_encode(['error' => 'Item nicht gefunden oder nicht im Fehlerstatus']); break; }
+        save_queue($queue);
+        echo json_encode(['ok' => true]);
+        break;
+
 
     case 'queue_remove':
         // Admins: dürfen alles entfernen (queue_remove)
@@ -780,7 +884,6 @@ switch ($action) {
 
     case 'stats':
         $db    = load_db();
-        // Queue-Zähler nur für Benutzer mit queue_view
         $queued = can('queue_view')
             ? count(array_filter(load_queue(), fn($q) => $q['status'] === 'pending'))
             : null;
@@ -789,7 +892,6 @@ switch ($action) {
             'episodes'    => count($db['episodes']),
             'queued'      => $queued,
             'configured'  => is_configured(),
-            // Berechtigungen mit zurückgeben, damit JS die UI steuern kann
             'can' => [
                 'queue_view'   => can('queue_view'),
                 'queue_add'    => can('queue_add'),
@@ -802,15 +904,93 @@ switch ($action) {
         ]);
         break;
 
+    case 'dashboard_data':
+        require_permission('settings');
+        $queue = load_queue();
+        $db    = load_db();
+
+        // ── Queue-Statistiken ─────────────────────────────────────────────────
+        $qStats = ['pending' => 0, 'downloading' => 0, 'done' => 0, 'error' => 0];
+        foreach ($queue as $qi) {
+            $s = $qi['status'] ?? 'pending';
+            if (isset($qStats[$s])) $qStats[$s]++;
+        }
+
+        // ── Letzte 10 Downloads ───────────────────────────────────────────────
+        $history = [];
+        if (file_exists(DOWNLOAD_HISTORY_FILE)) {
+            $raw = @file_get_contents(DOWNLOAD_HISTORY_FILE);
+            if ($raw !== false) $history = json_decode($raw, true) ?? [];
+        }
+        $recentDownloads = array_slice($history, 0, 10);
+
+        // ── Speicherplatz ─────────────────────────────────────────────────────
+        $diskInfo = null;
+        if (!RCLONE_ENABLED && DEST_PATH !== '') {
+            $path = is_dir(DEST_PATH) ? DEST_PATH : dirname(DEST_PATH);
+            if (is_dir($path)) {
+                $free  = disk_free_space($path);
+                $total = disk_total_space($path);
+                if ($free !== false && $total !== false) {
+                    $diskInfo = [
+                        'free'       => $free,
+                        'total'      => $total,
+                        'used'       => $total - $free,
+                        'percent'    => round(($total - $free) / $total * 100, 1),
+                        'path'       => DEST_PATH,
+                    ];
+                }
+            }
+        } elseif (RCLONE_ENABLED) {
+            $diskInfo = ['rclone' => true, 'remote' => RCLONE_REMOTE . ':' . RCLONE_PATH];
+        }
+
+        // ── System-Status ─────────────────────────────────────────────────────
+        $memUsed  = memory_get_usage(true);
+        $memPeak  = memory_get_peak_usage(true);
+        $memLimit = ini_get('memory_limit');
+
+        // Uptime via /proc/uptime (Linux)
+        $uptime = null;
+        if (file_exists('/proc/uptime')) {
+            $up = (float)explode(' ', file_get_contents('/proc/uptime'))[0];
+            $d  = floor($up / 86400);
+            $h  = floor(($up % 86400) / 3600);
+            $m  = floor(($up % 3600) / 60);
+            $uptime = ($d > 0 ? "{$d}d " : '') . "{$h}h {$m}m";
+        }
+
+        echo json_encode([
+            'queue_stats'      => $qStats,
+            'recent_downloads' => array_map(fn($q) => [
+                'title'    => $q['title'],
+                'type'     => $q['type']    ?? 'movie',
+                'added_at' => $q['done_at'] ?? $q['added_at'] ?? '',
+                'added_by' => $q['added_by'] ?? '',
+                'cover'    => $q['cover']    ?? '',
+            ], $recentDownloads),
+            'disk'             => $diskInfo,
+            'system'           => [
+                'php_version' => PHP_VERSION,
+                'mem_used'    => $memUsed,
+                'mem_peak'    => $memPeak,
+                'mem_limit'   => $memLimit,
+                'uptime'      => $uptime,
+                'os'          => php_uname('s') . ' ' . php_uname('r'),
+            ],
+            'total_downloaded' => count($db['movies']) + count($db['episodes']),
+        ]);
+        break;
+
     // ── Externer Endpoint: Benutzer anlegen via API-Key ───────────────────────
     case 'external_create_user':
         // Nur via API-Key erreichbar (geprüft oben)
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
-        $result = create_user(
-            trim($d['username'] ?? ''),
-            $d['password']       ?? '',
-            $d['role']           ?? 'viewer'
-        );
+        // Parameter aus POST-Body (JSON) oder GET-Query-String
+        $d = json_decode(file_get_contents('php://input'), true) ?? [];
+        $username = trim($d['username'] ?? $_GET['username'] ?? '');
+        $password = $d['password']      ?? $_GET['password'] ?? '';
+        $role     = $d['role']          ?? $_GET['role']     ?? 'viewer';
+        $result = create_user($username, $password, $role);
         if (is_string($result)) {
             http_response_code(400);
             echo json_encode(['error' => $result]);

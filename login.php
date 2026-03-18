@@ -39,6 +39,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (is_string($result)) {
                 $error = $result;
             } else {
+                // ── Cronjobs automatisch einrichten ──────────────────────────
+                $cronScript    = __DIR__ . '/cron.php';
+                $cacheScript   = __DIR__ . '/cache_builder.php';
+                $phpBin        = PHP_BINARY ?: '/usr/bin/php';
+                $lockFile      = '/tmp/xtream_cron.lock';
+
+                $newJobs = [
+                    "*/30 * * * * flock -n {$lockFile} {$phpBin} {$cronScript} >> /dev/null 2>&1",
+                    "0 4 * * * {$phpBin} {$cacheScript} >> /dev/null 2>&1",
+                ];
+
+                // Bestehende Crontab lesen (Fehler ignorieren falls noch leer)
+                exec('crontab -l 2>/dev/null', $existing);
+                $existing = array_filter($existing, fn($l) => trim($l) !== '');
+                $currentCrontab = implode("\n", $existing);
+
+                // Nur hinzufügen wenn noch nicht vorhanden (idempotent)
+                if (!str_contains($currentCrontab, $cronScript)) {
+                    $existing[] = $newJobs[0];
+                }
+                if (!str_contains($currentCrontab, $cacheScript)) {
+                    $existing[] = $newJobs[1];
+                }
+
+                $newCrontab = implode("\n", $existing) . "\n";
+                $tmp = tempnam(sys_get_temp_dir(), 'crontab_');
+                file_put_contents($tmp, $newCrontab);
+                exec("crontab $tmp");
+                @unlink($tmp);
+                // ─────────────────────────────────────────────────────────────
+
                 attempt_login($username, $password);
                 header('Location: index.php');
                 exit;
