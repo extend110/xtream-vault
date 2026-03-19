@@ -415,5 +415,8 @@ xtream-frontend/
     ├── api_keys.json          — API-Keys
     ├── progress.json          — Aktueller Download-Fortschritt
     ├── cancel.lock            — Abbruch-Signal (temporär)
-    └── cron.log               — Download-Log
+    ├── cron.log               — Download-Log
+    ├── backup.log             — Backup-Log
+    └── backups/               — Backup-Archiv (automatisch erstellt)
+        └── backup_YYYY-MM-DD_HH-II-SS.zip
 ```
