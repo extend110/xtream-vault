@@ -16,20 +16,38 @@
 // ─── Config aus config.json laden ────────────────────────────────────────────
 require_once __DIR__ . '/config.php';
 
-// ─── Lock: Atomarer flock — verhindert parallele Runs ────────────────────────
-// flock(LOCK_EX|LOCK_NB) ist atomar — kein Race-Condition möglich
-// Lock bleibt offen (in $GLOBALS) bis PHP-Prozess endet → automatisch freigegeben
-$GLOBALS['_cron_lock_file'] = sys_get_temp_dir() . '/xtream_cron.lock';
-$GLOBALS['_cron_lock_fh']   = fopen($GLOBALS['_cron_lock_file'], 'c');
-if (!$GLOBALS['_cron_lock_fh'] || !flock($GLOBALS['_cron_lock_fh'], LOCK_EX | LOCK_NB)) {
-    if ($GLOBALS['_cron_lock_fh']) fclose($GLOBALS['_cron_lock_fh']);
-    exit(0); // Andere Instanz aktiv — still beenden
+// ─── Lock: mkdir-basiert (atomar auf allen POSIX-Systemen) ───────────────────
+$GLOBALS['_cron_lock_dir'] = sys_get_temp_dir() . '/xtream_cron.lockdir';
+// Debug: lock-Verhalten in separates Log schreiben
+$_lockLog = fn(string $msg) => file_put_contents(
+    __DIR__ . '/data/lock_debug.log',
+    '[' . date('Y-m-d H:i:s') . '] pid=' . getmypid() . ' ' . $msg . PHP_EOL,
+    FILE_APPEND
+);
+$lockResult = @mkdir($GLOBALS['_cron_lock_dir'], 0700);
+$_lockLog('mkdir=' . ($lockResult ? 'created' : 'exists') . ' dir=' . $GLOBALS['_cron_lock_dir']);
+if (!$lockResult) {
+    $pidFile  = $GLOBALS['_cron_lock_dir'] . '/pid';
+    $stalePid = file_exists($pidFile) ? (int)@file_get_contents($pidFile) : 0;
+    $alive    = $stalePid > 0
+        && (function_exists('posix_kill') ? posix_kill($stalePid, 0) : file_exists('/proc/' . $stalePid));
+    $_lockLog("existing pid=$stalePid alive=" . ($alive ? 'yes' : 'no'));
+    if ($alive) { $_lockLog('exit: other process running'); exit(0); }
+    @unlink($pidFile);
+    @rmdir($GLOBALS['_cron_lock_dir']);
+    if (!@mkdir($GLOBALS['_cron_lock_dir'], 0700)) {
+        $_lockLog('exit: second mkdir failed');
+        exit(0);
+    }
+    $_lockLog('stale lock cleaned, continuing');
 }
-// PID in Lock-Datei schreiben (für Status-Anzeige)
-ftruncate($GLOBALS['_cron_lock_fh'], 0);
-fwrite($GLOBALS['_cron_lock_fh'], (string)getmypid());
-fflush($GLOBALS['_cron_lock_fh']);
-// Lock wird beim Prozessende automatisch freigegeben (fh bleibt offen)
+file_put_contents($GLOBALS['_cron_lock_dir'] . '/pid', (string)getmypid());
+$_lockLog('lock acquired, pid written');
+register_shutdown_function(function() {
+    @unlink($GLOBALS['_cron_lock_dir'] . '/pid');
+    @rmdir($GLOBALS['_cron_lock_dir']);
+});
+@unlink(sys_get_temp_dir() . '/xtream_cron_starting.lock');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 define('CHUNK_SIZE',      1024 * 256);

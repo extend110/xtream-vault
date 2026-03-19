@@ -845,27 +845,37 @@ switch ($action) {
 
     case 'queue_start':
         require_permission('settings');
-        // Atomar prüfen ob cron.php läuft — gleicher Lock wie cron.php
-        $cronLock = sys_get_temp_dir() . '/xtream_cron.lock';
-        $lf = fopen($cronLock, 'c');
-        if (!$lf) { echo json_encode(['error' => 'Lock-Datei nicht erstellbar']); break; }
-        $free = flock($lf, LOCK_EX | LOCK_NB);
-        fclose($lf);
-        if (!$free) {
-            echo json_encode(['error' => 'Download-Worker läuft bereits']);
+        $lockDir     = sys_get_temp_dir() . '/xtream_cron.lockdir';
+        $startingLock = sys_get_temp_dir() . '/xtream_cron_starting.lock';
+
+        // Läuft bereits?
+        if (is_dir($lockDir)) {
+            $stalePid = (int)@file_get_contents($lockDir . '/pid');
+            $running = $stalePid > 0
+                && (function_exists('posix_kill') ? posix_kill($stalePid, 0) : file_exists('/proc/' . $stalePid));
+            if ($running) {
+                echo json_encode(['error' => 'Download-Worker läuft bereits']);
+                break;
+            }
+        }
+
+        // Wird gerade gestartet?
+        if (file_exists($startingLock) && (time() - filemtime($startingLock)) < 10) {
+            echo json_encode(['error' => 'Download-Worker wird gerade gestartet']);
             break;
         }
-        // Lock war frei — cron.php kann gestartet werden
+        file_put_contents($startingLock, date('Y-m-d H:i:s'));
+
         $q = load_queue();
         $pending = array_filter($q, fn($qi) => $qi['status'] === 'pending');
         if (empty($pending)) {
+            @unlink($startingLock);
             echo json_encode(['error' => 'Keine ausstehenden Downloads in der Queue']);
             break;
         }
         $script  = escapeshellarg(__DIR__ . '/cron.php');
-        $cronLog = escapeshellarg(DATA_PATH . '/cron.log');
         $phpBin  = escapeshellarg(PHP_BINARY ?: 'php');
-        shell_exec("{$phpBin} {$script} >> {$cronLog} 2>&1 &");
+        shell_exec("{$phpBin} {$script} > /dev/null 2>&1 &");
         log_activity($current_user['id'], $current_user['username'], 'queue_start', ['pending' => count($pending)]);
         echo json_encode(['ok' => true, 'pending' => count($pending)]);
         break;

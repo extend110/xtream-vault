@@ -760,7 +760,7 @@ body::before {
 
       <!-- Schnellzugriff -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="btn-secondary" onclick="dashStartQueue()">▶ Queue starten</button>
+        <button class="btn-secondary" data-label="▶ Queue starten" onclick="startQueue(this)">▶ Queue starten</button>
         <button class="btn-secondary" onclick="dashRebuildCache()">↻ Cache aufbauen</button>
         <button class="btn-secondary" onclick="dashClearDone()">Erledigte leeren</button>
         <button class="btn-secondary danger" onclick="dashClearAll()">Queue leeren</button>
@@ -892,7 +892,7 @@ body::before {
         <div class="queue-toolbar-title">Download Queue</div>
         <button class="btn-sm" onclick="refreshQueue()">↻ Refresh</button>
         <?php if ($can_settings): ?>
-        <button class="btn-sm" onclick="startQueue()">▶ Starten</button>
+        <button class="btn-sm" data-label="▶ Starten" onclick="startQueue(this)">▶ Starten</button>
         <?php endif; ?>
         <?php if ($can_queue_clear): ?>
         <button class="btn-sm" onclick="clearDone()">✕ Done entfernen</button>
@@ -1294,6 +1294,14 @@ async function updateQueueBadge() {
   updateQueuePill(d.pending ?? 0);
   <?php endif; ?>
 }
+
+// ── Globales Badge-Polling (alle 10s, unabhängig von der aktuellen View) ──────
+let _badgeInterval = null;
+function startBadgePolling() {
+  if (_badgeInterval) return;
+  _badgeInterval = setInterval(updateQueueBadge, 10000);
+}
+startBadgePolling();
 
 // ── Categories ────────────────────────────────────────────────
 async function loadMovieCats() {
@@ -2186,13 +2194,15 @@ async function cancelDownload() {
   showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
 }
 
-async function startQueue() {
-  const d = await apiPost('queue_start', {});
-  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
-}
-async function dashStartQueue() {
-  await startQueue();
+async function startQueue(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '▶ Startet…'; }
+  try {
+    const d = await apiPost('queue_start', {});
+    if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+    showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
+  } finally {
+    if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset.label || '▶ Starten'; }, 3000);
+  }
 }
 
 async function dashRebuildCache() {
@@ -2387,12 +2397,12 @@ function fmtDuration(s) {
 let dashboardInterval = null;
 
 function startDashboardPolling() {
-  // Beide sofort ausführen, dann sequenziell alle 5s — kein Race Condition
-  pollProgress().then(() => refreshDashboardQueue());
+  pollProgress().then(() => refreshDashboardQueue()).then(() => loadDashboardData());
   if (!dashboardInterval) dashboardInterval = setInterval(async () => {
     await pollProgress();
     await refreshDashboardQueue();
-  }, 5000);
+    await loadDashboardData();
+  }, 10000);
 }
 function stopDashboardPolling() {
   clearInterval(dashboardInterval);
