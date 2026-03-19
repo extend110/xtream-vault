@@ -1084,6 +1084,21 @@ body::before {
       </div>
       <div class="settings-msg" id="settings-msg"></div>
 
+      <!-- Backup -->
+      <div class="settings-card" style="margin-top:24px">
+        <h3>💾 Datensicherung</h3>
+        <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+          Sichert alle Dateien im <code>data/</code>-Verzeichnis als ZIP. Automatisch täglich um 3 Uhr, maximal 7 Backups.
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+          <button class="btn-secondary" onclick="runBackup(this)">▶ Backup jetzt erstellen</button>
+          <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
+        </div>
+        <div id="backup-list" style="font-size:.82rem">
+          <div style="color:var(--muted)">Lade…</div>
+        </div>
+      </div>
+
       <!-- Wartungsmodus -->
       <div class="settings-card" style="margin-top:24px;border-color:rgba(255,71,87,.2)">
         <h3>🔧 Wartungsmodus</h3>
@@ -1905,7 +1920,7 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
   if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance();<?php endif; ?> }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
@@ -1923,6 +1938,69 @@ function showView(v) {
 
 // ── Settings ──────────────────────────────────────────────────
 <?php if ($can_settings): ?>
+
+async function loadBackups() {
+  const d = await api('backup_list');
+  const el = document.getElementById('backup-list');
+  if (!el) return;
+  if (!d.backups?.length) {
+    el.innerHTML = `<div style="color:var(--muted)">Noch keine Backups vorhanden.</div>`;
+    return;
+  }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <tr style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">
+      <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--border)">Datei</th>
+      <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Größe</th>
+      <th style="text-align:right;padding:6px 0;border-bottom:1px solid var(--border)">Erstellt</th>
+      <th style="padding:6px 0;border-bottom:1px solid var(--border)"></th>
+    </tr>
+    ${d.backups.map(b => `
+    <tr style="border-bottom:1px solid rgba(255,255,255,.04)">
+      <td style="padding:8px 0;font-family:'DM Mono',monospace;font-size:.72rem">${esc(b.name)}</td>
+      <td style="padding:8px 0;text-align:right;color:var(--muted);font-size:.78rem">${fmtBytes(b.size)}</td>
+      <td style="padding:8px 0;text-align:right;color:var(--muted);font-size:.78rem">${esc(b.created_at)}</td>
+      <td style="padding:8px 4px;text-align:right;display:flex;gap:4px;justify-content:flex-end">
+        <button class="btn-sm" onclick="restoreBackup('${esc(b.name)}')">↩ Restore</button>
+        <button class="btn-sm danger" onclick="deleteBackup('${esc(b.name)}',this.closest('tr'))">✕</button>
+      </td>
+    </tr>`).join('')}
+  </table>`;
+}
+
+async function runBackup(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '▶ Läuft…'; }
+  const msg = document.getElementById('backup-run-msg');
+  if (msg) msg.textContent = 'Backup wird erstellt…';
+  await apiPost('backup_run', {});
+  showToast('Backup gestartet — läuft im Hintergrund', 'success');
+  setTimeout(async () => {
+    await loadBackups();
+    if (btn) { btn.disabled = false; btn.textContent = '▶ Backup jetzt erstellen'; }
+    if (msg) msg.textContent = '';
+  }, 3000);
+}
+
+async function restoreBackup(name) {
+  if (!confirm(`Backup "${name}" wiederherstellen?\n\nDie aktuellen Daten (Users, Queue, Config etc.) werden überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  showToast('Wiederherstellung läuft…', 'info');
+  const d = await apiPost('backup_restore', {name});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  if (!d.ok) {
+    showToast(`⚠️ Teilweise wiederhergestellt (${d.restored} Dateien). Fehler: ${d.errors?.join(', ')}`, 'error');
+    return;
+  }
+  showToast(`✅ ${d.restored} Dateien wiederhergestellt — Seite wird neu geladen…`, 'success');
+  setTimeout(() => location.reload(), 2000);
+}
+
+async function deleteBackup(name, row) {
+  if (!confirm(`Backup "${name}" löschen?`)) return;
+  const d = await apiPost('backup_delete', {name});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  row?.remove();
+  showToast('Backup gelöscht', 'info');
+}
+
 async function loadMaintenance() {
   const d = await api('maintenance_status');
   applyMaintenanceStatus(d.active ?? false);

@@ -33,7 +33,7 @@ if ($api_key_value !== '') {
 }
 
 // ─── Auth-freie Endpoints ─────────────────────────────────────────────────────
-$public_actions = ['login', 'logout', 'setup_status'];
+$public_actions = ['login', 'logout', 'setup_status', 'health'];
 if (!$api_key_auth && !in_array($action, $public_actions)) {
     $current_user = require_login();
 }
@@ -94,6 +94,58 @@ function stream_url(string $type, $id, string $ext): string {
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 switch ($action) {
+
+    // ── Health Check ──────────────────────────────────────────────────────────
+    case 'health':
+        $configured = is_configured();
+        $queue      = $configured ? load_queue() : [];
+        $pending    = count(array_filter($queue, fn($q) => $q['status'] === 'pending'));
+        $downloading = count(array_filter($queue, fn($q) => $q['status'] === 'downloading'));
+        $errors     = count(array_filter($queue, fn($q) => $q['status'] === 'error'));
+
+        // Cron-Worker Status
+        $lockDir    = sys_get_temp_dir() . '/xtream_cron.lockdir';
+        $cronPid    = file_exists($lockDir . '/pid') ? (int)file_get_contents($lockDir . '/pid') : 0;
+        $cronAlive  = $cronPid > 0 && (function_exists('posix_kill') ? posix_kill($cronPid, 0) : file_exists('/proc/' . $cronPid));
+
+        // Speicherplatz
+        $disk = null;
+        if (!RCLONE_ENABLED && DEST_PATH !== '' && is_dir(DEST_PATH)) {
+            $free  = disk_free_space(DEST_PATH);
+            $total = disk_total_space(DEST_PATH);
+            if ($free !== false) $disk = ['free_bytes' => $free, 'total_bytes' => $total, 'free_pct' => round($free / $total * 100, 1)];
+        }
+
+        // Wartungsmodus
+        $maintenance = file_exists(MAINTENANCE_FILE);
+
+        // Letztes Backup
+        $backupDir  = DATA_DIR . '/backups';
+        $lastBackup = null;
+        if (is_dir($backupDir)) {
+            $files = glob($backupDir . '/backup_*.zip');
+            if ($files) {
+                usort($files, fn($a,$b) => filemtime($b) - filemtime($a));
+                $lastBackup = date('Y-m-d H:i:s', filemtime($files[0]));
+            }
+        }
+
+        $status = $configured ? 'ok' : 'unconfigured';
+        if ($maintenance) $status = 'maintenance';
+        http_response_code($configured && !$maintenance ? 200 : 503);
+
+        echo json_encode([
+            'status'      => $status,
+            'version'     => '1.0',
+            'timestamp'   => date('Y-m-d H:i:s'),
+            'configured'  => $configured,
+            'maintenance' => $maintenance,
+            'queue'       => ['pending' => $pending, 'downloading' => $downloading, 'errors' => $errors],
+            'cron'        => ['running' => $cronAlive, 'pid' => $cronPid ?: null],
+            'disk'        => $disk,
+            'last_backup' => $lastBackup,
+        ]);
+        break;
 
     // ── Auth ──────────────────────────────────────────────────────────────────
     case 'setup_status':
@@ -878,6 +930,77 @@ switch ($action) {
         shell_exec("{$phpBin} {$script} > /dev/null 2>&1 &");
         log_activity($current_user['id'], $current_user['username'], 'queue_start', ['pending' => count($pending)]);
         echo json_encode(['ok' => true, 'pending' => count($pending)]);
+        break;
+
+    case 'backup_run':
+        require_permission('settings');
+        $script = escapeshellarg(__DIR__ . '/backup.php');
+        $phpBin = escapeshellarg(PHP_BINARY ?: 'php');
+        shell_exec("{$phpBin} {$script} > /dev/null 2>&1 &");
+        log_activity($current_user['id'], $current_user['username'], 'backup_run', []);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'backup_list':
+        require_permission('settings');
+        $backupDir = DATA_DIR . '/backups';
+        $files = is_dir($backupDir) ? glob($backupDir . '/backup_*.zip') : [];
+        if ($files) usort($files, fn($a,$b) => filemtime($b) - filemtime($a));
+        echo json_encode(['backups' => array_map(fn($f) => [
+            'name'       => basename($f),
+            'size'       => filesize($f),
+            'created_at' => date('Y-m-d H:i:s', filemtime($f)),
+        ], $files ?: [])]);
+        break;
+
+    case 'backup_restore':
+        require_permission('settings');
+        $name = basename(json_decode(file_get_contents('php://input'), true)['name'] ?? '');
+        if (!preg_match('/^backup_[\d_-]+\.zip$/', $name)) { echo json_encode(['error' => 'Ungültiger Dateiname']); break; }
+        $path = DATA_DIR . '/backups/' . $name;
+        if (!file_exists($path)) { echo json_encode(['error' => 'Backup nicht gefunden']); break; }
+        if (!class_exists('ZipArchive')) { echo json_encode(['error' => "PHP-Extension 'zip' nicht verfügbar"]); break; }
+
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) { echo json_encode(['error' => 'ZIP-Datei konnte nicht geöffnet werden']); break; }
+
+        $restored = 0;
+        $errors   = [];
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entry = $zip->getNameIndex($i);
+            // Nur data/-Dateien wiederherstellen, backup_info.json überspringen
+            if (!str_starts_with($entry, 'data/') || substr($entry, -1) === '/') continue;
+            $filename = basename($entry);
+            // Nur bekannte, sichere Dateien wiederherstellen
+            $allowed = ['config.json','users.json','queue.json','downloaded.json',
+                        'downloaded_index.json','download_history.json','library_cache.json',
+                        'activity.json','rate_limits.json','api_keys.json'];
+            if (!in_array($filename, $allowed)) continue;
+            $content = $zip->getFromIndex($i);
+            if ($content === false) { $errors[] = $filename; continue; }
+            // Validieren dass es gültiges JSON ist
+            if (json_decode($content) === null) { $errors[] = $filename . ' (ungültiges JSON)'; continue; }
+            file_put_contents(DATA_DIR . '/' . $filename, $content);
+            $restored++;
+        }
+        $zip->close();
+
+        if (!empty($errors)) {
+            echo json_encode(['ok' => false, 'restored' => $restored, 'errors' => $errors]);
+        } else {
+            log_activity($current_user['id'], $current_user['username'], 'backup_restore', ['name' => $name, 'files' => $restored]);
+            echo json_encode(['ok' => true, 'restored' => $restored]);
+        }
+        break;
+
+    case 'backup_delete':
+        require_permission('settings');
+        $name = basename(json_decode(file_get_contents('php://input'), true)['name'] ?? '');
+        if (!preg_match('/^backup_[\d_-]+\.zip$/', $name)) { echo json_encode(['error' => 'Ungültiger Dateiname']); break; }
+        $path = DATA_DIR . '/backups/' . $name;
+        if (!file_exists($path)) { echo json_encode(['error' => 'Datei nicht gefunden']); break; }
+        @unlink($path);
+        echo json_encode(['ok' => true]);
         break;
 
     case 'rebuild_library_cache':

@@ -96,6 +96,7 @@ Erwartete Einträge:
 ```
 */30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
 0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
+0 3 * * * /usr/bin/php /var/www/html/xtream/backup.php >> /dev/null 2>&1
 ```
 
 Falls die automatische Einrichtung fehlschlägt, manuell hinzufügen:
@@ -333,6 +334,47 @@ Content-Type: application/json
 ```json
 { "ok": true, "id": "abc123", "username": "max", "role": "viewer" }
 ```
+
+---
+
+## Health-Check Endpoint
+
+Gibt den aktuellen Status der Anwendung zurück — kein Login erforderlich.
+
+```
+GET /api.php?action=health
+```
+
+**Antwort (HTTP 200 wenn OK, 503 bei Wartung oder nicht konfiguriert):**
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-03-19 10:00:00",
+  "configured": true,
+  "maintenance": false,
+  "queue": { "pending": 2, "downloading": 1, "errors": 0 },
+  "cron": { "running": true, "pid": 12345 },
+  "disk": { "free_bytes": 107374182400, "total_bytes": 536870912000, "free_pct": 20.0 },
+  "last_backup": "2026-03-19 03:00:00"
+}
+```
+
+Mögliche `status`-Werte: `ok`, `unconfigured`, `maintenance`
+
+---
+
+## Datensicherung
+
+Backup-Verwaltung unter **Einstellungen → 💾 Datensicherung**.
+
+Gesichert werden alle Dateien in `data/` (Konfiguration, User, Queue, Favoriten, Verlauf etc.) als ZIP-Archiv. Backups landen in `data/backups/` und werden nach 7 Kopien automatisch rotiert.
+
+**Manuell ausführen:**
+```bash
+php /var/www/html/xtream/backup.php
+```
+
+**Backup-Log:** `data/backup.log`
 
 ---
 

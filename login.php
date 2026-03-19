@@ -64,11 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // ── Cronjobs automatisch einrichten ──────────────────────────
                 $cronScript    = __DIR__ . '/cron.php';
                 $cacheScript   = __DIR__ . '/cache_builder.php';
+                $backupScript  = __DIR__ . '/backup.php';
                 $phpBin        = PHP_BINARY ?: '/usr/bin/php';
 
                 $newJobs = [
                     "*/30 * * * * {$phpBin} {$cronScript} >> /dev/null 2>&1",
                     "0 4 * * * {$phpBin} {$cacheScript} >> /dev/null 2>&1",
+                    "0 3 * * * {$phpBin} {$backupScript} >> /dev/null 2>&1",
                 ];
 
                 // Bestehende Crontab lesen (Fehler ignorieren falls noch leer)
@@ -82,6 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 if (!str_contains($currentCrontab, $cacheScript)) {
                     $existing[] = $newJobs[1];
+                }
+                if (!str_contains($currentCrontab, $backupScript)) {
+                    $existing[] = $newJobs[2];
                 }
 
                 $newCrontab = implode("\n", $existing) . "\n";
