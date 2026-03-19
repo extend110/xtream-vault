@@ -47,7 +47,11 @@ function save_rate_limits(array $data): void {
  */
 function check_queue_rate_limit(array $user): array {
     $role  = $user['role'];
-    $limit = QUEUE_ADD_HOURLY_LIMIT[$role] ?? null;
+    // User-spezifisches Limit hat Vorrang vor Rollen-Limit
+    // null = kein Limit, 0 = gesperrt, >0 = Limit pro Stunde
+    $limit = isset($user['queue_limit']) && $user['queue_limit'] !== ''
+        ? (int)$user['queue_limit']
+        : (QUEUE_ADD_HOURLY_LIMIT[$role] ?? null);
 
     // Keine Beschränkung für diese Rolle
     if ($limit === null) return ['allowed' => true];

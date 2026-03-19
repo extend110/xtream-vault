@@ -40,6 +40,17 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   --muted:     #5a5a70;
   --sidebar-w: 280px;
 }
+[data-theme="light"] {
+  --bg:     #f0f0f5;
+  --bg2:    #ffffff;
+  --bg3:    #e8e8ef;
+  --border: rgba(0,0,0,.1);
+  --text:   #1a1a2e;
+  --muted:  #7a7a90;
+}
+body, .sidebar, .topbar, .card, .settings-card, .queue-item, .modal, .dkpi, .dash-info-card {
+  transition: background-color .2s, border-color .2s, color .2s;
+}
 html { font-size: 15.5px; overflow-x: hidden; }
 body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
 ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -109,7 +120,7 @@ body::before {
   height: 60px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; gap: 16px;
   padding: 0 28px; position: sticky; top: 0;
-  background: rgba(10,10,15,.9); backdrop-filter: blur(12px); z-index: 50;
+  background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(12px); z-index: 50;
 }
 .page-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: .08em; color: var(--text); flex: 0 0 auto; }
 .search-wrap { flex: 1; max-width: 420px; position: relative; }
@@ -660,6 +671,34 @@ body::before {
 .dkpi-n { font-size: 1.5rem; font-weight: 500; line-height: 1.1; margin-top: 2px; }
 .btn-secondary.danger { border-color: rgba(255,71,87,.3); color: var(--red); }
 .btn-secondary.danger:hover { background: rgba(255,71,87,.1); border-color: var(--red); }
+
+/* ── API Docs ── */
+.api-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 12px; }
+.api-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.api-method { font-family: 'DM Mono', monospace; font-size: .65rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .08em; flex-shrink: 0; }
+.api-method.post { background: rgba(232,255,71,.12); color: var(--accent); }
+.api-method.get  { background: rgba(46,213,115,.12); color: var(--green); }
+.api-endpoint { font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--muted); word-break: break-all; }
+.api-desc { font-size: .875rem; color: var(--text); margin-bottom: 14px; line-height: 1.5; }
+.api-section-label { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; margin: 12px 0 8px; }
+.api-code { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--accent2); line-height: 1.7; word-break: break-all; }
+.api-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.api-table th { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.api-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: top; }
+.api-table td code { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--accent2); }
+
+/* ── History chips ── */
+.history-chip {
+  display: inline-block; background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 12px; font-size: .78rem; cursor: pointer;
+  margin: 0 6px 6px 0; transition: border-color .15s, background .15s;
+}
+.history-chip:hover { border-color: var(--accent); background: rgba(232,255,71,.06); }
+.sort-select { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: .78rem; outline: none; cursor: pointer; }
+.sort-select:focus { border-color: var(--accent); }
+.pagination-btn { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 6px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: .7rem; cursor: pointer; margin: 0 3px; transition: border-color .15s; }
+.pagination-btn:hover { border-color: var(--accent); }
+.pagination-btn.active { border-color: var(--accent); color: var(--accent); }
 .dic-label {
   font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted);
   letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px;
@@ -736,6 +775,9 @@ body::before {
     <?php if ($can_cron_log): ?>
     <div class="nav-item" onclick="showView('log')"><span class="nav-icon">🖥</span> Cron Log</div>
     <?php endif; ?>
+    <?php if ($can_settings): ?>
+    <div class="nav-item" onclick="showView('api-docs')"><span class="nav-icon">📖</span> API-Dokumentation</div>
+    <?php endif; ?>
     <?php if ($can_users): ?>
     <div class="nav-item" onclick="showView('users')"><span class="nav-icon">👥</span> Benutzer</div>
     <?php endif; ?>
@@ -763,6 +805,7 @@ body::before {
     <?php if ($can_queue_view): ?>
     <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> in Queue</span>
     <?php endif; ?>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Hell/Dunkel wechseln" style="background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:4px 8px;color:var(--muted);transition:color .2s" aria-label="Theme wechseln">🌙</button>
     <?php if ($role === 'editor'): ?>
     <span id="limit-indicator" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
     <?php endif; ?>
@@ -911,10 +954,39 @@ body::before {
     </div>
 
     <!-- Movies -->
-    <?php if ($show_movies): ?><div id="view-movies" style="display:none"><div class="grid" id="movie-grid"></div></div><?php endif; ?>
-    <?php if ($show_series): ?><div id="view-series" style="display:none"><div class="grid" id="series-grid"></div></div><?php endif; ?>
+    <?php if ($show_movies): ?>
+    <div id="view-movies" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
+          <select id="sort-movies" class="sort-select" onchange="setSortOrder(this.value,'movies')">
+            <option value="default">Standard</option><option value="az">A → Z</option><option value="za">Z → A</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid" id="movie-grid"></div>
+      <div id="movie-pagination" style="margin-top:16px;text-align:center"></div>
+    </div>
+    <?php endif; ?>
+    <?php if ($show_series): ?>
+    <div id="view-series" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="flex:1"></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
+          <select id="sort-series" class="sort-select" onchange="setSortOrder(this.value,'series')">
+            <option value="default">Standard</option><option value="az">A → Z</option><option value="za">Z → A</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid" id="series-grid"></div>
+      <div id="series-pagination" style="margin-top:16px;text-align:center"></div>
+    </div>
+    <?php endif; ?>
     <!-- Search -->
     <div id="view-search" style="display:none">
+      <div id="search-history-box" style="margin-bottom:16px"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <button class="filter-btn active" id="search-tab-movies"  onclick="switchSearchTab('movies',this)">🎬 Filme</button>
         <button class="filter-btn"        id="search-tab-series"  onclick="switchSearchTab('series',this)">📺 Serien</button>
@@ -992,8 +1064,130 @@ body::before {
       <div class="grid" id="fav-grid"></div>
     </div>
 
-    <div id="view-log" style="display:none">
-      <div class="queue-toolbar">
+    <!-- API Docs -->
+    <?php if ($can_settings): ?>
+    <div id="view-api-docs" style="display:none">
+      <div style="max-width:860px">
+
+        <!-- Intro -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-bottom:20px">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px">Authentifizierung</div>
+          <p style="font-size:.85rem;color:var(--muted);line-height:1.7;margin-bottom:12px">
+            Alle externen Endpoints erfordern einen API-Key. Dieser kann als HTTP-Header oder Query-Parameter übergeben werden.
+          </p>
+          <div class="api-code">X-API-Key: xv_xxxxxxxxxxxx</div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:8px">oder als Query-Parameter: <code style="color:var(--accent2)">?api_key=xv_xxxxxxxxxxxx</code></div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:6px">API-Keys verwalten: <span style="color:var(--accent2);cursor:pointer" onclick="showView('settings')">Einstellungen → API-Keys</span></div>
+        </div>
+
+        <!-- Endpoints -->
+        <?php
+        $base = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http')
+              . '://' . $_SERVER['HTTP_HOST']
+              . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/api.php';
+        ?>
+
+        <!-- create_user -->
+        <div class="api-card">
+          <div class="api-card-header">
+            <span class="api-method post">POST</span>
+            <span class="api-method get">GET</span>
+            <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_create_user</code>
+          </div>
+          <div class="api-desc">Legt einen neuen Benutzer an.</div>
+          <div class="api-section-label">Parameter</div>
+          <table class="api-table">
+            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername (eindeutig)</td></tr>
+            <tr><td>password</td><td>string</td><td>✅</td><td>Passwort (min. 6 Zeichen)</td></tr>
+            <tr><td>role</td><td>string</td><td>–</td><td><code>viewer</code> (Standard), <code>editor</code>, <code>admin</code></td></tr>
+          </table>
+          <div class="api-section-label">Antwort</div>
+          <div class="api-code">{ "ok": true, "id": "abc123", "username": "max", "role": "viewer" }</div>
+        </div>
+
+        <!-- list_users -->
+        <div class="api-card">
+          <div class="api-card-header">
+            <span class="api-method get">GET</span>
+            <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_list_users</code>
+          </div>
+          <div class="api-desc">Gibt alle Benutzer zurück (ohne Passwörter).</div>
+          <div class="api-section-label">Antwort</div>
+          <div class="api-code">{ "ok": true, "count": 3, "users": [<br>&nbsp;&nbsp;{ "id": "abc123", "username": "max", "role": "viewer", "suspended": false, "created_at": "2026-01-01 12:00:00" }<br>] }</div>
+        </div>
+
+        <!-- suspend_user -->
+        <div class="api-card">
+          <div class="api-card-header">
+            <span class="api-method post">POST</span>
+            <span class="api-method get">GET</span>
+            <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_suspend_user</code>
+          </div>
+          <div class="api-desc">Sperrt oder entsperrt einen Benutzer. Admins können nicht gesperrt werden.</div>
+          <div class="api-section-label">Parameter</div>
+          <table class="api-table">
+            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
+            <tr><td>suspended</td><td>bool</td><td>–</td><td><code>true</code> = sperren (Standard), <code>false</code> = entsperren</td></tr>
+          </table>
+          <div class="api-section-label">Antwort</div>
+          <div class="api-code">{ "ok": true, "username": "max", "suspended": true }</div>
+        </div>
+
+        <!-- update_user -->
+        <div class="api-card">
+          <div class="api-card-header">
+            <span class="api-method post">POST</span>
+            <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_update_user</code>
+          </div>
+          <div class="api-desc">Ändert Passwort oder Rolle eines Benutzers.</div>
+          <div class="api-section-label">Parameter</div>
+          <table class="api-table">
+            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
+            <tr><td>password</td><td>string</td><td>–</td><td>Neues Passwort</td></tr>
+            <tr><td>role</td><td>string</td><td>–</td><td><code>viewer</code>, <code>editor</code>, <code>admin</code></td></tr>
+          </table>
+          <div class="api-section-label">Antwort</div>
+          <div class="api-code">{ "ok": true, "username": "max", "updated": true }</div>
+        </div>
+
+        <!-- delete_user -->
+        <div class="api-card">
+          <div class="api-card-header">
+            <span class="api-method post">POST</span>
+            <span class="api-method get">GET</span>
+            <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_delete_user</code>
+          </div>
+          <div class="api-desc">Löscht einen Benutzer permanent. Admins können nicht gelöscht werden.</div>
+          <div class="api-section-label">Parameter</div>
+          <table class="api-table">
+            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
+          </table>
+          <div class="api-section-label">Antwort</div>
+          <div class="api-code">{ "ok": true, "username": "max", "deleted": true }</div>
+        </div>
+
+        <!-- Fehler -->
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-top:8px">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px">Fehlercodes</div>
+          <table class="api-table">
+            <tr><th>HTTP</th><th>Bedeutung</th></tr>
+            <tr><td>400</td><td>Fehlende oder ungültige Parameter</td></tr>
+            <tr><td>401</td><td>API-Key ungültig oder widerrufen</td></tr>
+            <tr><td>403</td><td>Aktion nicht erlaubt (z.B. Admin sperren)</td></tr>
+            <tr><td>404</td><td>Benutzer nicht gefunden</td></tr>
+          </table>
+          <div style="margin-top:12px;font-size:.78rem;color:var(--muted)">Fehlermeldungen werden als <code style="color:var(--accent2)">{ "error": "..." }</code> zurückgegeben.</div>
+        </div>
+
+      </div>
+    </div>
+    <?php endif; ?>
+
+    <div id="view-log" style="display:none">      <div class="queue-toolbar">
         <div class="queue-toolbar-title">Cron Log</div>
         <button class="btn-sm" onclick="loadLog()">↻ Aktualisieren</button>
       </div>
@@ -1188,12 +1382,12 @@ body::before {
               <th>Rolle</th>
               <th>Status</th>
               <th>Erstellt</th>
-              <th>Letzter Login</th>
+              <th>Queue-Limit</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="users-tbody">
-            <tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Lade…</td></tr>
+            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Lade…</td></tr>
           </tbody>
         </table>
       </div>
@@ -1375,7 +1569,82 @@ let queueRefreshInterval;
   <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?>
   <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?>
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
+  initTheme();
+  startBadgePolling();
 })();
+
+// ── Theme Toggle ──────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('xv_theme') || 'dark';
+  applyTheme(saved);
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
+  localStorage.setItem('xv_theme', theme);
+}
+function toggleTheme() {
+  const cur = localStorage.getItem('xv_theme') || 'dark';
+  applyTheme(cur === 'dark' ? 'light' : 'dark');
+}
+
+// ── Search History ────────────────────────────────────────────
+const SEARCH_HISTORY_KEY = 'xv_search_history_<?= $user['id'] ?>';
+const CAT_HISTORY_KEY    = 'xv_cat_history_<?= $user['id'] ?>';
+const MAX_HISTORY = 10;
+
+function addSearchHistory(query) {
+  if (!query || query.length < 2) return;
+  let h = getSearchHistory();
+  h = [query, ...h.filter(q => q !== query)].slice(0, MAX_HISTORY);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(h));
+}
+function getSearchHistory() {
+  try { return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]'); } catch { return []; }
+}
+function addCatHistory(type, catId, catName) {
+  let h = getCatHistory();
+  const entry = {type, catId, catName, ts: Date.now()};
+  h = [entry, ...h.filter(c => !(c.type === type && c.catId === catId))].slice(0, MAX_HISTORY);
+  localStorage.setItem(CAT_HISTORY_KEY, JSON.stringify(h));
+}
+function getCatHistory() {
+  try { return JSON.parse(localStorage.getItem(CAT_HISTORY_KEY) || '[]'); } catch { return []; }
+}
+function renderSearchHistory() {
+  const box = document.getElementById('search-history-box');
+  if (!box) return;
+  const history = getSearchHistory();
+  const catHist = getCatHistory();
+  if (!history.length && !catHist.length) { box.innerHTML = ''; return; }
+  let html = '';
+  if (history.length) {
+    html += `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Zuletzt gesucht</div>`;
+    html += history.map(q => `<div class="history-chip" onclick="doSearchFromHistory(${JSON.stringify(q)})">${esc(q)}</div>`).join('');
+  }
+  if (catHist.length) {
+    html += `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin:12px 0 8px">Zuletzt angesehen</div>`;
+    html += catHist.map(c => `<div class="history-chip" onclick="loadCatFromHistory('${esc(c.type)}','${esc(c.catId)}','${esc(c.catName)}')">${c.type === 'series' ? '📺' : '🎬'} ${esc(c.catName)}</div>`).join('');
+  }
+  box.innerHTML = html;
+}
+function doSearchFromHistory(query) {
+  document.getElementById('search-input').value = query;
+  doSearch();
+}
+function loadCatFromHistory(type, catId, catName) {
+  if (type === 'series') {
+    loadSeriesCat(catId, catName, null);
+    showView('series');
+  } else {
+    loadMovies(catId, catName, null);
+    showView('movies');
+  }
+}
+
+// ── Sorting ───────────────────────────────────────────────────
+let currentSort = 'default';
 
 // ── Stats ─────────────────────────────────────────────────────
 async function loadStats() {
@@ -1430,26 +1699,64 @@ function toggleCats(type) {
 }
 
 // ── Movies ────────────────────────────────────────────────────
+const PAGE_SIZE = 50;
+let _moviePage = 1;
+let _seriesPage = 1;
+let _lastMovies = [];
+let _lastSeries = [];
+let _movieSort  = 'default';
+let _seriesSort = 'default';
+
 async function loadMovies(catId, catName, el) {
   setActiveCat(el);
   showView('movies');
   document.getElementById('page-title').textContent = catName;
   document.getElementById('movie-grid').innerHTML = loadingHTML();
-  allMovies = await api('get_movies', {category_id: catId});
-  // Kategoriename in jeden Eintrag schreiben (fehlt im API-Response beim Browse)
-  allMovies = allMovies.map(m => ({...m, category: m.category || catName}));
+  addCatHistory('movies', catId, catName);
+  _lastMovies = await api('get_movies', {category_id: catId});
+  _lastMovies = _lastMovies.map(m => ({...m, category: m.category || catName}));
+  _moviePage = 1;
   renderMovies();
+}
+
+function setSortOrder(order, type) {
+  if (type === 'movies') { _movieSort = order; _moviePage = 1; renderMovies(); }
+  else                   { _seriesSort = order; _seriesPage = 1; renderSeriesGrid(_lastSeries); }
 }
 
 function renderMovies() {
   const grid = document.getElementById('movie-grid');
-  let movies = allMovies;
+  let movies = _lastMovies;
   if (currentFilter === 'done')   movies = movies.filter(m => m.downloaded);
   if (currentFilter === 'new')    movies = movies.filter(m => !m.downloaded && !m.queued);
   if (currentFilter === 'queued') movies = movies.filter(m => m.queued);
-  if (!movies.length) { grid.innerHTML = emptyHTML('Keine Filme'); return; }
-  grid.innerHTML = movies.map(movieCard).join('');
+  if (_movieSort === 'az') movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
+  if (_movieSort === 'za') movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  if (!movies.length) { grid.innerHTML = emptyHTML('Keine Filme'); document.getElementById('movie-pagination').innerHTML = ''; return; }
+  const total = movies.length;
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const page  = Math.min(_moviePage, pages);
+  const slice = movies.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  grid.innerHTML = slice.map(movieCard).join('');
   lazyLoadImages();
+  renderPagination('movie-pagination', page, pages, p => { _moviePage = p; renderMovies(); });
+}
+
+function renderPagination(containerId, current, total, onPage) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (total <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  if (current > 1) html += `<button class="pagination-btn" onclick="(${onPage})(${current-1})">← Zurück</button>`;
+  // Show max 7 page buttons
+  const start = Math.max(1, current - 3);
+  const end   = Math.min(total, start + 6);
+  for (let p = start; p <= end; p++) {
+    html += `<button class="pagination-btn${p===current?' active':''}" onclick="(${onPage})(${p})">${p}</button>`;
+  }
+  if (current < total) html += `<button class="pagination-btn" onclick="(${onPage})(${current+1})">Weiter →</button>`;
+  html += `<div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:8px">Seite ${current} von ${total}</div>`;
+  el.innerHTML = html;
 }
 
 function movieCard(m) {
@@ -1459,7 +1766,9 @@ function movieCard(m) {
     : m.queued ? `<span class="card-badge badge-queue">⏳ Queue</span>` : '';
 
   const btn = m.downloaded
-    ? `<button class="btn-q done" disabled>✓ Done</button>`
+    ? canQueueRemove
+      ? `<button class="btn-q done" onclick="resetDownload('${m.stream_id}','movie',null)" title="Zurücksetzen">↺ Reset</button>`
+      : `<button class="btn-q done" disabled>✓ Done</button>`
     : m.queued && (canQueueRemove || canQueueRemoveOwn)
       ? `<button class="btn-q remove" onclick="removeFromQueue('${m.stream_id}',this.closest('.card'))">✕ Remove</button>`
       : m.queued
@@ -1497,10 +1806,25 @@ async function loadSeriesCat(catId, catName, el) {
   document.getElementById('page-title').textContent = catName;
   const grid = document.getElementById('series-grid');
   grid.innerHTML = loadingHTML();
-  const list = await api('get_series', {category_id: catId});
-  if (!list.length) { grid.innerHTML = emptyHTML('Keine Serien'); return; }
-  grid.innerHTML = list.map(s => seriesCard({...s, category: s.category || catName})).join('');
+  addCatHistory('series', catId, catName);
+  _lastSeries = await api('get_series', {category_id: catId});
+  _lastSeries = _lastSeries.map(s => ({...s, category: s.category || catName}));
+  _seriesPage = 1;
+  renderSeriesGrid(_lastSeries);
+}
+
+function renderSeriesGrid(list) {
+  const grid = document.getElementById('series-grid');
+  if (!list?.length) { grid.innerHTML = emptyHTML('Keine Serien'); document.getElementById('series-pagination').innerHTML = ''; return; }
+  let sorted = list;
+  if (_seriesSort === 'az') sorted = [...list].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
+  if (_seriesSort === 'za') sorted = [...list].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  const pages = Math.ceil(sorted.length / PAGE_SIZE);
+  const page  = Math.min(_seriesPage, pages);
+  const slice = sorted.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  grid.innerHTML = slice.map(s => seriesCard({...s})).join('');
   lazyLoadImages();
+  renderPagination('series-pagination', page, pages, p => { _seriesPage = p; renderSeriesGrid(_lastSeries); });
 }
 
 function seriesCard(s) {
@@ -1536,7 +1860,9 @@ async function openSeriesModal(id, title, cover) {
     </div>`;
     for (const ep of eps) {
       const epBtn = ep.downloaded
-        ? `<button class="ep-btn done" disabled>✓</button>`
+        ? canQueueRemove
+          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}')" title="Zurücksetzen">↺</button>`
+          : `<button class="ep-btn done" disabled>✓</button>`
         : ep.queued && (canQueueRemove || canQueueRemoveOwn)
           ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
           : ep.queued
@@ -1766,6 +2092,11 @@ function queueItemHTML(item) {
     ? `<button class="btn-icon" style="font-size:.65rem;padding:3px 8px;margin-left:6px" onclick="retryQueueItem('${item.stream_id}')">↻ Retry</button>`
     : '';
 
+  // Reset-Button für Done-Items (Admin)
+  const resetBtn = item.status === 'done' && canQueueRemove
+    ? `<button class="btn-icon" style="font-size:.65rem;padding:3px 8px;margin-left:6px" onclick="resetDownload('${item.stream_id}','${item.type ?? 'movie'}',this.closest('.queue-item'))" title="Zurücksetzen damit neu heruntergeladen werden kann">↺ Reset</button>`
+    : '';
+
   return `
   <div class="queue-item status-${item.status}" id="qi-${item.stream_id}">
     ${thumb}
@@ -1775,7 +2106,7 @@ function queueItemHTML(item) {
       ${item.error ? `<div style="font-size:.7rem;color:var(--red);margin-top:3px">${item.error}</div>` : ''}
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
-      <span class="qi-status ${item.status}">${statusLabel}${retryBtn}</span>
+      <span class="qi-status ${item.status}">${statusLabel}${retryBtn}${resetBtn}</span>
       ${prioBtn}
     </div>
     ${delBtn}
@@ -1901,6 +2232,45 @@ async function setPriority(sid, priority) {
   refreshQueue();
 }
 
+async function resetEpisode(sid, ep, season, seriesTitle) {
+  if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
+  const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('↺ Zurückgesetzt', 'success');
+  // Button in Modal auf + Q umschalten
+  const btn = document.getElementById('epbtn-' + sid);
+  const epRow = document.getElementById('ep-' + sid);
+  if (epRow) {
+    const newBtn = document.createElement('button');
+    newBtn.className = 'ep-btn add';
+    newBtn.id = 'epbtn-' + sid;
+    newBtn.textContent = '+ Q';
+    newBtn.onclick = () => queueEpisode(ep, season, seriesTitle, newBtn);
+    epRow.querySelector('button')?.replaceWith(newBtn);
+  }
+  updateQueueBadge();
+}
+
+async function resetDownload(sid, type, rowEl) {
+  if (!confirm('Download zurücksetzen?\n\nDas Item wird aus der "Heruntergeladen"-Liste entfernt und kann neu zur Queue hinzugefügt werden.')) return;
+  const d = await apiPost('reset_download', {stream_id: sid, type});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('↺ Zurückgesetzt — kann neu gequeued werden', 'success');
+  rowEl?.remove();
+
+  // _lastMovies aktualisieren damit re-render korrekt ist
+  const idx = _lastMovies.findIndex(x => String(x.stream_id) === String(sid));
+  if (idx >= 0) {
+    _lastMovies[idx].downloaded = false;
+    _lastMovies[idx].queued     = false;
+    // Karte neu rendern
+    const card = document.getElementById('card-m-' + sid);
+    if (card) card.outerHTML = movieCard(_lastMovies[idx]);
+  }
+
+  refreshQueue(); updateQueueBadge(); loadStats();
+}
+
 async function retryQueueItem(sid) {
   const r = await fetch(`${API}?action=queue_retry`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1962,9 +2332,14 @@ function initSearch() {
   const input = document.getElementById('search-input');
   input.addEventListener('input', () => {
     clearTimeout(searchDebounce);
-    searchDebounce = setTimeout(() => doSearch(input.value.trim()), 400);
+    const q = input.value.trim();
+    if (!q) { doSearch(''); return; }
+    searchDebounce = setTimeout(() => doSearch(q), 350);
   });
 }
+
+// Session-Cache für Suchergebnisse (lebt bis Seitenreload)
+const _searchCache = new Map();
 
 async function doSearch(q) {
   const movGrid = document.getElementById('search-movies-grid');
@@ -1973,32 +2348,74 @@ async function doSearch(q) {
     if (movGrid) movGrid.innerHTML = emptyHTML('Suchbegriff eingeben');
     if (serGrid) serGrid.innerHTML = '';
     clearSelection();
+    renderSearchHistory();
     return;
   }
+  addSearchHistory(q);
+  document.getElementById('search-history-box').innerHTML = '';
+
   if (searchTab === 'movies') {
     if (movGrid) movGrid.innerHTML = loadingHTML();
-    const results = await api('search_movies', {q});
-    allMovies = results;
+    const cacheKey = 'movies:' + q;
+    let results, source;
+    if (_searchCache.has(cacheKey)) {
+      ({results, source} = _searchCache.get(cacheKey));
+    } else {
+      const d = await api('search_movies', {q});
+      // Neues Format: {results, source} — Fallback auf altes Array-Format
+      results = d.results ?? d;
+      source  = d.source ?? 'xtream';
+      _searchCache.set(cacheKey, {results, source});
+    }
+    _lastMovies = results;
     if (movGrid) {
-      movGrid.innerHTML = results.length ? results.map(movieCard).join('') : emptyHTML('Keine Treffer');
-      lazyLoadImages();
+      const sourceHint = source === 'cache'
+        ? `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:10px">📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">Aktualisieren</span></div>`
+        : '';
+      if (!results.length) {
+        movGrid.innerHTML = emptyHTML('Keine Treffer');
+      } else {
+        movGrid.innerHTML = sourceHint + results.map(movieCard).join('');
+        lazyLoadImages();
+      }
     }
   } else {
     if (serGrid) serGrid.innerHTML = loadingHTML();
-    const results = await api('search_series', {q});
+    const cacheKey = 'series:' + q;
+    let results, source;
+    if (_searchCache.has(cacheKey)) {
+      ({results, source} = _searchCache.get(cacheKey));
+    } else {
+      const d = await api('search_series', {q});
+      results = d.results ?? d;
+      source  = d.source ?? 'xtream';
+      _searchCache.set(cacheKey, {results, source});
+    }
     if (serGrid) {
-      serGrid.innerHTML = results.length ? results.map(seriesCard).join('') : emptyHTML('Keine Treffer');
-      lazyLoadImages();
+      const sourceHint = source === 'cache'
+        ? `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:10px">📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">Aktualisieren</span></div>`
+        : '';
+      if (!results.length) {
+        serGrid.innerHTML = emptyHTML('Keine Treffer');
+      } else {
+        serGrid.innerHTML = sourceHint + results.map(seriesCard).join('');
+        lazyLoadImages();
+      }
     }
   }
   clearSelection();
+}
+
+function clearSearchCache() {
+  _searchCache.clear();
+  showToast('Suchcache geleert', 'info');
 }
 
 // ── View management ───────────────────────────────────────────
 function showView(v) {
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
-  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites'].forEach(name => {
+  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','api-docs'].forEach(name => {
     const el = document.getElementById('view-' + name);
     if (el) el.style.display = name === v ? '' : 'none';
   });
@@ -2010,7 +2427,7 @@ function showView(v) {
   const fb = document.getElementById('filter-bar');
   sb.style.display = v === 'search'  ? '' : 'none';
   fb.style.display = v === 'movies'  ? '' : 'none';
-  if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); }
+  if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
   if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
@@ -2019,6 +2436,7 @@ function showView(v) {
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
   if (v === 'favourites')   { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); }
+  if (v === 'api-docs')     { document.getElementById('page-title').textContent = 'API-Dokumentation'; }
   clearInterval(queueRefreshInterval);
   if (v === 'queue') {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
@@ -2345,12 +2763,16 @@ async function loadDashboardData() {
     } else {
       recent.innerHTML = d.recent_downloads.map(item => {
         const icon = item.type === 'episode' ? '📺' : '🎬';
+        const resetBtn = canQueueRemove
+          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${item.id}','${item.type ?? 'movie'}',this.closest('div[style*=border-bottom]'))" title="Zurücksetzen">↺</button>`
+          : '';
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
           ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
           <div style="flex:1;min-width:0">
             <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
             <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
           </div>
+          ${resetBtn}
         </div>`;
       }).join('');
     }
@@ -2891,7 +3313,7 @@ async function loadUsers() {
   }
 
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted)">Keine Benutzer gefunden</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Keine Benutzer gefunden</td></tr>';
     return;
   }
   tbody.innerHTML = users.map(u => {
@@ -2902,6 +3324,10 @@ async function loadUsers() {
     const suspendBtn = isSuspended
       ? `<button class="btn-icon" onclick="toggleSuspend('${esc(u.id)}',false,'${esc(u.username)}')">✅ Entsperren</button>`
       : `<button class="btn-icon danger" onclick="toggleSuspend('${esc(u.id)}',true,'${esc(u.username)}')">🚫 Sperren</button>`;
+    const limitVal = u.queue_limit !== undefined ? u.queue_limit : '';
+    const limitDisplay = limitVal === '' ? '<span style="color:var(--muted)">Standard</span>'
+      : limitVal == 0 ? '<span style="color:var(--red)">Gesperrt</span>'
+      : `<span style="color:var(--orange)">${limitVal}/h</span>`;
     return `
     <tr style="${isSuspended ? 'opacity:.6' : ''}">
       <td>
@@ -2911,7 +3337,12 @@ async function loadUsers() {
       <td><span class="role-badge ${u.role}">${u.role}</span></td>
       <td>${statusBadge}</td>
       <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem">${u.created_at ?? '–'}</td>
-      <td style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.72rem">${u.last_login ?? 'Noch nie'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          ${limitDisplay}
+          <button class="btn-icon" onclick="setUserLimit('${esc(u.id)}','${esc(u.username)}','${limitVal}')" title="Limit ändern">✏️</button>
+        </div>
+      </td>
       <td>
         <div class="user-actions">
           <button class="btn-icon" onclick="openEditUser('${esc(u.id)}','${esc(u.username)}','${u.role}')">✏️ Bearbeiten</button>
@@ -2920,6 +3351,19 @@ async function loadUsers() {
         </div>
       </td>
     </tr>`}).join('');
+}
+
+async function setUserLimit(id, username, current) {
+  const input = prompt(
+    `Queue-Limit für "${username}" (Anfragen/Stunde):\n` +
+    `• Leer lassen = Rollen-Standard\n• 0 = Keine Queue-Zugriffe\n• Zahl = Individuelle Grenze`,
+    current
+  );
+  if (input === null) return; // Abgebrochen
+  const d = await apiPost('set_user_limit', {id, queue_limit: input.trim()});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('Limit aktualisiert', 'success');
+  loadUsers();
 }
 
 async function toggleSuspend(id, suspend, username) {

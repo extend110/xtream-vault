@@ -507,10 +507,15 @@ foreach ($queue as &$item) {
     $cat        = !empty($item['category']) ? $item['category'] : 'Uncategorized';
     $season     = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
 
-    // Länderkürzel aus dem Originaltitel extrahieren (vor clean_title)
-    // Fallback: aus Kategorienamen extrahieren falls im Titel keines gefunden
-    $countryPrefix = extract_country_prefix($title);
-    if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
+    // Länderkürzel: für Episoden primär aus dem Serientitel ($cat), dann aus $title
+    // Für Filme: aus $title, dann aus $cat
+    if ($type === 'episode') {
+        $countryPrefix = extract_country_prefix($cat);
+        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
+    } else {
+        $countryPrefix = extract_country_prefix($title);
+        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
+    }
 
     // Dateiname: Länderkürzel entfernen, Jahr behalten (via clean_title)
     $fileTitle = clean_title($title);
@@ -553,7 +558,13 @@ foreach ($queue as &$item) {
             $safeCat = trim(substr($safeCat, strlen($safePrefix)), ' -_.');
             $safeCat = $safeCat ?: 'Uncategorized';
         }
-        // Serien-Struktur: TV Shows / [CC /] Kategorie(=Serienname) / [Staffel N /] Episode.mkv
+        if ($safePrefix === '') {
+            // Kürzel noch nicht gefunden — aus $safeCat extrahieren (z.B. "DE Arctic Circle" → "DE")
+            $safePrefix = extract_country_prefix($safeCat);
+            $safeCat    = remove_country_prefix($safeCat);
+            $safeCat    = trim($safeCat, ' -_.') ?: 'Uncategorized';
+        }
+        // Serien-Struktur: TV Shows / [CC /] Serienname / [Staffel N /] Episode.mkv
         $staffel = $season !== null ? ('Staffel ' . $season) : '';
         $relPath = $sub
             . ($safePrefix !== '' ? DIRECTORY_SEPARATOR . $safePrefix : '')

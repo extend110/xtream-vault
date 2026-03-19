@@ -76,17 +76,18 @@ define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', '
  * Gibt das Kürzel zurück (z.B. 'DE') oder '' wenn keins gefunden.
  */
 function extract_country_prefix(string $name): string {
-    // Mit Trennzeichen (Leerzeichen, |, :, -)  z.B. 'DE | Film', 'US: Movie'
+    // Normalisieren: non-breaking spaces und andere Whitespace-Varianten ersetzen
+    $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
+    $name = trim($name);
+    // Mit Trennzeichen (Leerzeichen, |, :, -)  z.B. 'DE | Film', 'US: Movie', 'DE Film'
     if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) {
         return $m[1];
     }
     // Ohne Trennzeichen: nur bekannte Kürzel, gefolgt von Großbuchstabe
-    // z.B. 'DEDer Pate' → 'DE', 'USTitanic' → 'US'
     foreach (COUNTRY_CODES as $code) {
         $len = strlen($code);
         if (strncmp($name, $code, $len) === 0) {
             $rest = substr($name, $len);
-            // Nächstes Zeichen muss Großbuchstabe oder Leerzeichen sein
             if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) {
                 return $code;
             }
@@ -95,11 +96,10 @@ function extract_country_prefix(string $name): string {
     return '';
 }
 
-/**
- * Entfernt führende Länderkürzel (mit und ohne Trennzeichen).
- * Nur beim Download/Dateinamen verwenden.
- */
 function remove_country_prefix(string $name): string {
+    // Normalisieren: non-breaking spaces ersetzen
+    $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
+    $name = trim($name);
     // Mit Trennzeichen
     $stripped = preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name);
     if ($stripped !== $name) return trim($stripped);

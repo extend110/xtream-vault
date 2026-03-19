@@ -101,11 +101,30 @@ foreach ($categories as $cat) {
 file_put_contents(LIBRARY_CACHE_FILE, json_encode($movieCache, JSON_UNESCAPED_UNICODE));
 blog(sprintf('Movie-Cache gespeichert: %d Einträge → %s', count($movieCache), LIBRARY_CACHE_FILE));
 
-// ── Schritt 2: Serien-Cache ───────────────────────────────────────────────────
-// Der vollständige Serien-Cache (get_series_info für jede Serie) ist zu aufwendig
-// und wird NICHT mehr vom cache_builder aufgebaut. Episoden-Metadaten werden
-// stattdessen direkt beim Download durch cron.php in downloaded_index.json gespeichert.
-blog('Serien-Cache: wird durch cron.php beim Download befüllt (kein vollständiger Aufbau).');
+// ── Schritt 2: Serien-Cache aufbauen ─────────────────────────────────────────
+blog('=== Starte Serien-Cache Aufbau ===');
+$seriesCache = [];
+$seriesCats  = xtream_req('get_series_categories');
+blog(sprintf('  %d Serien-Kategorien gefunden', count($seriesCats)));
+
+foreach ($seriesCats as $cat) {
+    $series = xtream_req('get_series', ['category_id' => $cat['category_id']]);
+    foreach ($series as $s) {
+        $seriesCache[(string)$s['series_id']] = [
+            'series_id'   => (string)$s['series_id'],
+            'clean_title' => display_title($s['name'] ?? ''),
+            'cover'       => $s['cover'] ?? '',
+            'category'    => $cat['category_name'],
+            'genre'       => $s['genre'] ?? '',
+            'type'        => 'series',
+        ];
+    }
+    blog(sprintf('  Kategorie "%s": %d Serien', $cat['category_name'], count($series)));
+}
+
+$seriesCacheFile = DATA_DIR . '/series_cache.json';
+file_put_contents($seriesCacheFile, json_encode(array_values($seriesCache), JSON_UNESCAPED_UNICODE));
+blog(sprintf('Serien-Cache gespeichert: %d Einträge → %s', count($seriesCache), $seriesCacheFile));
 
 // ── Schritt 3: Downloaded-Index aufbauen ──────────────────────────────────────
 blog('=== Baue Downloaded-Index auf ===');

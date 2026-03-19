@@ -24,8 +24,15 @@ if ($api_key_value !== '') {
     }
     record_api_key_use($api_key_value);
     $api_key_auth = true;
-    // API-Key-Aufrufe dürfen nur den external_create_user-Endpoint nutzen
-    if ($action !== 'external_create_user') {
+    // Erlaubte externe Endpoints
+    $external_allowed = [
+        'external_create_user',
+        'external_list_users',
+        'external_suspend_user',
+        'external_delete_user',
+        'external_update_user',
+    ];
+    if (!in_array($action, $external_allowed)) {
         http_response_code(403);
         echo json_encode(['error' => 'This endpoint is not available via API key']);
         exit;
@@ -39,7 +46,9 @@ if (!$api_key_auth && !in_array($action, $public_actions)) {
 }
 
 // ─── Nicht konfiguriert → Fehler außer bei Config-Aktionen ───────────────────
-$config_actions = ['get_config', 'save_config'];
+$config_actions = ['get_config', 'save_config',
+    'external_create_user', 'external_list_users', 'external_suspend_user',
+    'external_delete_user', 'external_update_user'];
 if (!is_configured() && !in_array($action, $config_actions) && !in_array($action, $public_actions)) {
     http_response_code(503);
     echo json_encode(['error' => 'not_configured']);
@@ -183,12 +192,13 @@ switch ($action) {
     case 'list_users':
         require_permission('users');
         $users = array_map(fn($u) => [
-            'id'         => $u['id'],
-            'username'   => $u['username'],
-            'role'       => $u['role'],
-            'suspended'  => $u['suspended'] ?? false,
-            'created_at' => $u['created_at'],
-            'last_login' => $u['last_login'],
+            'id'          => $u['id'],
+            'username'    => $u['username'],
+            'role'        => $u['role'],
+            'suspended'   => $u['suspended'] ?? false,
+            'created_at'  => $u['created_at'],
+            'last_login'  => $u['last_login'],
+            'queue_limit' => $u['queue_limit'] ?? '',
         ], load_users());
         echo json_encode($users);
         break;
@@ -222,6 +232,25 @@ switch ($action) {
             $target = find_user_by_id($id);
             log_activity($current_user['id'], $current_user['username'], 'change_role', ['target' => $target['username'] ?? $id, 'role' => $d['role']]);
         }
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'set_user_limit':
+        require_permission('users');
+        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
+        $id    = $d['id'] ?? '';
+        $limit = $d['queue_limit'] ?? ''; // '' = Rollen-Standard, '0' = gesperrt, '5' = 5/h
+        $users = load_users();
+        $found = false;
+        foreach ($users as &$u) {
+            if ($u['id'] !== $id) continue;
+            if ($limit === '' || $limit === null) unset($u['queue_limit']);
+            else $u['queue_limit'] = max(0, (int)$limit);
+            $found = true; break;
+        }
+        unset($u);
+        if (!$found) { http_response_code(404); echo json_encode(['error' => 'User nicht gefunden']); break; }
+        save_users($users);
         echo json_encode(['ok' => true]);
         break;
 
@@ -425,46 +454,86 @@ switch ($action) {
 
     case 'search_movies':
         $q        = strtolower(trim($_GET['q'] ?? ''));
+        if ($q === '') { echo json_encode([]); break; }
         $db       = load_db();
         $queue    = load_queue();
         $qids     = array_map('strval', array_column($queue, 'stream_id'));
         $is_admin = can('settings');
         $results  = [];
+
+        // ── Primär: Library-Cache durchsuchen ─────────────────────────────────
+        $cacheFile = LIBRARY_CACHE_FILE;
+        $cacheAge  = file_exists($cacheFile) ? (time() - filemtime($cacheFile)) : PHP_INT_MAX;
+        $useCache  = file_exists($cacheFile) && $cacheAge < 86400 * 1; // max 1 Tag alt
+
+        if ($useCache) {
+            $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
+            foreach ($cache as $sid => $m) {
+                $title = strtolower($m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '');
+                if (!str_contains($title, $q)) continue;
+                $sidStr = (string)($m['stream_id'] ?? $sid);
+                $results[] = [
+                    'stream_id'           => $sidStr,
+                    'clean_title'         => $m['title'] ?? $m['clean_title'] ?? '',
+                    'stream_icon'         => $m['cover'] ?? '',
+                    'category'            => $m['category'] ?? '',
+                    'container_extension' => $m['ext'] ?? 'mp4',
+                    'downloaded'          => in_array($sidStr, $db['movies']),
+                    'queued'              => in_array($sidStr, $qids),
+                ];
+            }
+            echo json_encode(['results' => $results, 'source' => 'cache', 'cache_age' => $cacheAge]);
+            break;
+        }
+
+        // ── Fallback: Xtream-Server (Cache leer oder zu alt) ──────────────────
         foreach (xtream('get_vod_categories') as $cat) {
             foreach (xtream('get_vod_streams', ['category_id' => $cat['category_id']]) as $m) {
                 $title = display_title($m['name'] ?? '');
-                if ($q === '' || str_contains(strtolower($title), $q)) {
-                    $m['clean_title'] = $title;
-                    $m['category']    = $cat['category_name'];
-                    $m['downloaded']  = in_array((string)$m['stream_id'], $db['movies']);
-                    $m['queued']      = in_array((string)$m['stream_id'], $qids);
-                    if ($is_admin) {
-                        $m['stream_url'] = stream_url('movie', $m['stream_id'], $m['container_extension'] ?? 'mp4');
-                    } else {
-                        unset($m['stream_url']);
-                    }
-                    $results[] = $m;
-                }
+                if (!str_contains(strtolower($title), $q)) continue;
+                $m['clean_title'] = $title;
+                $m['category']    = $cat['category_name'];
+                $m['downloaded']  = in_array((string)$m['stream_id'], $db['movies']);
+                $m['queued']      = in_array((string)$m['stream_id'], $qids);
+                if ($is_admin) $m['stream_url'] = stream_url('movie', $m['stream_id'], $m['container_extension'] ?? 'mp4');
+                else unset($m['stream_url']);
+                $results[] = $m;
             }
         }
-        echo json_encode($results);
+        echo json_encode(['results' => $results, 'source' => 'xtream']);
         break;
 
     case 'search_series':
-        $q        = strtolower(trim($_GET['q'] ?? ''));
+        $q = strtolower(trim($_GET['q'] ?? ''));
         if ($q === '') { echo json_encode([]); break; }
-        $results  = [];
+        $results = [];
+
+        // ── Primär: Series-Cache ───────────────────────────────────────────────
+        $seriesCacheFile = DATA_DIR . '/series_cache.json';
+        $seriesCacheAge  = file_exists($seriesCacheFile) ? (time() - filemtime($seriesCacheFile)) : PHP_INT_MAX;
+        $useSeriesCache  = file_exists($seriesCacheFile) && $seriesCacheAge < 86400 * 1;
+
+        if ($useSeriesCache) {
+            $cache = json_decode(file_get_contents($seriesCacheFile), true) ?? [];
+            foreach ($cache as $s) {
+                $title = strtolower($s['clean_title'] ?? $s['name'] ?? '');
+                if (str_contains($title, $q)) $results[] = $s;
+            }
+            echo json_encode(['results' => $results, 'source' => 'cache', 'cache_age' => $seriesCacheAge]);
+            break;
+        }
+
+        // ── Fallback: Xtream-Server ────────────────────────────────────────────
         foreach (xtream('get_series_categories') as $cat) {
             foreach (xtream('get_series', ['category_id' => $cat['category_id']]) as $s) {
                 $title = display_title($s['name'] ?? '');
-                if (str_contains(strtolower($title), $q)) {
-                    $s['clean_title'] = $title;
-                    $s['category']    = $cat['category_name'];
-                    $results[]        = $s;
-                }
+                if (!str_contains(strtolower($title), $q)) continue;
+                $s['clean_title'] = $title;
+                $s['category']    = $cat['category_name'];
+                $results[]        = $s;
             }
         }
-        echo json_encode($results);
+        echo json_encode(['results' => $results, 'source' => 'xtream']);
         break;
 
     case 'queue_add_bulk':
@@ -756,6 +825,39 @@ switch ($action) {
         $queue = array_values(array_filter($queue, fn($q) => (string)$q['stream_id'] !== $sid));
         save_queue($queue);
         echo json_encode(['ok' => true, 'count' => count($queue)]);
+        break;
+
+    case 'reset_download':
+        // Entfernt ein Item aus downloaded.json und downloaded_index.json
+        // damit es erneut zur Queue hinzugefügt werden kann
+        require_permission('settings');
+        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid  = (string)($d['stream_id'] ?? '');
+        $type = $d['type'] ?? 'movie'; // 'movie' oder 'episode'
+        if ($sid === '') { http_response_code(400); echo json_encode(['error' => 'Missing stream_id']); break; }
+
+        // Aus downloaded.json entfernen
+        $db     = load_db();
+        $dbKey  = $type === 'movie' ? 'movies' : 'episodes';
+        $before = count($db[$dbKey]);
+        $db[$dbKey] = array_values(array_filter($db[$dbKey], fn($id) => (string)$id !== $sid));
+        save_db($db);
+
+        // Aus downloaded_index.json entfernen
+        if (file_exists(DOWNLOADED_INDEX_FILE)) {
+            $index = json_decode(file_get_contents(DOWNLOADED_INDEX_FILE), true) ?? [];
+            unset($index[$sid]);
+            file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
+
+        // Aus Queue entfernen falls noch als 'done' vorhanden
+        $queue = load_queue();
+        $queue = array_values(array_filter($queue, fn($qi) => !((string)$qi['stream_id'] === $sid && $qi['status'] === 'done')));
+        save_queue($queue);
+
+        $removed = $before - count($db[$dbKey]);
+        log_activity($current_user['id'], $current_user['username'], 'reset_download', ['stream_id' => $sid, 'type' => $type]);
+        echo json_encode(['ok' => true, 'removed' => $removed > 0]);
         break;
 
     case 'queue_clear_done':
@@ -1182,6 +1284,76 @@ switch ($action) {
                 'role'     => $result['role'],
             ]);
         }
+        break;
+
+    case 'external_list_users':
+        // Gibt alle User zurück (ohne Passwort-Hashes)
+        $users = array_map(fn($u) => [
+            'id'         => $u['id'],
+            'username'   => $u['username'],
+            'role'       => $u['role'],
+            'suspended'  => (bool)($u['suspended'] ?? false),
+            'created_at' => $u['created_at'] ?? null,
+        ], load_users());
+        echo json_encode(['ok' => true, 'users' => $users, 'count' => count($users)]);
+        break;
+
+    case 'external_suspend_user':
+        $d         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $target    = trim($d['username'] ?? $_GET['username'] ?? '');
+        $suspended = isset($d['suspended']) ? (bool)$d['suspended']
+                   : (isset($_GET['suspended']) ? filter_var($_GET['suspended'], FILTER_VALIDATE_BOOLEAN) : true);
+        if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
+        $users  = load_users();
+        $found  = false;
+        foreach ($users as &$u) {
+            if ($u['username'] === $target) {
+                if ($u['role'] === 'admin') {
+                    http_response_code(403);
+                    echo json_encode(['error' => 'Admin-Accounts können nicht gesperrt werden']);
+                    $found = true; break;
+                }
+                $u['suspended'] = $suspended;
+                $found = true;
+                break;
+            }
+        }
+        unset($u);
+        if (!$found) { http_response_code(404); echo json_encode(['error' => 'User nicht gefunden']); break; }
+        save_users($users);
+        echo json_encode(['ok' => true, 'username' => $target, 'suspended' => $suspended]);
+        break;
+
+    case 'external_delete_user':
+        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $target = trim($d['username'] ?? $_GET['username'] ?? '');
+        if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
+        $users  = load_users();
+        $before = count($users);
+        $users  = array_values(array_filter($users, fn($u) => $u['username'] !== $target || $u['role'] === 'admin'));
+        if (count($users) === $before) { http_response_code(404); echo json_encode(['error' => 'User nicht gefunden oder Admin']); break; }
+        save_users($users);
+        echo json_encode(['ok' => true, 'username' => $target, 'deleted' => true]);
+        break;
+
+    case 'external_update_user':
+        // Passwort oder Rolle eines Users ändern
+        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $target = trim($d['username'] ?? $_GET['username'] ?? '');
+        if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
+        $users = load_users();
+        $found = false;
+        foreach ($users as &$u) {
+            if ($u['username'] !== $target) continue;
+            if (!empty($d['password'])) $u['password'] = password_hash($d['password'], PASSWORD_BCRYPT);
+            if (!empty($d['role']) && in_array($d['role'], ['admin','editor','viewer'])) $u['role'] = $d['role'];
+            $found = true;
+            break;
+        }
+        unset($u);
+        if (!$found) { http_response_code(404); echo json_encode(['error' => 'User nicht gefunden']); break; }
+        save_users($users);
+        echo json_encode(['ok' => true, 'username' => $target, 'updated' => true]);
         break;
 
     // ── Server-Infos (Admin only) ─────────────────────────────────────────────
