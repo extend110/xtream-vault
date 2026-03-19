@@ -94,7 +94,7 @@ sudo -u www-data crontab -l
 
 Erwartete Einträge:
 ```
-*/30 * * * * flock -n /tmp/xtream_cron.lock /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
+*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
 0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
 ```
 
