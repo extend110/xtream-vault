@@ -124,12 +124,14 @@ function save_db(array $db): void {
 }
 
 function safe_filename(string $name): string {
-    // Dateisystem-Sonderzeichen entfernen
-    $name = preg_replace('/[<>:"|?*\/\\\\]/', '', $name);
+    // Doppelpunkt durch Bindestrich ersetzen (vor dem Entfernen anderer Sonderzeichen)
+    $name = str_replace(':', '-', $name);
+    // Dateisystem-Sonderzeichen entfernen (< > " | ? * / \)
+    $name = preg_replace('/[<>"|?*\/\\\\]/', '', $name);
     // Steuerzeichen entfernen
     $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name);
-    // Unicode-Symbole, Box-Drawing, Pfeile, Sonderzeichen entfernen
-    // aber Buchstaben (inkl. Umlaute, Akzente), Zahlen, Leerzeichen und - _ . behalten
+    // Unicode-Symbole entfernen, aber Buchstaben (inkl. Umlaute ä ö ü ß etc.),
+    // Zahlen, Leerzeichen, Bindestrich, Unterstrich und Punkt behalten
     $name = preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '', $name);
     return trim(preg_replace('/\s+/', ' ', $name)) ?: 'file';
 }
