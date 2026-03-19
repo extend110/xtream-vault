@@ -1242,6 +1242,36 @@ switch ($action) {
         echo json_encode(['ok' => revoke_api_key($id)]);
         break;
 
+    case 'reveal_api_key':
+        require_permission('settings');
+        $d        = json_decode(file_get_contents('php://input'), true) ?? [];
+        $id       = trim($d['id']       ?? '');
+        $password = $d['password'] ?? '';
+        if ($id === '' || $password === '') { echo json_encode(['error' => 'Fehlende Parameter']); break; }
+
+        // Passwort des aktuell eingeloggten Admins prüfen
+        $users = load_users();
+        $me    = null;
+        foreach ($users as $u) { if ($u['id'] === $current_user['id']) { $me = $u; break; } }
+        if (!$me || !password_verify($password, $me['password'])) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Falsches Passwort']);
+            break;
+        }
+
+        // Key aus der Liste holen
+        $keys = load_api_keys();
+        $found = null;
+        foreach ($keys as $k) { if ($k['id'] === $id) { $found = $k; break; } }
+        if (!$found || ($found['revoked'] ?? false)) {
+            echo json_encode(['error' => 'API-Key nicht gefunden oder widerrufen']);
+            break;
+        }
+
+        log_activity($current_user['id'], $current_user['username'], 'reveal_api_key', ['key_id' => $id]);
+        echo json_encode(['ok' => true, 'key' => $found['key'], 'name' => $found['name']]);
+        break;
+
     case 'delete_api_key':
         require_permission('settings');
         $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';

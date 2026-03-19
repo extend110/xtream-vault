@@ -25,7 +25,8 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 
 | Anforderung | Mindestversion / Hinweis |
 |---|---|
-| PHP | 8.0+ mit Extensions `curl`, `json`, `session`, `posix` |
+| PHP | 8.0+ mit Extensions `curl`, `json`, `session`, `posix`, `zip` |
+| php-zip | `sudo apt install php-zip` — für Backup-Funktion |
 | Webserver | Apache mit `mod_rewrite` und `mod_headers` |
 | php.ini | `allow_url_fopen = On` |
 | Optional: rclone | Für Cloud-Speicher-Integration |

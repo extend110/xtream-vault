@@ -367,7 +367,16 @@ body::before {
 
   /* Settings */
   .settings-card { padding: 16px; }
-  .settings-actions { flex-wrap: wrap; gap: 8px; }
+  .settings-grid { gap: 12px !important; }
+  .settings-actions { flex-direction: column; gap: 8px; }
+  .settings-actions button { width: 100%; }
+  .field input, .field select, .field textarea { font-size: 1rem; } /* prevent zoom on iOS */
+  /* rclone test button row */
+  .settings-card [style*="display:flex"][style*="gap"] { flex-wrap: wrap; }
+  /* API key table — scrollable on mobile */
+  .apikey-table { font-size: .72rem; }
+  .apikey-table td, .apikey-table th { padding: 8px 6px; }
+  .apikey-table td:nth-child(2) { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Queue */
   .queue-toolbar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
@@ -422,11 +431,66 @@ body::before {
   .dic-val { font-size: .8rem; }
   #dash-bottom-grid { grid-template-columns: 1fr !important; }
 }
+
+@media (max-width: 480px) {
+  /* Sidebar vollständig ausblenden bis manuell geöffnet */
+  .sidebar { width: 100% !important; }
+
+  /* Header kompakter */
+  .header { padding: 0 12px; height: 52px; }
+  .page-title { font-size: .9rem; }
+
+  /* Content mehr Platz */
+  .content { padding: 12px; }
+
+  /* Dashboard KPI-Zeilen — 2 Spalten statt 4/6 */
+  #dash-stat-grid { grid-template-columns: 1fr 1fr !important; }
+  #dash-server-info { grid-template-columns: 1fr 1fr !important; }
+  /* Queue+Disk+System — alle auf 1fr */
+  #dash-stat-grid ~ div { grid-template-columns: 1fr 1fr !important; }
+
+  /* Medien-Grid: 2 Spalten */
+  .grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
+
+  /* Queue-Items: kompakter */
+  .queue-item { gap: 8px; padding: 10px 0; }
+  .qi-thumb { width: 40px; height: 40px; }
+  .qi-title { font-size: .8rem; }
+  .qi-meta  { font-size: .65rem; }
+
+  /* Progress-Card: Stats in 2 Spalten */
+  .pc-stats { grid-template-columns: 1fr 1fr; }
+
+  /* Schnellzugriff-Buttons: volle Breite */
+  #view-dashboard > div[style*="display:flex"] > button { flex: 1 1 calc(50% - 4px); }
+
+  /* Queue-Toolbar: Wrap */
+  .queue-toolbar { gap: 6px; }
+  .queue-toolbar .btn-sm { font-size: .62rem; padding: 5px 8px; }
+
+  /* Modal: fast vollbild */
+  .modal { margin: 8px; max-height: calc(100dvh - 16px); }
+
+  /* Navbadge kleiner */
+  .nav-badge { font-size: .6rem; padding: 1px 5px; }
+
+  /* KPI Zahlen kleiner */
+  .dkpi-n { font-size: 1.2rem; }
+  .dkpi   { padding: 8px 10px; }
+  .dkpi-l { font-size: .55rem; }
+}
 /* ── Settings ── */
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; max-width: 900px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 20px; max-width: 900px; }
 .settings-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
 .settings-card h3 { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 16px; }
 .settings-card.warning { border-color: rgba(255,71,87,.25); }
+.settings-toggle {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .9rem;
+  min-height: 44px;
+}
+.settings-toggle:last-child { border-bottom: none; padding-bottom: 0; }
+.settings-toggle input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field:last-child { margin-bottom: 0; }
 .field label { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
@@ -948,9 +1012,11 @@ body::before {
             <label>Server IP / Domain</label>
             <input type="text" id="cfg-server-ip" placeholder="z.B. line.example.com">
           </div>
-          <div class="field">
-            <label>Port</label>
-            <input type="text" id="cfg-port" placeholder="80" value="80">
+          <div style="display:grid;grid-template-columns:1fr 120px;gap:12px">
+            <div class="field">
+              <label>Port</label>
+              <input type="text" id="cfg-port" placeholder="80" value="80">
+            </div>
           </div>
           <div class="field">
             <label>Username</label>
@@ -980,18 +1046,14 @@ body::before {
             Steuert welche Bereiche für editor- und viewer-Accounts sichtbar sind.<br>
             Admins sehen immer alles.
           </div>
-          <div class="field" style="margin-bottom:10px">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-              <input type="checkbox" id="cfg-editor-movies" style="width:16px;height:16px;accent-color:var(--accent)">
-              🎬 Movies anzeigen
-            </label>
-          </div>
-          <div class="field">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-              <input type="checkbox" id="cfg-editor-series" style="width:16px;height:16px;accent-color:var(--accent)">
-              📺 Series anzeigen
-            </label>
-          </div>
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfg-editor-movies">
+            <span>🎬 Movies anzeigen</span>
+          </label>
+          <label class="settings-toggle">
+            <input type="checkbox" id="cfg-editor-series">
+            <span>📺 Series anzeigen</span>
+          </label>
         </div>
 
         <div class="settings-card" style="grid-column:1/-1">
@@ -1028,16 +1090,6 @@ body::before {
               <div class="settings-msg" id="rclone-test-msg" style="margin:0"></div>
             </div>
           </div>
-        </div>
-
-        <div class="settings-card">
-          <h3>Cronjob</h3>
-          <div style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--orange);background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:12px;line-height:1.7;word-break:break-all">
-            # Alle 30 Minuten ausführen:<br>
-            */30 * * * * flock -n /tmp/xtream.lock \<br>
-            &nbsp;&nbsp;php <?= __DIR__ ?>/cron.php
-          </div>
-          <div style="font-size:.75rem;color:var(--muted);margin-top:10px">Einrichten mit: <code style="color:var(--accent2)">sudo crontab -e -u www-data</code></div>
         </div>
 
         <div class="settings-card">
@@ -1084,33 +1136,36 @@ body::before {
       </div>
       <div class="settings-msg" id="settings-msg"></div>
 
-      <!-- Backup -->
-      <div class="settings-card" style="margin-top:24px">
-        <h3>💾 Datensicherung</h3>
-        <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-          Sichert alle Dateien im <code>data/</code>-Verzeichnis als ZIP. Automatisch täglich um 3 Uhr, maximal 7 Backups.
-        </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-          <button class="btn-secondary" onclick="runBackup(this)">▶ Backup jetzt erstellen</button>
-          <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
-        </div>
-        <div id="backup-list" style="font-size:.82rem">
-          <div style="color:var(--muted)">Lade…</div>
-        </div>
-      </div>
+      <!-- Backup + Wartung in Grid -->
+      <div class="settings-grid" style="margin-top:20px">
 
-      <!-- Wartungsmodus -->
-      <div class="settings-card" style="margin-top:24px;border-color:rgba(255,71,87,.2)">
-        <h3>🔧 Wartungsmodus</h3>
-        <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-          Wenn aktiv, können sich nur Admins einloggen. Alle anderen sehen eine Wartungsseite.
-        </div>
-        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-          <div id="maintenance-status" style="font-family:'DM Mono',monospace;font-size:.75rem;padding:5px 12px;border-radius:5px;background:var(--bg3);border:1px solid var(--border)">
-            Lade…
+        <!-- Backup -->
+        <div class="settings-card">
+          <h3>💾 Datensicherung</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            Sichert alle Dateien im <code>data/</code>-Verzeichnis als ZIP. Automatisch täglich um 3 Uhr, maximal 7 Backups.
           </div>
-          <button class="btn-secondary" id="btn-maintenance-toggle" onclick="toggleMaintenance()">Lade…</button>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+            <button class="btn-secondary" onclick="runBackup(this)">▶ Jetzt sichern</button>
+            <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
+          </div>
+          <div id="backup-list"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
         </div>
+
+        <!-- Wartungsmodus -->
+        <div class="settings-card" style="border-color:rgba(255,71,87,.2)">
+          <h3>🔧 Wartungsmodus</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            Wenn aktiv, können sich nur Admins einloggen. Alle anderen sehen eine Wartungsseite.
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div id="maintenance-status" style="font-family:'DM Mono',monospace;font-size:.75rem;padding:5px 12px;border-radius:5px;background:var(--bg3);border:1px solid var(--border)">
+              Lade…
+            </div>
+            <button class="btn-secondary" id="btn-maintenance-toggle" onclick="toggleMaintenance()">Lade…</button>
+          </div>
+        </div>
+
       </div>
       <?php else: ?>
       <div class="state-box"><div class="icon">🔒</div><p>Keine Berechtigung — nur Admins können die Einstellungen ändern.</p></div>
@@ -1237,6 +1292,45 @@ body::before {
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Reveal API Key Modal -->
+<div class="modal-overlay" id="reveal-modal" onclick="if(event.target===this)closeRevealModal()" style="display:none;z-index:1100">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="reveal-modal-title">API-Key anzeigen</div>
+      <button class="modal-close" onclick="closeRevealModal()">✕</button>
+    </div>
+    <div style="padding:0 24px 24px">
+      <div id="reveal-password-section">
+        <p style="font-size:.85rem;color:var(--muted);margin-bottom:16px;line-height:1.5">
+          Gib dein Admin-Passwort ein um den API-Key anzuzeigen.
+        </p>
+        <div class="field" style="margin-bottom:12px">
+          <label>Admin-Passwort</label>
+          <input type="password" id="reveal-password-input" placeholder="Dein Passwort"
+            onkeydown="if(event.key==='Enter')submitReveal()">
+        </div>
+        <div id="reveal-error" style="font-size:.78rem;color:var(--red);margin-bottom:10px;display:none"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" onclick="submitReveal()">Bestätigen</button>
+          <button class="btn-secondary" onclick="closeRevealModal()">Abbrechen</button>
+        </div>
+      </div>
+      <div id="reveal-key-section" style="display:none">
+        <p style="font-size:.82rem;color:var(--muted);margin-bottom:12px">
+          Kopiere den Key — er wird nach dem Schließen nicht mehr angezeigt.
+        </p>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;
+                    font-family:'DM Mono',monospace;font-size:.78rem;word-break:break-all;
+                    color:var(--accent);margin-bottom:12px" id="reveal-key-value"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-primary" onclick="copyRevealKey()">📋 Kopieren</button>
+          <button class="btn-secondary" onclick="closeRevealModal()">Schließen</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2336,6 +2430,54 @@ async function loadServerInfo() {
   set('si-proto',   s.server_protocol || '–');
 }
 
+// ── Reveal API Key Modal ──────────────────────────────────────
+let _revealKeyId = null;
+
+function showRevealModal(id, name) {
+  _revealKeyId = id;
+  document.getElementById('reveal-modal-title').textContent = `API-Key anzeigen — ${name}`;
+  document.getElementById('reveal-password-input').value = '';
+  document.getElementById('reveal-error').style.display = 'none';
+  document.getElementById('reveal-password-section').style.display = '';
+  document.getElementById('reveal-key-section').style.display = 'none';
+  document.getElementById('reveal-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('reveal-password-input').focus(), 50);
+}
+
+function closeRevealModal() {
+  document.getElementById('reveal-modal').style.display = 'none';
+  document.getElementById('reveal-key-value').textContent = '';
+  _revealKeyId = null;
+}
+
+async function submitReveal() {
+  const pw  = document.getElementById('reveal-password-input').value;
+  const err = document.getElementById('reveal-error');
+  if (!pw) { err.textContent = 'Bitte Passwort eingeben'; err.style.display = ''; return; }
+
+  const d = await apiPost('reveal_api_key', {id: _revealKeyId, password: pw});
+  if (d.error) {
+    err.textContent = d.error;
+    err.style.display = '';
+    document.getElementById('reveal-password-input').value = '';
+    document.getElementById('reveal-password-input').focus();
+    return;
+  }
+  document.getElementById('reveal-password-section').style.display = 'none';
+  document.getElementById('reveal-key-value').textContent = d.key;
+  document.getElementById('reveal-key-section').style.display = '';
+}
+
+async function copyRevealKey() {
+  const key = document.getElementById('reveal-key-value').textContent;
+  try {
+    await navigator.clipboard.writeText(key);
+    showToast('API-Key kopiert', 'success');
+  } catch {
+    showToast('Kopieren fehlgeschlagen — bitte manuell kopieren', 'error');
+  }
+}
+
 // ── API Key Management ────────────────────────────────────────
 async function loadApiKeys() {
   const tbody = document.getElementById('apikey-tbody');
@@ -2354,7 +2496,8 @@ async function loadApiKeys() {
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.last_used ?? 'Nie'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.use_count ?? 0}</td>
       <td>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${k.active ? `<button class="btn-icon" onclick="showRevealModal('${k.id}','${esc(k.name)}')">👁 Anzeigen</button>` : ''}
           ${k.active ? `<button class="btn-icon" onclick="revokeApiKey('${k.id}')">⛔ Widerrufen</button>` : ''}
           <button class="btn-icon danger" onclick="deleteApiKey('${k.id}')">✕ Löschen</button>
         </div>
