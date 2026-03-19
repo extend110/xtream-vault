@@ -314,15 +314,25 @@ function current_user(): ?array {
 function require_login(): array {
     $user = current_user();
     if (!$user) {
-        // API-Aufruf → JSON-Fehler
+        // Wartungsmodus: Login-Seite zeigt eigene Meldung
         if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
             header('Content-Type: application/json');
             http_response_code(401);
             echo json_encode(['error' => 'unauthenticated']);
             exit;
         }
-        // Browser → Redirect zur Login-Seite
         header('Location: login.php');
+        exit;
+    }
+    // Wartungsmodus aktiv → nur Admins dürfen rein
+    if (file_exists(MAINTENANCE_FILE) && $user['role'] !== 'admin') {
+        if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) || str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json')) {
+            header('Content-Type: application/json');
+            http_response_code(503);
+            echo json_encode(['error' => 'maintenance']);
+            exit;
+        }
+        include __DIR__ . '/maintenance.php';
         exit;
     }
     return $user;

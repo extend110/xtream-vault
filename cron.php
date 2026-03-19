@@ -16,21 +16,20 @@
 // ─── Config aus config.json laden ────────────────────────────────────────────
 require_once __DIR__ . '/config.php';
 
-// ─── Lock: ALLERERSTE Aktion — verhindert parallele Runs ─────────────────────
-$lockFile = sys_get_temp_dir() . '/xtream_cron.lock';
-
-function cron_pid_running(int $pid): bool {
-    if ($pid <= 0) return false;
-    if (function_exists('posix_kill')) return posix_kill($pid, 0);
-    return file_exists('/proc/' . $pid);
-}
-
-$existingPid = file_exists($lockFile) ? (int)@file_get_contents($lockFile) : 0;
-if ($existingPid > 0 && cron_pid_running($existingPid)) {
+// ─── Lock: Atomarer flock — verhindert parallele Runs ────────────────────────
+// flock(LOCK_EX|LOCK_NB) ist atomar — kein Race-Condition möglich
+// Lock bleibt offen (in $GLOBALS) bis PHP-Prozess endet → automatisch freigegeben
+$GLOBALS['_cron_lock_file'] = sys_get_temp_dir() . '/xtream_cron.lock';
+$GLOBALS['_cron_lock_fh']   = fopen($GLOBALS['_cron_lock_file'], 'c');
+if (!$GLOBALS['_cron_lock_fh'] || !flock($GLOBALS['_cron_lock_fh'], LOCK_EX | LOCK_NB)) {
+    if ($GLOBALS['_cron_lock_fh']) fclose($GLOBALS['_cron_lock_fh']);
     exit(0); // Andere Instanz aktiv — still beenden
 }
-file_put_contents($lockFile, getmypid());
-register_shutdown_function(fn() => @unlink($lockFile));
+// PID in Lock-Datei schreiben (für Status-Anzeige)
+ftruncate($GLOBALS['_cron_lock_fh'], 0);
+fwrite($GLOBALS['_cron_lock_fh'], (string)getmypid());
+fflush($GLOBALS['_cron_lock_fh']);
+// Lock wird beim Prozessende automatisch freigegeben (fh bleibt offen)
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 define('CHUNK_SIZE',      1024 * 256);

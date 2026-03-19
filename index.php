@@ -760,6 +760,7 @@ body::before {
 
       <!-- Schnellzugriff -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn-secondary" onclick="dashStartQueue()">▶ Queue starten</button>
         <button class="btn-secondary" onclick="dashRebuildCache()">↻ Cache aufbauen</button>
         <button class="btn-secondary" onclick="dashClearDone()">Erledigte leeren</button>
         <button class="btn-secondary danger" onclick="dashClearAll()">Queue leeren</button>
@@ -890,6 +891,9 @@ body::before {
       <div class="queue-toolbar">
         <div class="queue-toolbar-title">Download Queue</div>
         <button class="btn-sm" onclick="refreshQueue()">↻ Refresh</button>
+        <?php if ($can_settings): ?>
+        <button class="btn-sm" onclick="startQueue()">▶ Starten</button>
+        <?php endif; ?>
         <?php if ($can_queue_clear): ?>
         <button class="btn-sm" onclick="clearDone()">✕ Done entfernen</button>
         <button class="btn-sm danger" onclick="clearAll()">🗑 Alles löschen</button>
@@ -1079,6 +1083,20 @@ body::before {
         <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()">💾 Speichern</button>
       </div>
       <div class="settings-msg" id="settings-msg"></div>
+
+      <!-- Wartungsmodus -->
+      <div class="settings-card" style="margin-top:24px;border-color:rgba(255,71,87,.2)">
+        <h3>🔧 Wartungsmodus</h3>
+        <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+          Wenn aktiv, können sich nur Admins einloggen. Alle anderen sehen eine Wartungsseite.
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+          <div id="maintenance-status" style="font-family:'DM Mono',monospace;font-size:.75rem;padding:5px 12px;border-radius:5px;background:var(--bg3);border:1px solid var(--border)">
+            Lade…
+          </div>
+          <button class="btn-secondary" id="btn-maintenance-toggle" onclick="toggleMaintenance()">Lade…</button>
+        </div>
+      </div>
       <?php else: ?>
       <div class="state-box"><div class="icon">🔒</div><p>Keine Berechtigung — nur Admins können die Einstellungen ändern.</p></div>
       <?php endif; ?>
@@ -1339,7 +1357,7 @@ function movieCard(m) {
     : '';
 
   const isFav = favourites.has('movie:' + m.stream_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
   return `
   <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}">
@@ -1371,7 +1389,7 @@ async function loadSeriesCat(catId, catName, el) {
 function seriesCard(s) {
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
   const isFav = favourites.has('series:' + s.series_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
   return `
   <div class="card" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
@@ -1666,13 +1684,13 @@ function updateFavBadge() {
   badge.style.display = n > 0 ? '' : 'none';
 }
 
-async function toggleFav(type, sid, title, cover, category, btn) {
+async function toggleFav(type, sid, title, cover, category, ext, btn) {
   const key = type + ':' + sid;
-  const d = await apiPost('favourite_toggle', {stream_id: sid, type, title, cover, category});
+  const d = await apiPost('favourite_toggle', {stream_id: sid, type, title, cover, category, ext});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   if (d.action === 'added') {
     favourites.add(key);
-    favouriteData.push({stream_id: sid, type, title, cover, category, added_at: new Date().toISOString().slice(0,10)});
+    favouriteData.push({stream_id: sid, type, title, cover, category, ext, added_at: new Date().toISOString().slice(0,10)});
     btn.classList.add('active');
     showToast('Zu Favoriten hinzugefügt', 'success');
   } else {
@@ -1711,17 +1729,33 @@ function renderFavourites() {
     const thumb = f.cover
       ? `<img src="${esc(f.cover)}" alt="" class="loaded" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">`
       : '';
+    const ext = f.ext || 'mp4';
+
+    // Queue-Button: Filme direkt queuen, Serien → Modal öffnen
+    let actionBtn = '';
+    if (f.type === 'movie' && canQueueAdd) {
+      const movieObj = JSON.stringify({
+        stream_id: f.stream_id, type: 'movie', title: f.title,
+        container_extension: ext, cover: f.cover, category: f.category,
+        clean_title: f.title,
+      }).replace(/"/g, '&quot;');
+      actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
+    } else if (f.type === 'series') {
+      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}')">📋 Episodes</button>`;
+    }
+
     return `
     <div class="card">
       <div class="card-thumb">
         <div class="card-thumb-placeholder">${icon}</div>
         ${thumb}
-        <button class="btn-fav active" onclick="event.stopPropagation();toggleFav('${f.type}','${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}',this)">♥</button>
+        <button class="btn-fav active" onclick="event.stopPropagation();toggleFav('${f.type}','${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}','${esc(ext)}',this)">♥</button>
       </div>
       <div class="card-body">
         <div class="card-title">${esc(f.title)}</div>
         <div class="card-meta">${f.type === 'series' ? 'Serie' : 'Film'} · ${esc(f.category||'')}</div>
       </div>
+      ${actionBtn ? `<div class="card-actions">${actionBtn}</div>` : ''}
     </div>`;
   }).join('');
   lazyLoadImages();
@@ -1863,7 +1897,7 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
   if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys();<?php endif; ?> }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
@@ -1881,6 +1915,41 @@ function showView(v) {
 
 // ── Settings ──────────────────────────────────────────────────
 <?php if ($can_settings): ?>
+async function loadMaintenance() {
+  const d = await api('maintenance_status');
+  applyMaintenanceStatus(d.active ?? false);
+}
+
+function applyMaintenanceStatus(active) {
+  const status = document.getElementById('maintenance-status');
+  const btn    = document.getElementById('btn-maintenance-toggle');
+  if (!status || !btn) return;
+  if (active) {
+    status.textContent = '🔴 Wartungsmodus AKTIV';
+    status.style.color = 'var(--red)';
+    status.style.borderColor = 'rgba(255,71,87,.3)';
+    btn.textContent = 'Wartungsmodus deaktivieren';
+    btn.className = 'btn-secondary danger';
+  } else {
+    status.textContent = '🟢 Normal — Seite erreichbar';
+    status.style.color = 'var(--green)';
+    status.style.borderColor = 'rgba(46,213,115,.2)';
+    btn.textContent = 'Wartungsmodus aktivieren';
+    btn.className = 'btn-secondary';
+  }
+}
+
+async function toggleMaintenance() {
+  const current = document.getElementById('maintenance-status')?.textContent?.includes('AKTIV');
+  if (!current && !confirm('Wartungsmodus aktivieren? Alle nicht-Admin-User werden ausgesperrt.')) return;
+  const action = current ? 'maintenance_disable' : 'maintenance_enable';
+  const d = await fetch(`${API}?action=${action}`, {method:'POST'});
+  const r = await d.json();
+  if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
+  applyMaintenanceStatus(!current);
+  showToast(current ? 'Wartungsmodus deaktiviert' : 'Wartungsmodus aktiviert', current ? 'success' : 'info');
+}
+
 async function loadConfig() {
   const c = await api('get_config');
   document.getElementById('cfg-server-ip').value    = c.server_ip     ?? '';
@@ -2115,6 +2184,15 @@ async function cancelDownload() {
   const r = await d.json();
   if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
   showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
+}
+
+async function startQueue() {
+  const d = await apiPost('queue_start', {});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
+}
+async function dashStartQueue() {
+  await startQueue();
 }
 
 async function dashRebuildCache() {

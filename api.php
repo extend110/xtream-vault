@@ -548,6 +548,25 @@ switch ($action) {
         ]);
         break;
 
+    case 'maintenance_enable':
+        require_permission('settings');
+        file_put_contents(MAINTENANCE_FILE, date('Y-m-d H:i:s'));
+        log_activity($current_user['id'], $current_user['username'], 'maintenance_enable', []);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'maintenance_disable':
+        require_permission('settings');
+        @unlink(MAINTENANCE_FILE);
+        log_activity($current_user['id'], $current_user['username'], 'maintenance_disable', []);
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'maintenance_status':
+        require_permission('settings');
+        echo json_encode(['active' => file_exists(MAINTENANCE_FILE)]);
+        break;
+
     case 'queue_cancel':
         require_permission('queue_remove');
         // Schreibt cancel.lock — cron.php prüft diese Datei und bricht ab
@@ -580,9 +599,10 @@ switch ($action) {
                 $favs[$key] = [
                     'stream_id' => $sid,
                     'type'      => $type,
-                    'title'     => sanitize($d['title']  ?? ''),
-                    'cover'     => $d['cover']  ?? '',
+                    'title'     => sanitize($d['title']    ?? ''),
+                    'cover'     => $d['cover']    ?? '',
                     'category'  => $d['category'] ?? '',
+                    'ext'       => $d['ext']       ?? 'mp4',
                     'added_at'  => date('Y-m-d H:i:s'),
                 ];
                 $action = 'added';
@@ -821,6 +841,33 @@ switch ($action) {
             'total'         => count($movies) + count($episodes),
             'categories'    => $categories,
         ]);
+        break;
+
+    case 'queue_start':
+        require_permission('settings');
+        // Atomar prüfen ob cron.php läuft — gleicher Lock wie cron.php
+        $cronLock = sys_get_temp_dir() . '/xtream_cron.lock';
+        $lf = fopen($cronLock, 'c');
+        if (!$lf) { echo json_encode(['error' => 'Lock-Datei nicht erstellbar']); break; }
+        $free = flock($lf, LOCK_EX | LOCK_NB);
+        fclose($lf);
+        if (!$free) {
+            echo json_encode(['error' => 'Download-Worker läuft bereits']);
+            break;
+        }
+        // Lock war frei — cron.php kann gestartet werden
+        $q = load_queue();
+        $pending = array_filter($q, fn($qi) => $qi['status'] === 'pending');
+        if (empty($pending)) {
+            echo json_encode(['error' => 'Keine ausstehenden Downloads in der Queue']);
+            break;
+        }
+        $script  = escapeshellarg(__DIR__ . '/cron.php');
+        $cronLog = escapeshellarg(DATA_PATH . '/cron.log');
+        $phpBin  = escapeshellarg(PHP_BINARY ?: 'php');
+        shell_exec("{$phpBin} {$script} >> {$cronLog} 2>&1 &");
+        log_activity($current_user['id'], $current_user['username'], 'queue_start', ['pending' => count($pending)]);
+        echo json_encode(['ok' => true, 'pending' => count($pending)]);
         break;
 
     case 'rebuild_library_cache':
