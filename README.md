@@ -110,7 +110,7 @@ sudo -u www-data crontab -l
 
 Erwartete Einträge:
 ```
-*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
+*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&11
 0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
 0 3 * * * /usr/bin/php /var/www/html/xtream/backup.php >> /dev/null 2>&1
 ```

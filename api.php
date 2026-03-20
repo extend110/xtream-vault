@@ -999,21 +999,24 @@ switch ($action) {
 
     case 'queue_start':
         require_permission('settings');
-        $lockDir     = sys_get_temp_dir() . '/xtream_cron.lockdir';
-        $startingLock = sys_get_temp_dir() . '/xtream_cron_starting.lock';
+        $lockFile     = __DIR__ . '/data/cron.lock';
+        $startingLock = __DIR__ . '/data/cron_starting.lock';
 
-        // Läuft bereits?
-        if (is_dir($lockDir)) {
-            $stalePid = (int)@file_get_contents($lockDir . '/pid');
-            $running = $stalePid > 0
-                && (function_exists('posix_kill') ? posix_kill($stalePid, 0) : file_exists('/proc/' . $stalePid));
-            if ($running) {
-                echo json_encode(['error' => 'Download-Worker läuft bereits']);
-                break;
-            }
+        // Prüfen ob cron.php läuft — gleiche Lock-Datei wie cron.php intern
+        $lf = @fopen($lockFile, 'c');
+        if ($lf) {
+            $free = flock($lf, LOCK_EX | LOCK_NB);
+            if ($free) flock($lf, LOCK_UN);
+            fclose($lf);
+        } else {
+            $free = true;
+        }
+        if (!$free) {
+            echo json_encode(['error' => 'Download-Worker läuft bereits']);
+            break;
         }
 
-        // Wird gerade gestartet?
+        // Semaphore gegen Doppelstart innerhalb 10s
         if (file_exists($startingLock) && (time() - filemtime($startingLock)) < 10) {
             echo json_encode(['error' => 'Download-Worker wird gerade gestartet']);
             break;
@@ -1245,11 +1248,12 @@ switch ($action) {
         echo json_encode([
             'queue_stats'      => $qStats,
             'recent_downloads' => array_map(fn($q) => [
-                'title'    => $q['title'],
-                'type'     => $q['type']    ?? 'movie',
-                'added_at' => $q['done_at'] ?? $q['added_at'] ?? '',
-                'added_by' => $q['added_by'] ?? '',
-                'cover'    => $q['cover']    ?? '',
+                'stream_id' => (string)($q['stream_id'] ?? $q['id'] ?? ''),
+                'title'     => $q['title'],
+                'type'      => $q['type']    ?? 'movie',
+                'added_at'  => $q['done_at'] ?? $q['added_at'] ?? '',
+                'added_by'  => $q['added_by'] ?? '',
+                'cover'     => $q['cover']    ?? '',
             ], $recentDownloads),
             'disk'             => $diskInfo,
             'system'           => [

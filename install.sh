@@ -152,7 +152,7 @@ crontab -u www-data -l 2>/dev/null | grep -v "xtream\|cache_builder\|backup.php"
 
 # Neue Einträge anhängen
 cat >> "$CRON_TMP" <<EOL
-*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>&1
+*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>&11
 0 4 * * * $PHP_BIN $PROJECT_PATH/cache_builder.php >> /dev/null 2>&1
 0 3 * * * $PHP_BIN $PROJECT_PATH/backup.php >> /dev/null 2>&1
 EOL

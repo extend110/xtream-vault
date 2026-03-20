@@ -16,38 +16,21 @@
 // ─── Config aus config.json laden ────────────────────────────────────────────
 require_once __DIR__ . '/config.php';
 
-// ─── Lock: mkdir-basiert (atomar auf allen POSIX-Systemen) ───────────────────
-$GLOBALS['_cron_lock_dir'] = sys_get_temp_dir() . '/xtream_cron.lockdir';
-// Debug: lock-Verhalten in separates Log schreiben
-$_lockLog = fn(string $msg) => file_put_contents(
-    __DIR__ . '/data/lock_debug.log',
-    '[' . date('Y-m-d H:i:s') . '] pid=' . getmypid() . ' ' . $msg . PHP_EOL,
-    FILE_APPEND
-);
-$lockResult = @mkdir($GLOBALS['_cron_lock_dir'], 0700);
-$_lockLog('mkdir=' . ($lockResult ? 'created' : 'exists') . ' dir=' . $GLOBALS['_cron_lock_dir']);
-if (!$lockResult) {
-    $pidFile  = $GLOBALS['_cron_lock_dir'] . '/pid';
-    $stalePid = file_exists($pidFile) ? (int)@file_get_contents($pidFile) : 0;
-    $alive    = $stalePid > 0
-        && (function_exists('posix_kill') ? posix_kill($stalePid, 0) : file_exists('/proc/' . $stalePid));
-    $_lockLog("existing pid=$stalePid alive=" . ($alive ? 'yes' : 'no'));
-    if ($alive) { $_lockLog('exit: other process running'); exit(0); }
-    @unlink($pidFile);
-    @rmdir($GLOBALS['_cron_lock_dir']);
-    if (!@mkdir($GLOBALS['_cron_lock_dir'], 0700)) {
-        $_lockLog('exit: second mkdir failed');
-        exit(0);
-    }
-    $_lockLog('stale lock cleaned, continuing');
+// ─── Lock: flock auf data/ (kein tmpfs) ──────────────────────────────────────
+// /tmp ist oft tmpfs wo flock(LOCK_NB) unzuverlässig ist.
+// data/ liegt auf dem echten Dateisystem → flock garantiert atomar.
+// Filehandle bleibt offen für gesamte Laufzeit → Lock automatisch freigegeben.
+$GLOBALS['_cron_lock_fh'] = fopen(__DIR__ . '/data/cron.lock', 'c');
+if (!$GLOBALS['_cron_lock_fh'] || !flock($GLOBALS['_cron_lock_fh'], LOCK_EX | LOCK_NB)) {
+    if ($GLOBALS['_cron_lock_fh']) fclose($GLOBALS['_cron_lock_fh']);
+    $logLine = '[' . date('Y-m-d H:i:s') . '] Another instance of cron.php is already running. Exiting.' . PHP_EOL;
+    @file_put_contents(__DIR__ . '/data/cron.log', $logLine, FILE_APPEND);
+    exit(0);
 }
-file_put_contents($GLOBALS['_cron_lock_dir'] . '/pid', (string)getmypid());
-$_lockLog('lock acquired, pid written');
-register_shutdown_function(function() {
-    @unlink($GLOBALS['_cron_lock_dir'] . '/pid');
-    @rmdir($GLOBALS['_cron_lock_dir']);
-});
-@unlink(sys_get_temp_dir() . '/xtream_cron_starting.lock');
+ftruncate($GLOBALS['_cron_lock_fh'], 0);
+fwrite($GLOBALS['_cron_lock_fh'], (string)getmypid());
+fflush($GLOBALS['_cron_lock_fh']);
+@unlink(__DIR__ . '/data/cron_starting.lock');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 define('CHUNK_SIZE',      1024 * 256);
@@ -517,34 +500,11 @@ foreach ($queue as &$item) {
         if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
     }
 
-    // Dateiname: Länderkürzel entfernen, Jahr behalten (via clean_title)
-    $fileTitle = clean_title($title);
-    // Episoden: Format immer "Serienname.SxxExx" — alles danach abschneiden
-    if ($type !== 'movie') {
-        $base = remove_country_prefix($title);
-        $base = trim($base);
-        if (preg_match('/^(.*?)[.\s\-_]+([Ss]\d{1,2}[Ee]\d{1,2})/u', $base, $m)) {
-            // Serienname bereinigen: Punkte/Bindestriche durch Leerzeichen ersetzen
-            $seriesName = trim(preg_replace('/[.\-_]+/', ' ', $m[1]));
-            // SxxExx normalisieren: S01E01 Großbuchstaben
-            $episode    = strtoupper($m[2]);
-            $fileTitle  = $seriesName . '.' . $episode;
-        } else {
-            // Kein SxxExx gefunden → nur Kürzel entfernen
-            $fileTitle = $base;
-        }
-    }
-    $safeTitle = safe_filename($fileTitle) ?: safe_filename($title) ?: 'film_' . $sid;
-    $safeTitle = trim($safeTitle, ' -_.');
-    $safeTitle = $safeTitle ?: 'film_' . $sid;
-
-    // Kategorie: Länderkürzel entfernen (z.B. 'DE Hotel Cocaine' → 'Hotel Cocaine')
-    // trim() zuerst um unsichtbare Zeichen/BOM zu entfernen
-    $catTrimmed = trim($cat);
+    // Kategorie: Länderkürzel entfernen
+    $catTrimmed = preg_replace('/\xc2\xa0/', ' ', trim($cat)); // non-breaking space normalisieren
     $cleanCat   = remove_country_prefix($catTrimmed);
-    // Fallback: wenn remove_country_prefix nichts geändert hat, nochmals via Regex versuchen
     if ($cleanCat === $catTrimmed) {
-        $cleanCat = preg_replace('/^[A-Z]{2,4}\s+/', '', $catTrimmed);
+        $cleanCat = preg_replace('/^[A-Z]{2,4}\s+/u', '', $catTrimmed);
     }
     $cleanCat = trim($cleanCat) ?: $catTrimmed;
     $safeCat  = safe_filename($cleanCat) ?: 'Uncategorized';
@@ -559,11 +519,36 @@ foreach ($queue as &$item) {
             $safeCat = $safeCat ?: 'Uncategorized';
         }
         if ($safePrefix === '') {
-            // Kürzel noch nicht gefunden — aus $safeCat extrahieren (z.B. "DE Arctic Circle" → "DE")
+            // Kürzel noch nicht gefunden — aus $safeCat extrahieren
             $safePrefix = extract_country_prefix($safeCat);
             $safeCat    = remove_country_prefix($safeCat);
             $safeCat    = trim($safeCat, ' -_.') ?: 'Uncategorized';
         }
+    }
+
+    // Dateiname: jetzt wo $safeCat final ist, $fileTitle aufbauen
+    $fileTitle = clean_title($title);
+    if ($type !== 'movie') {
+        // Serienname immer aus dem finalisierten $safeCat
+        $seriesBase = $safeCat ?: 'Unknown';
+
+        // SxxExx aus Stream-Titel extrahieren
+        $episode = '';
+        if (preg_match('/([Ss]\d{1,2}[Ee]\d{1,2})/u', $title, $m)) {
+            $episode = strtoupper($m[1]);
+        }
+        // Fallback: aus season + episode_num Feldern im Queue-Item
+        if ($episode === '' && isset($item['season'], $item['episode_num'])) {
+            $episode = sprintf('S%02dE%02d', (int)$item['season'], (int)$item['episode_num']);
+        }
+
+        $fileTitle = $episode !== '' ? $seriesBase . '.' . $episode : $seriesBase;
+    }
+    $safeTitle = safe_filename($fileTitle) ?: safe_filename($title) ?: 'film_' . $sid;
+    $safeTitle = trim($safeTitle, ' -_.');
+    $safeTitle = $safeTitle ?: 'film_' . $sid;
+
+    if ($type === 'episode') {
         // Serien-Struktur: TV Shows / [CC /] Serienname / [Staffel N /] Episode.mkv
         $staffel = $season !== null ? ('Staffel ' . $season) : '';
         $relPath = $sub

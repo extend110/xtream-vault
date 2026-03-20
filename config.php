@@ -76,32 +76,32 @@ define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', '
  * Gibt das Kürzel zurück (z.B. 'DE') oder '' wenn keins gefunden.
  */
 function extract_country_prefix(string $name): string {
-    // Normalisieren: non-breaking spaces und andere Whitespace-Varianten ersetzen
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
-    // Mit Trennzeichen (Leerzeichen, |, :, -)  z.B. 'DE | Film', 'US: Movie', 'DE Film'
-    if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) {
-        return $m[1];
-    }
-    // Ohne Trennzeichen: nur bekannte Kürzel, gefolgt von Großbuchstabe
+    // Mit Standard-Trennzeichen
+    if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) return $m[1];
+    // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃)
+    if (preg_match('/^([A-Z]{2,4})[^\p{L}\p{N}\s]+/u', $name, $m)) return $m[1];
+    // Ohne Trennzeichen: nur bekannte Kürzel
     foreach (COUNTRY_CODES as $code) {
         $len = strlen($code);
         if (strncmp($name, $code, $len) === 0) {
             $rest = substr($name, $len);
-            if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) {
-                return $code;
-            }
+            if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) return $code;
         }
     }
     return '';
 }
 
 function remove_country_prefix(string $name): string {
-    // Normalisieren: non-breaking spaces ersetzen
+    // Normalisieren: non-breaking spaces und alle sonstigen Whitespace-Varianten → normales Leerzeichen
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
-    // Mit Trennzeichen
+    // Mit Standard-Trennzeichen (Leerzeichen, |, :, -)
     $stripped = preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name);
+    if ($stripped !== $name) return trim($stripped);
+    // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃ U+2503, │ U+2502, ‖ etc.)
+    $stripped = preg_replace('/^[A-Z]{2,4}[^\p{L}\p{N}\s]+/u', '', $name);
     if ($stripped !== $name) return trim($stripped);
     // Ohne Trennzeichen: bekannte Kürzel
     foreach (COUNTRY_CODES as $code) {

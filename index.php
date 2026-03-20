@@ -441,6 +441,7 @@ body::before {
   .dash-info-card { padding: 10px 12px; }
   .dic-val { font-size: .8rem; }
   #dash-bottom-grid { grid-template-columns: 1fr !important; }
+  .dash-bottom-grid { grid-template-columns: 1fr !important; }
 }
 
 @media (max-width: 480px) {
@@ -500,6 +501,7 @@ body::before {
   padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .9rem;
   min-height: 44px;
 }
+.dash-bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .settings-toggle:last-child { border-bottom: none; padding-bottom: 0; }
 .settings-toggle input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
@@ -896,7 +898,7 @@ body::before {
       </div>
 
       <!-- Letzte Downloads + Queue nebeneinander -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="dash-bottom-grid">
+      <div class="dash-bottom-grid" id="dash-bottom-grid">
         <div>
           <div class="dkpi-l" style="margin-bottom:8px">Letzte Downloads</div>
           <div id="dash-recent" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -2442,7 +2444,7 @@ function showView(v) {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
     // queueRefreshInterval bleibt leer, refreshQueue läuft über startProgressPolling
   }
-  if (v !== 'queue') stopProgressPolling();
+  if (v !== 'queue' && v !== 'dashboard') stopProgressPolling();
   <?php if ($can_settings): ?>if (v !== 'dashboard') stopDashboardPolling();<?php endif; ?>
   // Clear multi-select when leaving search
   if (v !== 'search') clearSelection();
@@ -2763,10 +2765,11 @@ async function loadDashboardData() {
     } else {
       recent.innerHTML = d.recent_downloads.map(item => {
         const icon = item.type === 'episode' ? '📺' : '🎬';
-        const resetBtn = canQueueRemove
-          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${item.id}','${item.type ?? 'movie'}',this.closest('div[style*=border-bottom]'))" title="Zurücksetzen">↺</button>`
+        const sid  = item.stream_id ?? '';
+        const resetBtn = (canQueueRemove && sid)
+          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${sid}','${item.type ?? 'movie'}',this.closest('.dl-row'))" title="Zurücksetzen">↺</button>`
           : '';
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
+        return `<div class="dl-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
           ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
           <div style="flex:1;min-width:0">
             <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
@@ -2969,17 +2972,12 @@ async function deleteApiKey(id) {
 let progressInterval = null;
 
 function startProgressPolling() {
-  // Sofort ausführen
   pollProgress();
   refreshQueue();
-  // Einziger Interval für beides — verhindert Race Condition
   if (!progressInterval) progressInterval = setInterval(async () => {
     await pollProgress();
-    // Queue nur alle 10s aktualisieren (5 × 2s)
-    if (!progressInterval._tick) progressInterval._tick = 0;
-    progressInterval._tick++;
-    if (progressInterval._tick % 5 === 0) refreshQueue();
-  }, 2000);
+    if (currentView === 'queue') refreshQueue();
+  }, 5000);
 }
 function stopProgressPolling() {
   clearInterval(progressInterval);
