@@ -2057,9 +2057,15 @@ async function refreshQueue() {
 
       const statusEl = existing.querySelector('.qi-status');
       const statusLabel = {pending:'Ausstehend', downloading:'Lädt…', done:'Fertig', error:'Fehler'}[item.status] ?? item.status;
-      if (statusEl && statusEl.textContent !== statusLabel) {
-        statusEl.textContent = statusLabel;
-        statusEl.className   = `qi-status ${item.status}`;
+      if (statusEl) {
+        statusEl.className = `qi-status ${item.status}`;
+        const retryBtn = item.status === 'error' && canQueueRemove
+          ? `<button class="btn-icon" style="font-size:.65rem;padding:3px 8px;margin-left:6px" onclick="retryQueueItem('${item.stream_id}')">↻ Retry</button>`
+          : '';
+        const resetBtn = item.status === 'done' && canQueueRemove
+          ? `<button class="btn-icon" style="font-size:.65rem;padding:3px 8px;margin-left:6px" onclick="resetDownload('${item.stream_id}','${item.type ?? 'movie'}',this.closest('.queue-item'))" title="Zurücksetzen">↺ Reset</button>`
+          : '';
+        statusEl.innerHTML = statusLabel + retryBtn + resetBtn;
       }
     }
   });

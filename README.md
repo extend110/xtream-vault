@@ -110,7 +110,7 @@ sudo -u www-data crontab -l
 
 Erwartete Einträge:
 ```
-*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&11
+*/30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
 0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
 0 3 * * * /usr/bin/php /var/www/html/xtream/backup.php >> /dev/null 2>&1
 ```
@@ -240,18 +240,18 @@ TV Shows/
         Dark.S02E01.mkv
 ```
 
-**Länderkürzel** werden automatisch aus Serientitel oder Kategorie extrahiert (`DE`, `US`, `DACH`, `MULTI` etc.). Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
+**Länderkürzel** werden automatisch aus dem Serientitel oder der Kategorie extrahiert (`DE`, `US`, `DACH`, `MULTI` etc.). Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
 
 **Dateinamen:**
 - Filme: `Titel.Jahr.ext`
-- Episoden: `Serienname.SxxExx.ext` — alles nach dem Episode-Code wird entfernt
-- Doppelpunkte im Titel werden durch `-` ersetzt, Umlaute bleiben erhalten
+- Episoden: `Serienname.SxxExx.ext` — Serienname kommt immer aus dem Xtream-Serientitel, SxxExx wird aus dem Stream-Titel extrahiert
+- Doppelpunkte werden durch `-` ersetzt, Umlaute bleiben erhalten
 
-**Unterstützte Eingabeformate für Episoden:**
-- `Dark - S01E01 - Folge 1` → `Dark.S01E01.mkv`
-- `dark.s01e01.german.720p` → `dark.S01E01.mkv`
-- `power.book IV force S02E01` → `power book IV force.S02E01.mkv`
-- `power.book.iv.force.s01e01.german.dl.720p` → `power book iv force.S01E01.mkv`
+**Beispiele Episoden** (Serientitel: `DE Dark`, Stream-Titel variiert):
+```
+dark.s02e04.german.720p  →  TV Shows/DE/Dark/Staffel 2/Dark.S02E04.mkv
+Dark - S01E01 - Folge 1  →  TV Shows/DE/Dark/Staffel 1/Dark.S01E01.mkv
+```
 
 ---
 
@@ -298,7 +298,7 @@ Admins können in der **Benutzerverwaltung** für jeden User ein individuelles L
 
 ### Manuell starten
 
-Downloads können über **▶ Starten** im Dashboard oder in der Queue-Ansicht manuell angestoßen werden, ohne den nächsten Cron-Lauf abzuwarten.
+Downloads können über **▶ Starten** im Dashboard oder in der Queue-Ansicht manuell angestoßen werden, ohne den nächsten Cron-Lauf abzuwarten. Der Worker prüft intern ob bereits eine Instanz läuft und verhindert Doppelstarts.
 
 ### Speicherplatz-Prüfung (lokaler Modus)
 
@@ -451,7 +451,7 @@ xtream-frontend/
     ├── rate_limits.json       — Rate-Limit-Tracking
     ├── api_keys.json          — API-Keys
     ├── progress.json          — Aktueller Download-Fortschritt
-    ├── cancel.lock            — Abbruch-Signal (temporär)
+    ├── cron.lock              — Download-Worker Lock-Datei (temporär)
     ├── cron.log               — Download-Log
     ├── backup.log             — Backup-Log
     └── backups/               — Backup-Archiv (automatisch erstellt)
