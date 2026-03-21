@@ -105,6 +105,97 @@ function stream_url(string $type, $id, string $ext): string {
 switch ($action) {
 
     // ── Health Check ──────────────────────────────────────────────────────────
+    case 'tmdb_info':
+        require_permission('browse');
+        $d     = $_GET + (json_decode(file_get_contents('php://input'), true) ?? []);
+        $title = trim($d['title'] ?? '');
+        $type  = $d['type'] ?? 'movie';
+        $year  = trim($d['year']  ?? '');
+        if ($title === '') { echo json_encode(['error' => 'Missing title']); break; }
+        if (TMDB_API_KEY === '') { echo json_encode(['error' => 'TMDB API-Key nicht konfiguriert']); break; }
+
+        // ── Titel bereinigen ──────────────────────────────────────────────────
+        // 1. Alle führenden Unicode-Sonderzeichen entfernen (z.B. ┃ U+2503)
+        $title = preg_replace('/^[^\p{L}\p{N}]+/u', '', $title);
+        // 2. Länderkürzel + Trennzeichen am Anfang entfernen (DE, US, DACH, ┃DE┃ etc.)
+        $title = preg_replace('/^[A-Z]{2,4}[^\p{L}\p{N}]*/u', '', $title);
+        // 3. Nochmal führende Sonderzeichen bereinigen
+        $title = preg_replace('/^[^\p{L}\p{N}]+/u', '', $title);
+        // 4. Jahr extrahieren — aus "(1966)", "- 2026" oder " 2026" am Ende
+        if ($year === '') {
+            if (preg_match('/\(((19|20)\d{2})\)\s*$/', $title, $ym)) {
+                $year = $ym[1];
+            } elseif (preg_match('/\b((19|20)\d{2})\b/', $title, $ym)) {
+                $year = $ym[1];
+            }
+        }
+        // 5. Jahr aus dem Titel entfernen — "(1966)", "- 2026", " 2026" am Ende
+        $title = preg_replace('/\s*\((?:19|20)\d{2}\)\s*$/', '', $title);
+        $title = preg_replace('/\s*[-–]\s*(?:19|20)\d{2}\s*$/', '', $title);
+        $title = preg_replace('/\s+(?:19|20)\d{2}\s*$/', '', $title);
+        // 6. Trailing Sonderzeichen/Leerzeichen bereinigen
+        $title = trim($title, " -–·|");
+        $title = trim($title);
+
+        if ($title === '') { echo json_encode(['error' => 'Titel nach Bereinigung leer']); break; }
+
+        $apiKey   = TMDB_API_KEY;
+        $endpoint = $type === 'series' ? 'tv' : 'movie';
+        $query    = urlencode($title);
+        $yearParam = $year ? ($type === 'series' ? "&first_air_date_year={$year}" : "&year={$year}") : '';
+        $searchUrl = "https://api.themoviedb.org/3/search/{$endpoint}?api_key={$apiKey}&query={$query}&language=de-DE{$yearParam}";
+
+        $ctx = stream_context_create(['http' => ['timeout' => 8, 'header' => "User-Agent: XtreamVault/1.0\r\n"]]);
+        $raw = @file_get_contents($searchUrl, false, $ctx);
+
+        // Fallback: ohne Jahr suchen falls keine Ergebnisse
+        if ($raw !== false) {
+            $data = json_decode($raw, true);
+            if (empty($data['results']) && $yearParam !== '') {
+                $raw = @file_get_contents(
+                    "https://api.themoviedb.org/3/search/{$endpoint}?api_key={$apiKey}&query={$query}&language=de-DE",
+                    false, $ctx
+                );
+                $data = $raw ? (json_decode($raw, true) ?? []) : [];
+            }
+        }
+
+        if ($raw === false) { echo json_encode(['error' => 'TMDB nicht erreichbar']); break; }
+        $data = $data ?? json_decode($raw, true);
+        if (empty($data['results'])) { echo json_encode(['found' => false]); break; }
+
+        $r      = $data['results'][0];
+        $tmdbId = $r['id'];
+
+        // Details abrufen
+        $detailUrl = "https://api.themoviedb.org/3/{$endpoint}/{$tmdbId}?api_key={$apiKey}&language=de-DE";
+        $detailRaw = @file_get_contents($detailUrl, false, $ctx);
+        $detail    = $detailRaw ? (json_decode($detailRaw, true) ?? $r) : $r;
+
+        $poster = !empty($detail['poster_path'])
+            ? 'https://image.tmdb.org/t/p/w500' . $detail['poster_path']
+            : (!empty($r['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $r['poster_path'] : null);
+
+        $backdrop = !empty($detail['backdrop_path'])
+            ? 'https://image.tmdb.org/t/p/w780' . $detail['backdrop_path']
+            : null;
+
+        echo json_encode([
+            'found'       => true,
+            'title'       => $detail['title'] ?? $detail['name'] ?? $r['title'] ?? $r['name'] ?? $title,
+            'overview'    => $detail['overview'] ?? $r['overview'] ?? '',
+            'rating'      => round((float)($detail['vote_average'] ?? $r['vote_average'] ?? 0), 1),
+            'vote_count'  => (int)($detail['vote_count'] ?? $r['vote_count'] ?? 0),
+            'release'     => $detail['release_date'] ?? $detail['first_air_date'] ?? $r['release_date'] ?? $r['first_air_date'] ?? '',
+            'runtime'     => $detail['runtime'] ?? ($detail['episode_run_time'][0] ?? null),
+            'genres'      => array_column($detail['genres'] ?? [], 'name'),
+            'poster'      => $poster,
+            'backdrop'    => $backdrop,
+            'tmdb_id'     => $tmdbId,
+            'tmdb_url'    => "https://www.themoviedb.org/{$endpoint}/{$tmdbId}",
+        ]);
+        break;
+
     case 'health':
         $configured = is_configured();
         $queue      = $configured ? load_queue() : [];
@@ -318,6 +409,7 @@ switch ($action) {
             'rclone_bin'             => $c['rclone_bin']             ?? 'rclone',
             'editor_movies_enabled'  => (bool)($c['editor_movies_enabled']  ?? true),
             'editor_series_enabled'  => (bool)($c['editor_series_enabled']  ?? true),
+            'tmdb_api_key'           => isset($c['tmdb_api_key']) && $c['tmdb_api_key'] !== '' ? '••••••••' : '',
         ]);
         break;
 
@@ -337,6 +429,7 @@ switch ($action) {
             'rclone_bin'            => trim($d['rclone_bin']     ?? $current['rclone_bin']     ?? 'rclone'),
             'editor_movies_enabled' => isset($d['editor_movies_enabled']) ? (bool)$d['editor_movies_enabled'] : (bool)($current['editor_movies_enabled'] ?? true),
             'editor_series_enabled' => isset($d['editor_series_enabled']) ? (bool)$d['editor_series_enabled'] : (bool)($current['editor_series_enabled'] ?? true),
+            'tmdb_api_key'          => trim($d['tmdb_api_key'] ?? '') !== '' ? trim($d['tmdb_api_key']) : ($current['tmdb_api_key'] ?? ''),
         ];
         if (!empty($d['password']) && $d['password'] !== '••••••••') {
             $new['password'] = $d['password'];

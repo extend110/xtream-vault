@@ -53,6 +53,7 @@ define('DOWNLOADED_INDEX_FILE', DATA_DIR . '/downloaded_index.json');
 define('DOWNLOAD_HISTORY_FILE', DATA_DIR . '/download_history.json');
 define('CANCEL_FILE',        DATA_DIR . '/cancel.lock');
 define('MAINTENANCE_FILE',   DATA_DIR . '/maintenance.lock');
+define('TMDB_API_KEY',       $_cfg['tmdb_api_key'] ?? '');
 define('API_KEYS_FILE',      DATA_DIR . '/api_keys.json');
 define('ACTIVITY_LOG_FILE',  DATA_DIR . '/activity.json');
 

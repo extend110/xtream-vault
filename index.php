@@ -24,718 +24,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <title>XTREAM VAULT</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-:root {
-  --bg:        #0a0a0f;
-  --bg2:       #111118;
-  --bg3:       #18181f;
-  --border:    rgba(255,255,255,.07);
-  --accent:    #e8ff47;
-  --accent2:   #47d4ff;
-  --orange:    #ff9f43;
-  --red:       #ff4757;
-  --green:     #2ed573;
-  --text:      #e8e8f0;
-  --muted:     #5a5a70;
-  --sidebar-w: 280px;
-}
-[data-theme="light"] {
-  --bg:     #f0f0f5;
-  --bg2:    #ffffff;
-  --bg3:    #e8e8ef;
-  --border: rgba(0,0,0,.1);
-  --text:   #1a1a2e;
-  --muted:  #7a7a90;
-}
-body, .sidebar, .topbar, .card, .settings-card, .queue-item, .modal, .dkpi, .dash-info-card {
-  transition: background-color .2s, border-color .2s, color .2s;
-}
-html { font-size: 15.5px; overflow-x: hidden; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-body::before {
-  content: '';
-  position: fixed; inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.04'/%3E%3C/svg%3E");
-  pointer-events: none; z-index: 9999; opacity: .4;
-}
-.app { display: flex; min-height: 100vh; }
-
-/* ── Sidebar ── */
-.sidebar {
-  width: var(--sidebar-w); min-height: 100vh;
-  background: var(--bg2); border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  position: fixed; left: 0; top: 0; z-index: 100;
-  transition: transform .3s cubic-bezier(.4,0,.2,1);
-}
-.sidebar-logo { padding: 28px 24px 20px; border-bottom: 1px solid var(--border); }
-.logo-text { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; letter-spacing: .12em; color: var(--accent); line-height: 1; }
-.logo-sub { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); letter-spacing: .2em; margin-top: 2px; }
-.sidebar-stats { display: flex; gap: 8px; padding: 16px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-.stat-box { flex: 1; min-width: 60px; background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; }
-.stat-box.queue-stat { border-color: rgba(255,159,67,.3); }
-.stat-num { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; color: var(--accent); line-height: 1; }
-.stat-box.queue-stat .stat-num { color: var(--orange); }
-.stat-label { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .1em; margin-top: 2px; text-transform: uppercase; }
-.nav { flex: 1; padding: 16px 0; overflow-y: auto; }
-.nav-section-title { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .2em; text-transform: uppercase; padding: 8px 24px 4px; }
-.nav-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 24px; cursor: pointer;
-  transition: background .15s, color .15s;
-  border-left: 2px solid transparent;
-  font-size: .875rem; color: var(--muted); font-weight: 400;
-}
-.nav-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
-.nav-item.active { background: rgba(232,255,71,.06); color: var(--accent); border-left-color: var(--accent); }
-.nav-item.queue-nav.active { background: rgba(255,159,67,.06); color: var(--orange); border-left-color: var(--orange); }
-.nav-icon { font-size: 1rem; width: 20px; text-align: center; }
-.nav-badge {
-  margin-left: auto;
-  background: var(--orange); color: #000;
-  font-family: 'DM Mono', monospace; font-size: .6rem; font-weight: 700;
-  padding: 2px 7px; border-radius: 10px;
-  display: none;
-}
-.nav-badge.show { display: inline-block; }
-.category-list { max-height: 220px; overflow-y: auto; display: none; }
-.category-list.open { display: block; }
-.cat-item {
-  padding: 8px 24px 8px 56px; cursor: pointer;
-  color: var(--muted); font-size: .8rem;
-  transition: color .15s, background .15s;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.cat-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
-.cat-item.active { color: var(--accent2); }
-
-/* ── Main ── */
-.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
-.topbar {
-  height: 60px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 16px;
-  padding: 0 28px; position: sticky; top: 0;
-  background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(12px); z-index: 50;
-}
-.page-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem; letter-spacing: .08em; color: var(--text); flex: 0 0 auto; }
-.search-wrap { flex: 1; max-width: 420px; position: relative; }
-.search-wrap input {
-  width: 100%; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 6px; padding: 8px 36px 8px 14px;
-  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: .875rem;
-  outline: none; transition: border-color .2s;
-}
-.search-wrap input:focus { border-color: var(--accent); }
-.search-wrap input::placeholder { color: var(--muted); }
-.search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
-.filter-bar { display: flex; gap: 8px; margin-left: auto; }
-.filter-btn {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
-  padding: 6px 14px; color: var(--muted);
-  font-family: 'DM Mono', monospace; font-size: .7rem; letter-spacing: .1em;
-  cursor: pointer; transition: all .15s;
-}
-.filter-btn:hover { border-color: var(--accent); color: var(--accent); }
-.filter-btn.active { background: rgba(232,255,71,.12); border-color: var(--accent); color: var(--accent); }
-.content { padding: 28px; flex: 1; overflow-x: hidden; max-width: 100%; }
-
-/* ── Grid & Cards ── */
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
-.card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-  overflow: hidden; transition: transform .2s, border-color .2s, box-shadow .2s; position: relative;
-}
-.card:hover { transform: translateY(-3px); border-color: rgba(232,255,71,.3); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
-.card.downloaded { border-color: rgba(71,212,255,.2); }
-.card.queued     { border-color: rgba(255,159,67,.35); }
-.btn-fav {
-  position: absolute; top: 8px; right: 8px;
-  background: rgba(0,0,0,.6); border: none; border-radius: 50%;
-  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: .85rem; transition: transform .15s; color: var(--muted); z-index: 2;
-}
-.btn-fav:hover { transform: scale(1.15); background: rgba(0,0,0,.85); }
-.btn-fav.active { color: #ff4f6d; }
-.card-thumb { width: 100%; aspect-ratio: 2/3; background: var(--bg3); overflow: hidden; position: relative; }
-.card-thumb img { width: 100%; height: 100%; object-fit: cover; transition: opacity .3s; opacity: 0; }
-.card-thumb img.loaded { opacity: 1; }
-.card-thumb-placeholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: var(--muted); }
-.card-badge {
-  position: absolute; top: 8px; right: 8px;
-  font-family: 'DM Mono', monospace; font-size: .55rem; font-weight: 500;
-  letter-spacing: .1em; padding: 3px 7px; border-radius: 3px; text-transform: uppercase;
-}
-.badge-done  { background: var(--accent2); color: #000; }
-.badge-queue { background: var(--orange);  color: #000; }
-.card-body { padding: 12px; }
-.card-title { font-size: .82rem; font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.card-meta { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); margin-top: 6px; letter-spacing: .05em; }
-.card-actions { display: flex; gap: 6px; padding: 0 12px 12px; }
-.btn-q {
-  flex: 1; border: none; border-radius: 5px; padding: 7px;
-  font-family: 'DM Mono', monospace; font-size: .65rem; font-weight: 500;
-  letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
-  transition: opacity .15s, transform .1s; text-align: center;
-}
-.btn-q:hover { opacity: .85; transform: scale(.98); }
-.btn-q.add    { background: var(--accent); color: #000; }
-.btn-q.remove { background: rgba(255,159,67,.15); color: var(--orange); border: 1px solid rgba(255,159,67,.4); }
-.btn-q.done   { background: var(--bg3); color: var(--muted); cursor: default; }
-.btn-info {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
-  padding: 7px 10px; color: var(--muted); font-size: .75rem; cursor: pointer;
-  transition: color .15s, border-color .15s;
-}
-.btn-info:hover { color: var(--accent2); border-color: var(--accent2); }
-
-/* ── Queue Panel ── */
-.queue-panel { }
-.queue-toolbar {
-  display: flex; align-items: center; gap: 12px;
-  margin-bottom: 20px; flex-wrap: wrap;
-}
-.queue-toolbar-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: .08em; flex: 1; }
-.btn-sm {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
-  padding: 6px 14px; color: var(--muted);
-  font-family: 'DM Mono', monospace; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase;
-  cursor: pointer; transition: all .15s;
-}
-.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
-.btn-sm.danger:hover { border-color: var(--red); color: var(--red); }
-.queue-list { display: flex; flex-direction: column; gap: 8px; }
-.queue-item {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 7px;
-  display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-  transition: border-color .2s;
-}
-.queue-item.status-done    { border-left: 3px solid var(--green);  opacity: .7; }
-.queue-item.status-error   { border-left: 3px solid var(--red); }
-.queue-item.status-pending { border-left: 3px solid var(--orange); }
-.queue-item.status-downloading { border-left: 3px solid var(--accent2); animation: pulse-border 1.5s ease-in-out infinite; }
-@keyframes pulse-border { 0%,100%{border-left-color:var(--accent2)} 50%{border-left-color:#ffffff44} }
-.qi-thumb { width: 36px; height: 54px; object-fit: cover; border-radius: 3px; background: var(--bg3); flex-shrink: 0; }
-.qi-info { flex: 1; min-width: 0; }
-.qi-title { font-size: .875rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qi-meta  { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); margin-top: 3px; }
-.qi-status {
-  font-family: 'DM Mono', monospace; font-size: .65rem; letter-spacing: .1em; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 4px; flex-shrink: 0;
-}
-.qi-status.pending     { background: rgba(255,159,67,.1); color: var(--orange); }
-.qi-status.downloading { background: rgba(71,212,255,.1); color: var(--accent2); }
-.qi-status.done        { background: rgba(46,213,115,.1); color: var(--green); }
-.qi-status.error       { background: rgba(255,71,87,.1);  color: var(--red); }
-.qi-del {
-  background: none; border: 1px solid transparent; border-radius: 4px;
-  color: var(--muted); font-size: .8rem; padding: 4px 8px; cursor: pointer;
-  transition: all .15s; flex-shrink: 0;
-}
-.qi-del:hover { border-color: var(--red); color: var(--red); }
-
-/* ── Live Progress Card ── */
-.progress-card {
-  background: var(--bg2); border: 1px solid rgba(71,212,255,.25);
-  border-radius: 8px; padding: 20px 24px; margin-bottom: 20px;
-  display: none;
-}
-.progress-card.active { display: block; animation: fadeIn .3s ease; }
-@keyframes fadeIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
-.pc-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.pc-dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); flex-shrink: 0;
-  animation: blink 1.2s ease-in-out infinite;
-}
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
-.pc-title { font-weight: 500; font-size: .92rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pc-pos { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); flex-shrink: 0; }
-.pc-bar-wrap { background: var(--bg3); border-radius: 4px; height: 6px; overflow: hidden; margin-bottom: 10px; }
-.pc-bar { height: 100%; background: var(--accent2); border-radius: 4px; transition: width .8s ease; width: 0%; }
-.pc-stats { display: flex; gap: 20px; flex-wrap: wrap; }
-.pc-stat { font-family: 'DM Mono', monospace; font-size: .7rem; }
-.pc-stat .val { color: var(--text); }
-.pc-stat .lbl { color: var(--muted); margin-left: 4px; }
-
-/* ── Log Panel ── */
-.log-wrap {
-  background: #08080d; border: 1px solid var(--border); border-radius: 8px;
-  padding: 16px; font-family: 'DM Mono', monospace; font-size: .72rem;
-  color: #aaa; max-height: 500px; overflow-y: auto;
-  white-space: pre-wrap; word-break: break-all;
-  line-height: 1.6;
-}
-.log-wrap .log-ok    { color: var(--green); }
-.log-wrap .log-err   { color: var(--red); }
-.log-wrap .log-skip  { color: var(--muted); }
-.log-wrap .log-start { color: var(--accent2); }
-.log-wrap .log-prog  { color: #888; }
-.log-wrap .log-head  { color: var(--accent); }
-
-/* ── Modal ── */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px); z-index: 1000; display: none; align-items: center; justify-content: center; }
-.modal-overlay.open { display: flex; }
-.modal {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
-  width: 90vw; max-width: 760px; max-height: 85vh;
-  display: flex; flex-direction: column; overflow: hidden;
-  animation: slideUp .25s cubic-bezier(.4,0,.2,1);
-}
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
-.modal-header { display: flex; align-items: center; gap: 16px; padding: 20px 24px; border-bottom: 1px solid var(--border); }
-.modal-thumb { width: 60px; height: 90px; object-fit: cover; border-radius: 5px; background: var(--bg3); flex-shrink: 0; }
-.modal-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: .06em; color: var(--text); line-height: 1.1; }
-.modal-meta  { font-family: 'DM Mono', monospace; font-size: .7rem; color: var(--muted); margin-top: 4px; }
-.modal-close { margin-left: auto; background: none; border: none; color: var(--muted); font-size: 1.3rem; cursor: pointer; padding: 4px; transition: color .15s; }
-.modal-close:hover { color: var(--text); }
-.modal-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
-.season-header { font-family: 'DM Mono', monospace; font-size: .7rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); padding: 12px 0 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-.season-queue-all { font-size: .65rem; color: var(--orange); cursor: pointer; }
-.episode-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
-.ep-num   { font-family: 'DM Mono', monospace; font-size: .7rem; color: var(--muted); width: 28px; flex-shrink: 0; text-align: right; }
-.ep-title { flex: 1; font-size: .85rem; }
-.ep-ext   { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); text-transform: uppercase; }
-.ep-btn {
-  background: none; border: 1px solid var(--border); border-radius: 4px;
-  padding: 5px 12px; font-family: 'DM Mono', monospace; font-size: .6rem; letter-spacing: .1em;
-  text-transform: uppercase; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
-}
-.ep-btn.add    { color: var(--accent); border-color: rgba(232,255,71,.3); }
-.ep-btn.add:hover { background: rgba(232,255,71,.1); border-color: var(--accent); }
-.ep-btn.remove { color: var(--orange); border-color: rgba(255,159,67,.3); }
-.ep-btn.remove:hover { background: rgba(255,159,67,.1); }
-.ep-btn.done   { color: var(--muted); cursor: default; }
-
-/* ── States ── */
-.state-box { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 80px 24px; color: var(--muted); text-align: center; }
-.state-box .icon { font-size: 2.5rem; opacity: .4; }
-.state-box p { font-size: .85rem; max-width: 280px; }
-.spinner { width: 32px; height: 32px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 12px 18px; font-size: .82rem; z-index: 9000; opacity: 0; transform: translateY(8px); transition: opacity .25s, transform .25s; pointer-events: none; max-width: 340px; }
-.toast.show { opacity: 1; transform: none; }
-.toast.success { border-left: 3px solid var(--accent); }
-.toast.error   { border-left: 3px solid var(--red); }
-.toast.info    { border-left: 3px solid var(--orange); }
-.hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-.hamburger span { width: 22px; height: 2px; background: var(--text); border-radius: 1px; }
-.sidebar-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.5);
-  z-index: 99;
-}
-@media (max-width: 768px) {
-  :root { --sidebar-w: 0px; }
-
-  /* Prevent ANY element from causing horizontal scroll */
-  *, *::before, *::after { box-sizing: border-box; max-width: 100%; }
-
-  /* Layout */
-  .sidebar { transform: translateX(-100%); width: 260px; }
-  .sidebar.open { transform: translateX(0); }
-  .main { margin-left: 0; }
-  .hamburger { display: flex !important; }
-
-  /* Topbar */
-  .topbar { padding: 0 12px; gap: 10px; }
-  .page-title { font-size: 1.1rem; }
-  .search-wrap { max-width: none; }
-  .filter-bar { gap: 6px; }
-  .filter-btn { padding: 5px 10px; font-size: .65rem; }
-  .queue-pill { font-size: .7rem; padding: 4px 8px; }
-  #limit-indicator { display: none !important; }
-
-  /* Content */
-  .content { padding: 16px 14px; }
-
-  /* Grids — force single column on anything with a large minmax */
-  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-  .settings-grid { grid-template-columns: 1fr !important; max-width: 100%; }
-  #dash-stat-grid   { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-  #dash-server-info { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
-  /* Queue+Disk+System row — stack all to 2 cols */
-  #dash-stat-grid ~ div[style*="repeat(4,1fr)"] { grid-template-columns: 1fr 1fr !important; }
-  .dkpi-n { font-size: 1.2rem; }
-  .dkpi { padding: 10px 12px; }
-
-  /* Override inline style grids (dashboard, rclone fields, etc.) */
-  [style*="minmax(260px"] { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
-  [style*="minmax(200px"] { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
-  [style*="minmax(320px"] { grid-template-columns: 1fr !important; }
-  [style*="grid-template-columns:1fr 1fr"] { grid-template-columns: 1fr !important; }
-  [style*="grid-template-columns: 1fr 1fr"] { grid-template-columns: 1fr !important; }
-
-  /* Cards */
-  .card-body { padding: 8px 10px; }
-  .card-title { font-size: .78rem; }
-  .card-meta  { font-size: .65rem; }
-  .btn-q { font-size: .65rem; padding: 5px 8px; }
-
-  /* Settings */
-  .settings-card { padding: 16px; }
-  .settings-grid { gap: 12px !important; }
-  .settings-actions { flex-direction: column; gap: 8px; }
-  .settings-actions button { width: 100%; }
-  .field input, .field select, .field textarea { font-size: 1rem; } /* prevent zoom on iOS */
-  /* rclone test button row */
-  .settings-card [style*="display:flex"][style*="gap"] { flex-wrap: wrap; }
-  /* API key table — scrollable on mobile */
-  .apikey-table { font-size: .72rem; }
-  .apikey-table td, .apikey-table th { padding: 8px 6px; }
-  .apikey-table td:nth-child(2) { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  /* Queue */
-  .queue-toolbar { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
-  .queue-list    { padding: 0 14px; }
-  .queue-item    { gap: 10px; padding: 10px 0; }
-  .qi-thumb      { width: 44px; height: 44px; flex-shrink: 0; }
-  .qi-title      { font-size: .8rem; }
-  .qi-meta       { font-size: .65rem; }
-  .qi-del        { padding: 4px 8px; font-size: .75rem; }
-
-  /* Progress card */
-  .pc-stats { gap: 10px; flex-wrap: wrap; }
-  .pc-stat   { min-width: calc(50% - 10px); }
-
-  /* User table — make scrollable rather than overflow */
-  .user-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .user-table { font-size: .75rem; min-width: 0; width: 100%; }
-  .user-table th, .user-table td { padding: 8px 6px; }
-  .user-actions { flex-direction: column; gap: 4px; }
-  .btn-icon { font-size: .7rem; padding: 4px 8px; }
-  /* Hide less critical user columns */
-  .user-table th:nth-child(4),
-  .user-table td:nth-child(4) { display: none; }
-
-  /* API key table */
-  .apikey-table th, .apikey-table td { padding: 8px 6px; font-size: .72rem; }
-  .apikey-table th:nth-child(4),
-  .apikey-table td:nth-child(4),
-  .apikey-table th:nth-child(5),
-  .apikey-table td:nth-child(5) { display: none; }
-
-  /* Modals */
-  .umodal-box { padding: 20px; margin: 12px; width: calc(100% - 24px); max-width: none; }
-  .modal-box  { margin: 0; height: 100%; width: 100%; border-radius: 0; max-height: 100dvh; }
-  .modal-header { padding: 14px 16px; }
-  .modal-body   { padding: 14px 16px; }
-
-  /* Activity log */
-  .actlog-item { gap: 8px; }
-
-  /* Search — tab row and toolbar */
-  #view-search > div:first-child { flex-wrap: wrap; row-gap: 8px; }
-  #multiselect-toolbar { margin-left: 0 !important; width: 100%; }
-
-  /* Library filter bar — stack vertically */
-  #view-dashboard [style*="display:flex"][style*="gap:10px"] { flex-wrap: wrap; }
-  #lib-search { min-width: 0; flex: 1 1 100%; }
-  #lib-cat-filter { width: 100%; min-width: 0; }
-
-  /* Dashboard dash-info */
-  .dash-info-card { padding: 10px 12px; }
-  .dic-val { font-size: .8rem; }
-  #dash-bottom-grid { grid-template-columns: 1fr !important; }
-  .dash-bottom-grid { grid-template-columns: 1fr !important; }
-}
-
-@media (max-width: 480px) {
-  /* Sidebar vollständig ausblenden bis manuell geöffnet */
-  .sidebar { width: 100% !important; }
-
-  /* Header kompakter */
-  .header { padding: 0 12px; height: 52px; }
-  .page-title { font-size: .9rem; }
-
-  /* Content mehr Platz */
-  .content { padding: 12px; }
-
-  /* Dashboard KPI-Zeilen — 2 Spalten statt 4/6 */
-  #dash-stat-grid { grid-template-columns: 1fr 1fr !important; }
-  #dash-server-info { grid-template-columns: 1fr 1fr !important; }
-  /* Queue+Disk+System — alle auf 1fr */
-  #dash-stat-grid ~ div { grid-template-columns: 1fr 1fr !important; }
-
-  /* Medien-Grid: 2 Spalten */
-  .grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px; }
-
-  /* Queue-Items: kompakter */
-  .queue-item { gap: 8px; padding: 10px 0; }
-  .qi-thumb { width: 40px; height: 40px; }
-  .qi-title { font-size: .8rem; }
-  .qi-meta  { font-size: .65rem; }
-
-  /* Progress-Card: Stats in 2 Spalten */
-  .pc-stats { grid-template-columns: 1fr 1fr; }
-
-  /* Schnellzugriff-Buttons: volle Breite */
-  #view-dashboard > div[style*="display:flex"] > button { flex: 1 1 calc(50% - 4px); }
-
-  /* Queue-Toolbar: Wrap */
-  .queue-toolbar { gap: 6px; }
-  .queue-toolbar .btn-sm { font-size: .62rem; padding: 5px 8px; }
-
-  /* Modal: fast vollbild */
-  .modal { margin: 8px; max-height: calc(100dvh - 16px); }
-
-  /* Navbadge kleiner */
-  .nav-badge { font-size: .6rem; padding: 1px 5px; }
-
-  /* KPI Zahlen kleiner */
-  .dkpi-n { font-size: 1.2rem; }
-  .dkpi   { padding: 8px 10px; }
-  .dkpi-l { font-size: .55rem; }
-}
-/* ── Settings ── */
-.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 20px; max-width: 900px; }
-.settings-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
-.settings-card h3 { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); letter-spacing: .2em; text-transform: uppercase; margin-bottom: 16px; }
-.settings-card.warning { border-color: rgba(255,71,87,.25); }
-.settings-toggle {
-  display: flex; align-items: center; gap: 12px; cursor: pointer;
-  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .9rem;
-  min-height: 44px;
-}
-.dash-bottom-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.settings-toggle:last-child { border-bottom: none; padding-bottom: 0; }
-.settings-toggle input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; cursor: pointer; }
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-.field:last-child { margin-bottom: 0; }
-.field label { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
-.field input {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
-  padding: 9px 12px; color: var(--text);
-  font-family: 'DM Mono', monospace; font-size: .82rem;
-  outline: none; transition: border-color .2s;
-}
-.field input:focus { border-color: var(--accent); }
-.field input.error { border-color: var(--red); }
-.field .hint { font-size: .7rem; color: var(--muted); }
-.settings-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
-.btn-primary {
-  background: var(--accent); color: #000; border: none; border-radius: 6px;
-  padding: 9px 20px; font-family: 'DM Mono', monospace; font-size: .7rem;
-  font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
-  cursor: pointer; transition: opacity .15s;
-}
-.btn-primary:hover { opacity: .85; }
-.btn-primary:disabled { opacity: .4; cursor: default; }
-.btn-secondary {
-  background: var(--bg3); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
-  padding: 9px 20px; font-family: 'DM Mono', monospace; font-size: .7rem;
-  letter-spacing: .1em; text-transform: uppercase; cursor: pointer; transition: all .15s;
-}
-.btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
-.settings-msg { margin-top: 12px; font-size: .8rem; padding: 10px 14px; border-radius: 6px; display: none; }
-.settings-msg.ok  { background: rgba(46,213,115,.1); color: var(--green); border: 1px solid rgba(46,213,115,.2); display: block; }
-.settings-msg.err { background: rgba(255,71,87,.1);  color: var(--red);   border: 1px solid rgba(255,71,87,.2);  display: block; }
-.settings-msg.info { background: rgba(71,212,255,.1); color: var(--accent2); border: 1px solid rgba(71,212,255,.2); display: block; }
-.unconfigured-banner {
-  background: rgba(255,71,87,.08); border: 1px solid rgba(255,71,87,.25);
-  border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;
-  display: flex; align-items: center; gap: 12px; font-size: .875rem;
-  cursor: pointer; transition: background .15s;
-}
-.unconfigured-banner:hover { background: rgba(255,71,87,.13); }
-.unconfigured-banner .ub-icon { font-size: 1.4rem; }
-.unconfigured-banner strong { color: var(--red); }
-
-/* ── User Management ── */
-.user-table { width: 100%; border-collapse: collapse; }
-.user-table th {
-  font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted);
-  letter-spacing: .15em; text-transform: uppercase; text-align: left;
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
-}
-.user-table td { padding: 12px; border-bottom: 1px solid rgba(255,255,255,.03); font-size: .875rem; vertical-align: middle; }
-.user-table tr:last-child td { border-bottom: none; }
-.user-table tr:hover td { background: rgba(255,255,255,.02); }
-.role-badge {
-  font-family: 'DM Mono', monospace; font-size: .6rem; letter-spacing: .1em;
-  text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
-}
-.role-badge.admin  { background: rgba(232,255,71,.12); color: var(--accent); }
-.role-badge.editor { background: rgba(71,212,255,.12); color: var(--accent2); }
-.role-badge.viewer { background: rgba(255,255,255,.06); color: var(--muted); }
-.user-actions { display: flex; gap: 6px; }
-.btn-icon {
-  background: none; border: 1px solid var(--border); border-radius: 4px;
-  padding: 4px 10px; font-size: .75rem; color: var(--muted); cursor: pointer;
-  transition: all .15s; font-family: 'DM Mono', monospace;
-}
-.btn-icon:hover { border-color: var(--accent2); color: var(--accent2); }
-.btn-icon.danger:hover { border-color: var(--red); color: var(--red); }
-
-/* ── User Modal ── */
-.umodal {
-  position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
-  z-index: 2000; display: none; align-items: center; justify-content: center;
-}
-.umodal.open { display: flex; }
-.umodal-box {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
-  width: 90vw; max-width: 440px; padding: 28px 28px 24px;
-  animation: slideUp .2s cubic-bezier(.4,0,.2,1);
-}
-.umodal-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: .08em; margin-bottom: 20px; }
-.umodal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-
-/* ── Topbar user chip ── */
-.user-chip {
-  display: flex; align-items: center; gap: 8px; margin-left: auto;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 20px;
-  padding: 4px 14px 4px 10px; cursor: pointer; transition: border-color .15s;
-  position: relative;
-}
-.user-chip:hover { border-color: var(--accent); }
-.user-chip-avatar {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
-  color: #000; font-weight: 700; font-size: .7rem;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.user-chip-name { font-family: 'DM Mono', monospace; font-size: .7rem; }
-.user-chip-role { font-size: .65rem; color: var(--muted); }
-.user-dropdown {
-  position: absolute; top: calc(100% + 8px); right: 0;
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
-  min-width: 180px; overflow: hidden; z-index: 200;
-  display: none; box-shadow: 0 8px 24px rgba(0,0,0,.4);
-}
-.user-chip.open .user-dropdown { display: block; }
-.user-dropdown a, .user-dropdown button {
-  display: block; width: 100%; text-align: left;
-  padding: 10px 16px; font-size: .82rem; color: var(--text);
-  background: none; border: none; cursor: pointer; text-decoration: none;
-  transition: background .12s;
-}
-.user-dropdown a:hover, .user-dropdown button:hover { background: rgba(255,255,255,.05); }
-.user-dropdown .sep { height: 1px; background: var(--border); margin: 4px 0; }
-.user-dropdown .danger { color: var(--red); } */
-.queue-pill {
-  background: var(--orange); color: #000;
-  font-family: 'DM Mono', monospace; font-size: .65rem; font-weight: 700;
-  padding: 3px 10px; border-radius: 20px; cursor: pointer;
-  display: none; transition: transform .15s;
-}
-.queue-pill:hover { transform: scale(1.05); }
-.queue-pill.show { display: inline-block; }
-.qi-prio {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text); font-size: .65rem; padding: 3px 6px; cursor: pointer; outline: none;
-}
-.qi-prio-badge { font-size: .65rem; color: var(--muted); }
-.prio-1 { color: var(--red); }
-.prio-2 { color: var(--orange); }
-.prio-3 { color: var(--accent2); }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: .4; }
-}
-/* ── Multi-select ── */
-.card.selected {
-  border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px rgba(232,255,71,.25);
-}
-.card .select-check {
-  position: absolute; top: 8px; left: 8px;
-  width: 20px; height: 20px; border-radius: 50%;
-  background: var(--bg3); border: 2px solid var(--border);
-  display: flex; align-items: center; justify-content: center;
-  font-size: .7rem; cursor: pointer; z-index: 2;
-  transition: background .15s, border-color .15s;
-}
-.card.selected .select-check { background: var(--accent); border-color: var(--accent); color: #000; }
-
-/* ── Activity Log ── */
-.actlog-item {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.03);
-}
-.actlog-item:last-child { border-bottom: none; }
-.actlog-icon { font-size: 1rem; width: 28px; text-align: center; flex-shrink: 0; margin-top: 2px; }
-.actlog-info { flex: 1; }
-.actlog-action { font-size: .875rem; font-weight: 500; }
-.actlog-meta { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); margin-top: 3px; }
-.dash-info-card {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 7px;
-  padding: 14px 16px;
-}
-.dkpi { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-.dkpi-l { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px; }
-.dkpi-v { font-size: .875rem; color: var(--text); }
-.dkpi-n { font-size: 1.5rem; font-weight: 500; line-height: 1.1; margin-top: 2px; }
-.btn-secondary.danger { border-color: rgba(255,71,87,.3); color: var(--red); }
-.btn-secondary.danger:hover { background: rgba(255,71,87,.1); border-color: var(--red); }
-
-/* ── API Docs ── */
-.api-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; margin-bottom: 12px; }
-.api-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.api-method { font-family: 'DM Mono', monospace; font-size: .65rem; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .08em; flex-shrink: 0; }
-.api-method.post { background: rgba(232,255,71,.12); color: var(--accent); }
-.api-method.get  { background: rgba(46,213,115,.12); color: var(--green); }
-.api-endpoint { font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--muted); word-break: break-all; }
-.api-desc { font-size: .875rem; color: var(--text); margin-bottom: 14px; line-height: 1.5; }
-.api-section-label { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; margin: 12px 0 8px; }
-.api-code { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: .75rem; color: var(--accent2); line-height: 1.7; word-break: break-all; }
-.api-table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-.api-table th { font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
-.api-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: top; }
-.api-table td code { font-family: 'DM Mono', monospace; font-size: .72rem; color: var(--accent2); }
-
-/* ── History chips ── */
-.history-chip {
-  display: inline-block; background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 20px; padding: 4px 12px; font-size: .78rem; cursor: pointer;
-  margin: 0 6px 6px 0; transition: border-color .15s, background .15s;
-}
-.history-chip:hover { border-color: var(--accent); background: rgba(232,255,71,.06); }
-.sort-select { background: var(--bg3); border: 1px solid var(--border); border-radius: 5px; padding: 4px 8px; color: var(--text); font-family: 'DM Sans', sans-serif; font-size: .78rem; outline: none; cursor: pointer; }
-.sort-select:focus { border-color: var(--accent); }
-.pagination-btn { background: var(--bg2); border: 1px solid var(--border); border-radius: 5px; padding: 6px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: .7rem; cursor: pointer; margin: 0 3px; transition: border-color .15s; }
-.pagination-btn:hover { border-color: var(--accent); }
-.pagination-btn.active { border-color: var(--accent); color: var(--accent); }
-.dic-label {
-  font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted);
-  letter-spacing: .12em; text-transform: uppercase; margin-bottom: 5px;
-}
-.dic-val { font-size: .875rem; color: var(--text); word-break: break-all; }
-.dic-val.ok    { color: var(--green); font-weight: 500; }
-.dic-val.warn  { color: var(--orange); font-weight: 500; }
-.dic-val.error { color: var(--red); font-weight: 500; }
-
-/* ── API Key Table ── */
-.apikey-table { width: 100%; border-collapse: collapse; }
-.apikey-table th {
-  font-family: 'DM Mono', monospace; font-size: .6rem; color: var(--muted);
-  letter-spacing: .15em; text-transform: uppercase; text-align: left;
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
-}
-.apikey-table td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,.03); font-size: .82rem; vertical-align: middle; }
-.apikey-table tr:last-child td { border-bottom: none; }
-.apikey-table tr:hover td { background: rgba(255,255,255,.02); }
-.key-preview {
-  font-family: 'DM Mono', monospace; font-size: .72rem;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: 4px; padding: 4px 8px; color: var(--accent2);
-  letter-spacing: .05em;
-}
-.key-new-reveal {
-  font-family: 'DM Mono', monospace; font-size: .75rem;
-  background: rgba(46,213,115,.08); border: 1px solid rgba(46,213,115,.25);
-  border-radius: 6px; padding: 12px 16px; color: var(--green);
-  word-break: break-all; line-height: 1.7; margin: 12px 0;
-}
-.key-new-reveal strong { display: block; font-size: .65rem; color: var(--muted); letter-spacing: .15em; text-transform: uppercase; margin-bottom: 6px; }
-.badge-active   { background: rgba(46,213,115,.12); color: var(--green); }
-.badge-inactive { background: rgba(255,71,87,.1);   color: var(--red); }
-</style>
+<link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__.'/style.css') ?>">
 </head>
 <body>
 <div class="app">
@@ -840,7 +129,7 @@ body::before {
       </div>
 
       <!-- Zeile 1: Verbindung + Downloads gesamt -->
-      <div id="dash-stat-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px">
+      <div id="dash-stat-grid" class="dash-kpi-grid">
         <div class="dkpi"><div class="dkpi-l">Server</div><div class="dkpi-v" id="dash-server">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Account</div><div class="dkpi-v" id="dash-user">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Destination</div><div class="dkpi-v" style="word-break:break-all;font-size:.8rem" id="dash-dest">–</div></div>
@@ -848,7 +137,7 @@ body::before {
       </div>
 
       <!-- Zeile 2: Queue-Zahlen + Disk + System in einer Zeile -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr) 1.6fr 1.6fr;gap:10px;margin-bottom:10px">
+      <div class="dash-disk-grid">
         <div class="dkpi"><div class="dkpi-l">Ausstehend</div><div class="dkpi-n" style="color:var(--accent)" id="dqs-pending">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Lädt</div><div class="dkpi-n" style="color:var(--orange)" id="dqs-downloading">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Fertig</div><div class="dkpi-n" style="color:var(--green)" id="dqs-done">–</div></div>
@@ -858,7 +147,7 @@ body::before {
       </div>
 
       <!-- Zeile 3: Xtream Server Info (6 kompakte Kacheln) -->
-      <div id="dash-server-info" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:10px">
+      <div id="dash-server-info" class="dash-server-grid">
         <div class="dkpi"><div class="dkpi-l">Status</div><div class="dkpi-v" id="si-status">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Läuft ab</div><div class="dkpi-v" id="si-exp">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Verbindungen</div><div class="dkpi-n" style="font-size:1.2rem" id="si-cons">–</div></div>
@@ -1069,7 +358,7 @@ body::before {
     <!-- API Docs -->
     <?php if ($can_settings): ?>
     <div id="view-api-docs" style="display:none">
-      <div style="max-width:860px">
+      <div>
 
         <!-- Intro -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-bottom:20px">
@@ -1200,19 +489,17 @@ body::before {
     <!-- Settings -->
     <div id="view-settings" style="display:none">
       <?php if ($can_settings): ?>
-      <div class="settings-grid">
+      <div>
 
-        <div class="settings-card" style="grid-column:1/-1">
+        <div class="settings-card">
           <h3>Xtream Server</h3>
           <div class="field">
             <label>Server IP / Domain</label>
             <input type="text" id="cfg-server-ip" placeholder="z.B. line.example.com">
           </div>
-          <div style="display:grid;grid-template-columns:1fr 120px;gap:12px">
-            <div class="field">
-              <label>Port</label>
-              <input type="text" id="cfg-port" placeholder="80" value="80">
-            </div>
+          <div class="field">
+            <label>Port</label>
+            <input type="text" id="cfg-port" placeholder="80" value="80" style="max-width:120px">
           </div>
           <div class="field">
             <label>Username</label>
@@ -1252,31 +539,27 @@ body::before {
           </label>
         </div>
 
-        <div class="settings-card" style="grid-column:1/-1">
+        <div class="settings-card">
           <h3>☁️ rclone — Cloud-Speicher</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             Wenn aktiviert, werden VODs direkt in den Cloud-Speicher gestreamt — ohne lokale Zwischenspeicherung.
           </div>
-          <div class="field" style="margin-bottom:12px">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-              <input type="checkbox" id="cfg-rclone-enabled" onchange="toggleRcloneFields(this.checked)" style="width:16px;height:16px;accent-color:var(--accent)">
-              rclone aktivieren
-            </label>
-          </div>
+          <label class="settings-toggle" style="margin-bottom:14px">
+            <input type="checkbox" id="cfg-rclone-enabled" onchange="toggleRcloneFields(this.checked)">
+            <span>rclone aktivieren</span>
+          </label>
           <div id="rclone-fields" style="display:none">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:12px">
-              <div class="field">
-                <label>Remote-Name</label>
-                <input type="text" id="cfg-rclone-remote" placeholder="gdrive">
-                <span class="hint">Name des konfigurierten rclone-Remotes (z.B. gdrive, onedrive, dropbox)</span>
-              </div>
-              <div class="field">
-                <label>Ziel-Pfad im Remote</label>
-                <input type="text" id="cfg-rclone-path" placeholder="Media/VOD">
-                <span class="hint">Ordner im Cloud-Speicher (ohne Remote-Name)</span>
-              </div>
+            <div class="field">
+              <label>Remote-Name</label>
+              <input type="text" id="cfg-rclone-remote" placeholder="gdrive">
+              <span class="hint">Name des konfigurierten rclone-Remotes (z.B. gdrive, onedrive, dropbox)</span>
             </div>
-            <div class="field" style="margin-bottom:12px">
+            <div class="field">
+              <label>Ziel-Pfad im Remote</label>
+              <input type="text" id="cfg-rclone-path" placeholder="Media/VOD">
+              <span class="hint">Ordner im Cloud-Speicher (ohne Remote-Name)</span>
+            </div>
+            <div class="field">
               <label>rclone Binary-Pfad</label>
               <input type="text" id="cfg-rclone-bin" placeholder="rclone">
               <span class="hint">Vollständiger Pfad wenn nicht im PATH: z.B. /usr/bin/rclone</span>
@@ -1299,14 +582,23 @@ body::before {
           <div class="settings-msg" id="cache-msg"></div>
         </div>
 
-        <div class="settings-card" style="grid-column:1/-1">
+        <div class="settings-card">
+          <h3>🎬 TMDB Integration</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            The Movie Database — zeigt Plot und Bewertung beim Klick auf eine Karte an.<br>
+            API-Key unter <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent2)">themoviedb.org/settings/api</a> erstellen.
+          </div>
+          <div class="field">
+            <label>TMDB API-Key (v3 auth)</label>
+            <input type="password" id="cfg-tmdb-api-key" placeholder="Leer lassen um TMDB zu deaktivieren" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="settings-card">
           <h3>API-Keys (Externe Benutzerverwaltung)</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             API-Keys ermöglichen externe Systeme, Benutzer anzulegen.<br>
-            <strong>POST:</strong> <code style="color:var(--accent2);font-family:'DM Mono',monospace">POST api.php?action=external_create_user</code>
-            mit Header <code style="color:var(--accent2);font-family:'DM Mono',monospace">X-API-Key: &lt;key&gt;</code>
-            und Body <code style="color:var(--accent2);font-family:'DM Mono',monospace">{"username":"…","password":"…","role":"viewer|editor|admin"}</code><br>
-            <strong>GET:</strong> <code style="color:var(--accent2);font-family:'DM Mono',monospace">api.php?action=external_create_user&amp;api_key=xv_...&amp;username=…&amp;password=…&amp;role=viewer</code>
+            Authentifizierung via Header <code style="color:var(--accent2);font-family:'DM Mono',monospace">X-API-Key: xv_...</code>
           </div>
           <div id="apikey-new-reveal" style="display:none" class="key-new-reveal">
             <strong>⚠️ Einmalig sichtbar — jetzt kopieren!</strong>
@@ -1316,7 +608,7 @@ body::before {
             <input type="text" id="apikey-name-input" placeholder="Name des Keys (z.B. Webshop)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;flex:1">
             <button class="btn-primary" onclick="createApiKey()">+ API-Key erstellen</button>
           </div>
-          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <div class="apikey-table-wrap">
             <table class="apikey-table" id="apikey-table">
               <thead><tr><th>Name</th><th>Key</th><th>Status</th><th>Erstellt</th><th>Zuletzt benutzt</th><th>Aufrufe</th><th></th></tr></thead>
               <tbody id="apikey-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Lade…</td></tr></tbody>
@@ -1324,18 +616,6 @@ body::before {
           </div>
         </div>
 
-      </div>
-
-      <div class="settings-actions">
-        <button class="btn-secondary" onclick="testConnection()">🔌 Verbindung testen</button>
-        <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()">💾 Speichern</button>
-      </div>
-      <div class="settings-msg" id="settings-msg"></div>
-
-      <!-- Backup + Wartung in Grid -->
-      <div class="settings-grid" style="margin-top:20px">
-
-        <!-- Backup -->
         <div class="settings-card">
           <h3>💾 Datensicherung</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
@@ -1345,10 +625,9 @@ body::before {
             <button class="btn-secondary" onclick="runBackup(this)">▶ Jetzt sichern</button>
             <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
           </div>
-          <div id="backup-list"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
+          <div id="backup-list" style="overflow-x:auto"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
         </div>
 
-        <!-- Wartungsmodus -->
         <div class="settings-card" style="border-color:rgba(255,71,87,.2)">
           <h3>🔧 Wartungsmodus</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
@@ -1361,6 +640,12 @@ body::before {
             <button class="btn-secondary" id="btn-maintenance-toggle" onclick="toggleMaintenance()">Lade…</button>
           </div>
         </div>
+
+        <div class="settings-actions">
+          <button class="btn-secondary" onclick="testConnection()">🔌 Verbindung testen</button>
+          <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()">💾 Speichern</button>
+        </div>
+        <div class="settings-msg" id="settings-msg"></div>
 
       </div>
       <?php else: ?>
@@ -1376,7 +661,7 @@ body::before {
         <button class="btn-sm" onclick="showView('activity-log')">📋 Aktivitätslog</button>
         <button class="btn-sm" onclick="openCreateUser()">+ Benutzer anlegen</button>
       </div>
-      <div class="user-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div class="user-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px">
         <table class="user-table" id="users-table">
           <thead>
             <tr>
@@ -1491,7 +776,29 @@ body::before {
   </div>
 </div>
 
-<!-- Reveal API Key Modal -->
+<!-- TMDB Info Modal -->
+<div class="modal-overlay" id="tmdb-modal" onclick="if(event.target===this)closeTmdbModal()" style="display:none;z-index:1050">
+  <div class="modal" style="max-width:520px;overflow:hidden;padding:0">
+    <div id="tmdb-backdrop" style="width:100%;height:160px;background:var(--bg3);background-size:cover;background-position:center top;position:relative;flex-shrink:0">
+      <button class="modal-close" onclick="closeTmdbModal()" style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);z-index:10">✕</button>
+    </div>
+    <div style="display:flex;gap:16px;padding:20px 20px 0;align-items:flex-start">
+      <img id="tmdb-poster" src="" alt="" style="width:80px;min-width:80px;border-radius:6px;border:2px solid var(--border);margin-top:-40px;box-shadow:0 4px 16px rgba(0,0,0,.4);display:none">
+      <div style="min-width:0;flex:1;padding-top:4px">
+        <div id="tmdb-title" style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.06em;line-height:1.1;margin-bottom:4px"></div>
+        <div id="tmdb-meta" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.05em"></div>
+      </div>
+    </div>
+    <div style="padding:16px 20px 20px">
+      <div id="tmdb-rating" style="display:flex;align-items:center;gap:8px;margin-bottom:14px"></div>
+      <div id="tmdb-overview" style="font-size:.875rem;line-height:1.6;color:var(--muted)"></div>
+      <div id="tmdb-genres" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div id="tmdb-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div id="tmdb-loading" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">⏳ Lade Informationen…</div>
+      <div id="tmdb-error" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:.82rem"></div>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="reveal-modal" onclick="if(event.target===this)closeRevealModal()" style="display:none;z-index:1100">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
@@ -1540,6 +847,7 @@ const canQueueRemoveOwn = <?= $can_queue_remove_own ? 'true' : 'false' ?>;
 const canSeeAddedBy     = <?= $can_settings         ? 'true' : 'false' ?>;
 const currentUsername   = <?= json_encode($user['username']) ?>;
 let currentView   = 'dashboard';
+let _queuedIds    = new Set(); // stream_ids aktuell in der Queue (non-done)
 let currentFilter = 'all';
 let allMovies     = [];
 let searchDebounce;
@@ -1787,8 +1095,13 @@ function movieCard(m) {
   const isFav = favourites.has('movie:' + m.stream_id);
   const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
+  const year = m.year ?? '';
+
   return `
-  <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}">
+  <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}"
+    data-tmdb-title="${esc(m.clean_title)}" data-tmdb-type="movie" data-tmdb-year="${esc(year)}"
+    data-tmdb-queue="${esc(JSON.stringify(m))}"
+    onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb">
       <div class="card-thumb-placeholder">🎬</div>
       ${thumb}${badge}${selectBox}${favBtn}
@@ -1797,7 +1110,7 @@ function movieCard(m) {
       <div class="card-title">${m.clean_title}</div>
       <div class="card-meta">${(m.container_extension??'').toUpperCase()}</div>
     </div>
-    <div class="card-actions">${btn}</div>
+    <div class="card-actions" onclick="event.stopPropagation()">${btn}</div>
   </div>`;
 }
 
@@ -1833,11 +1146,15 @@ function seriesCard(s) {
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
   const isFav = favourites.has('series:' + s.series_id);
   const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const queueData = {series_id: s.series_id, clean_title: s.clean_title, cover: s.cover || ''};
   return `
-  <div class="card" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">
+  <div class="card"
+    data-tmdb-title="${esc(s.clean_title)}" data-tmdb-type="series" data-tmdb-year=""
+    data-tmdb-queue="${esc(JSON.stringify(queueData))}"
+    onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
     <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div></div>
-    <div class="card-actions"><button class="btn-q add" onclick="event.stopPropagation();openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">📋 Episodes</button></div>
+    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">📋 Episodes</button></div>
   </div>`;
 }
 
@@ -2022,6 +1339,9 @@ async function refreshQueue() {
 
   const items = await api('get_queue');
 
+  // Global Set für Queue-IDs aktualisieren (für Favoriten und andere Views)
+  _queuedIds = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
+
   if (!items.length) {
     list.innerHTML = `<div class="state-box"><div class="icon">📭</div><p>Queue ist leer</p></div>`;
     return;
@@ -2189,13 +1509,21 @@ function renderFavourites() {
 
     // Queue-Button: Filme direkt queuen, Serien → Modal öffnen
     let actionBtn = '';
+    const isQueued     = _queuedIds.has(String(f.stream_id));
+    const isDownloaded = false; // Favoriten haben keinen Downloaded-Status — wird nicht gecacht
     if (f.type === 'movie' && canQueueAdd) {
-      const movieObj = JSON.stringify({
-        stream_id: f.stream_id, type: 'movie', title: f.title,
-        container_extension: ext, cover: f.cover, category: f.category,
-        clean_title: f.title,
-      }).replace(/"/g, '&quot;');
-      actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
+      if (isQueued) {
+        actionBtn = canQueueRemove || canQueueRemoveOwn
+          ? `<button class="btn-q remove" onclick="removeFromQueue('${f.stream_id}',this.closest('.card'))">✕ Remove</button>`
+          : `<button class="btn-q done" disabled>⏳ Queued</button>`;
+      } else {
+        const movieObj = JSON.stringify({
+          stream_id: f.stream_id, type: 'movie', title: f.title,
+          container_extension: ext, cover: f.cover, category: f.category,
+          clean_title: f.title,
+        }).replace(/"/g, '&quot;');
+        actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
+      }
     } else if (f.type === 'series') {
       actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}')">📋 Episodes</button>`;
     }
@@ -2574,6 +1902,8 @@ async function loadConfig() {
   // Editor feature flags
   document.getElementById('cfg-editor-movies').checked = c.editor_movies_enabled ?? true;
   document.getElementById('cfg-editor-series').checked = c.editor_series_enabled ?? true;
+  document.getElementById('cfg-tmdb-api-key').value    = c.tmdb_api_key ?? '';
+  document.getElementById('cfg-tmdb-api-key').placeholder = c.tmdb_api_key === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um TMDB zu deaktivieren';
   setSettingsMsg('', '');
 }
 
@@ -2595,6 +1925,7 @@ function collectConfig() {
     rclone_bin:     document.getElementById('cfg-rclone-bin').value.trim() || 'rclone',
     editor_movies_enabled: document.getElementById('cfg-editor-movies').checked,
     editor_series_enabled: document.getElementById('cfg-editor-series').checked,
+    tmdb_api_key:          (function() { const v = document.getElementById('cfg-tmdb-api-key').value.trim(); return (v === '••••••••' || v === '') ? '' : v; })(),
   };
 }
 
@@ -2861,7 +2192,112 @@ async function loadServerInfo() {
   set('si-proto',   s.server_protocol || '–');
 }
 
-// ── Reveal API Key Modal ──────────────────────────────────────
+// ── TMDB Info Modal ───────────────────────────────────────────
+function handleCardClick(event, card) {
+  // Klicks auf Buttons/Links innerhalb der Karte ignorieren
+  if (event.target.closest('button, a, .select-check, .btn-fav')) return;
+  const title     = card.dataset.tmdbTitle;
+  const type      = card.dataset.tmdbType;
+  const year      = card.dataset.tmdbYear || '';
+  const queueData = card.dataset.tmdbQueue ? JSON.parse(card.dataset.tmdbQueue) : null;
+  openTmdbModal(title, type, year, queueData);
+}
+const _tmdbCache = new Map();
+
+async function openTmdbModal(title, type, year, queueData) {
+  const modal = document.getElementById('tmdb-modal');
+  modal.style.display = 'flex';
+  // Reset state
+  document.getElementById('tmdb-loading').style.display = '';
+  document.getElementById('tmdb-error').style.display = 'none';
+  document.getElementById('tmdb-poster').style.display = 'none';
+  document.getElementById('tmdb-backdrop').style.backgroundImage = '';
+  document.getElementById('tmdb-title').textContent = title;
+  document.getElementById('tmdb-meta').textContent = '';
+  document.getElementById('tmdb-rating').innerHTML = '';
+  document.getElementById('tmdb-overview').textContent = '';
+  document.getElementById('tmdb-genres').innerHTML = '';
+  document.getElementById('tmdb-actions').innerHTML = '';
+
+  // Queue-Button vorbelegen
+  if (queueData) {
+    const label = type === 'series' ? '📋 Episodes' : '+ Queue';
+    const onclick = type === 'series'
+      ? `closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}')`
+      : `closeTmdbModal();addMovieToQueue(${JSON.stringify(queueData).replace(/"/g,'&quot;')},null)`;
+    document.getElementById('tmdb-actions').innerHTML =
+      `<button class="btn-primary" onclick="${onclick}">${label}</button>`;
+  }
+
+  const cacheKey = `${type}:${title}:${year||''}`;
+  let d;
+  if (_tmdbCache.has(cacheKey)) {
+    d = _tmdbCache.get(cacheKey);
+  } else {
+    d = await api('tmdb_info', {title, type, year: year || ''});
+    if (d && !d.error) _tmdbCache.set(cacheKey, d);
+  }
+
+  document.getElementById('tmdb-loading').style.display = 'none';
+
+  if (!d || d.error) {
+    document.getElementById('tmdb-error').style.display = '';
+    document.getElementById('tmdb-error').textContent = d?.error === 'TMDB API-Key nicht konfiguriert'
+      ? '🔑 TMDB API-Key nicht konfiguriert (Einstellungen → TMDB)'
+      : '⚠️ Keine TMDB-Informationen gefunden';
+    return;
+  }
+  if (!d.found) {
+    document.getElementById('tmdb-error').style.display = '';
+    document.getElementById('tmdb-error').textContent = '⚠️ Kein Treffer auf TMDB gefunden';
+    return;
+  }
+
+  // Backdrop
+  if (d.backdrop) {
+    document.getElementById('tmdb-backdrop').style.backgroundImage = `url(${d.backdrop})`;
+  }
+  // Poster
+  if (d.poster) {
+    const img = document.getElementById('tmdb-poster');
+    img.src = d.poster; img.style.display = '';
+  }
+  // Titel + Meta
+  document.getElementById('tmdb-title').textContent = d.title || title;
+  const parts = [];
+  if (d.release) parts.push(d.release.slice(0, 4));
+  if (d.runtime) parts.push(d.runtime + ' Min.');
+  document.getElementById('tmdb-meta').textContent = parts.join(' · ');
+
+  // Rating
+  if (d.rating) {
+    const stars = Math.round(d.rating / 2);
+    const starHtml = Array.from({length: 5}, (_, i) =>
+      `<span style="color:${i < stars ? '#f5c518' : 'var(--border)'};font-size:1rem">★</span>`
+    ).join('');
+    document.getElementById('tmdb-rating').innerHTML =
+      `${starHtml}<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--muted);margin-left:6px">${d.rating}/10 (${d.vote_count?.toLocaleString()} Bewertungen)</span>`;
+  }
+  // Overview
+  document.getElementById('tmdb-overview').textContent = d.overview || 'Keine Beschreibung verfügbar.';
+  // Genres
+  if (d.genres?.length) {
+    document.getElementById('tmdb-genres').innerHTML = d.genres.map(g =>
+      `<span style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:.72rem;font-family:'DM Mono',monospace">${esc(g)}</span>`
+    ).join('');
+  }
+  // TMDB-Link
+  if (d.tmdb_url) {
+    document.getElementById('tmdb-actions').innerHTML +=
+      `<a href="${esc(d.tmdb_url)}" target="_blank" class="btn-secondary" style="text-decoration:none;font-size:.75rem">🔗 TMDB</a>`;
+  }
+}
+
+function closeTmdbModal() {
+  document.getElementById('tmdb-modal').style.display = 'none';
+}
+
+// ── Reveal API Key Modal ───────────────────────────────────────────────────────
 let _revealKeyId = null;
 
 function showRevealModal(id, name) {
@@ -2927,10 +2363,10 @@ async function loadApiKeys() {
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.last_used ?? 'Nie'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.use_count ?? 0}</td>
       <td>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${k.active ? `<button class="btn-icon" onclick="showRevealModal('${k.id}','${esc(k.name)}')">👁 Anzeigen</button>` : ''}
-          ${k.active ? `<button class="btn-icon" onclick="revokeApiKey('${k.id}')">⛔ Widerrufen</button>` : ''}
-          <button class="btn-icon danger" onclick="deleteApiKey('${k.id}')">✕ Löschen</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;flex-direction:column">
+          ${k.active ? `<button class="btn-icon" style="width:100%" onclick="showRevealModal('${k.id}','${esc(k.name)}')">👁 Anzeigen</button>` : ''}
+          ${k.active ? `<button class="btn-icon" style="width:100%" onclick="revokeApiKey('${k.id}')">⛔ Widerrufen</button>` : ''}
+          <button class="btn-icon danger" style="width:100%" onclick="deleteApiKey('${k.id}')">✕ Löschen</button>
         </div>
       </td>
     </tr>
