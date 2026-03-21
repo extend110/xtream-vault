@@ -92,9 +92,10 @@ function save_queue(array $q): void {
 }
 function sanitize(string $n): string {
     $n = str_replace(['/', '\\'], '-', $n);
-    $n = preg_replace('/[<>:"|?*]/', '', $n);
-    $n = preg_replace('/[^\x20-\x7E]/', '', $n);
-    return trim(preg_replace('/\s+/', ' ', $n)) ?: 'Uncategorized';
+    $n = preg_replace('/[<>:"|?*]/u', '', $n);
+    // Unicode-safe: erlaubt Buchstaben (inkl. Umlaute), Zahlen etc.
+    $n = preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '', $n);
+    return trim(preg_replace('/\s+/u', ' ', $n)) ?: 'Uncategorized';
 }
 function stream_url(string $type, $id, string $ext): string {
     $p = $type === 'movie' ? 'movie' : 'series';
