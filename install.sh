@@ -66,7 +66,8 @@ apt-get install -y -qq \
     ffmpeg \
     wireguard \
     unzip \
-    zip
+    zip \
+    rsync
 log "Pakete installiert"
 
 # ── PHP-Version prüfen ────────────────────────────────────────
@@ -100,8 +101,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ "$SCRIPT_DIR" != "$PROJECT_PATH" ]; then
     mkdir -p "$PROJECT_PATH"
-    cp -r "$SCRIPT_DIR"/. "$PROJECT_PATH"/
-    log "Dateien nach $PROJECT_PATH kopiert"
+    rsync -a --exclude='install.sh' --exclude='README.md' --exclude='.gitignore' \
+        --exclude='data/' --exclude='.git/' \
+        "$SCRIPT_DIR"/ "$PROJECT_PATH"/
+    log "Dateien nach $PROJECT_PATH kopiert (install.sh, README.md, .gitignore ausgeschlossen)"
 else
     log "Skript läuft bereits aus $PROJECT_PATH"
 fi

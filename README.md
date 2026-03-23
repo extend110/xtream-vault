@@ -22,12 +22,15 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 14. [Statistiken](#statistiken)
 15. [Telegram-Benachrichtigungen](#telegram-benachrichtigungen)
 16. [VPN (WireGuard)](#vpn-wireguard)
-17. [Benutzerverwaltung](#benutzerverwaltung)
-18. [Datensicherung](#datensicherung)
-19. [Health-Check](#health-check)
-20. [Externe API](#externe-api)
-21. [Sicherheit](#sicherheit)
-22. [Dateistruktur](#dateistruktur)
+17. [Themes](#themes)
+18. [Benutzerverwaltung](#benutzerverwaltung)
+19. [Einladungslinks](#einladungslinks)
+20. [Updates](#updates)
+21. [Datensicherung](#datensicherung)
+22. [Health-Check](#health-check)
+23. [Externe API](#externe-api)
+24. [Sicherheit](#sicherheit)
+25. [Dateistruktur](#dateistruktur)
 
 ---
 
@@ -35,17 +38,12 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 
 | Anforderung | Mindestversion / Hinweis |
 |---|---|
-| PHP | 8.0+ mit Extensions `curl`, `json`, `session`, `posix`, `zip`, `mbstring` |
+| PHP | 8.0+ mit `curl`, `json`, `session`, `zip`, `mbstring` |
 | Webserver | Apache mit `mod_rewrite` und `mod_headers` |
 | php.ini | `allow_url_fopen = On` |
 | Optional: rclone | Für Cloud-Speicher-Integration |
 | Optional: ffmpeg | Für Stream-Analyse im TMDB-Modal (`ffprobe`) |
-| Optional: WireGuard | Für VPN-geschützte Downloads (`wg-quick`) |
-
-PHP-Erweiterungen installieren:
-```bash
-sudo apt install php-curl php-zip php-mbstring php-json
-```
+| Optional: WireGuard | Für VPN-geschützte Downloads |
 
 ---
 
@@ -54,17 +52,23 @@ sudo apt install php-curl php-zip php-mbstring php-json
 ### Schnellinstallation (empfohlen)
 
 ```bash
+# ZIP herunterladen und entpacken
+wget https://github.com/extend110/xtream-vault/archive/refs/heads/main.zip
+unzip main.zip
+cd xtream-vault-main
+
+# Installationsskript ausführen
 sudo bash install.sh
 ```
 
-Das Skript installiert alle Abhängigkeiten, richtet Apache ein, setzt Berechtigungen und konfiguriert Cronjobs automatisch. Optional: ffmpeg und rclone mitinstallieren.
+`install.sh` installiert alle Abhängigkeiten, richtet Apache ein, setzt Berechtigungen und Cronjobs, und richtet WireGuard-Sudoers ein. `install.sh`, `README.md` und `.gitignore` werden dabei **nicht** ins Webroot kopiert.
 
 ### Manuelle Installation
 
-**1. Dateien hochladen**
+**1. Dateien hochladen** (ohne `install.sh`, `README.md`, `.gitignore`, `data/`)
 
 ```bash
-scp -r xtream-frontend/ user@server:/var/www/html/xtream/
+scp *.php style.css .htaccess user@server:/var/www/html/xtream/
 ```
 
 **2. Berechtigungen setzen**
@@ -76,10 +80,6 @@ sudo chmod -R 775 /var/www/html/xtream/data/
 ```
 
 **3. Apache konfigurieren**
-
-```bash
-sudo nano /etc/apache2/sites-available/xtream.conf
-```
 
 ```apache
 <VirtualHost *:80>
@@ -103,49 +103,34 @@ sudo a2enmod rewrite headers
 sudo systemctl reload apache2
 ```
 
-> **HTTPS empfohlen:**
-> ```bash
-> sudo apt install certbot python3-certbot-apache
-> sudo certbot --apache -d deine-domain.de
-> ```
+**4. Cronjobs** (`sudo -u www-data crontab -e`)
 
-**4. Cronjobs**
-
-Die Cronjobs werden beim ersten Login **automatisch eingerichtet** (sofern `www-data` Crontab-Rechte hat). Zur manuellen Überprüfung:
-
-```bash
-sudo -u www-data crontab -l
-```
-
-Erwartete Einträge:
 ```
 */30 * * * * /usr/bin/php /var/www/html/xtream/cron.php >> /dev/null 2>&1
 0 4 * * * /usr/bin/php /var/www/html/xtream/cache_builder.php >> /dev/null 2>&1
 0 3 * * * /usr/bin/php /var/www/html/xtream/backup.php >> /dev/null 2>&1
 ```
 
-Falls die automatische Einrichtung fehlschlägt:
-```bash
-sudo crontab -e -u www-data
-```
+> **HTTPS empfohlen:**
+> ```bash
+> sudo apt install certbot python3-certbot-apache
+> sudo certbot --apache -d deine-domain.de
+> ```
 
 ---
 
 ## Ersteinrichtung
 
-1. Im Browser `https://deine-domain.de` aufrufen
-2. Den **Setup-Wizard** ausfüllen — Admin-Benutzername und Passwort vergeben
-3. Nach dem Login zu **Einstellungen** navigieren
-4. **Xtream-Server** konfigurieren: IP/Domain, Port, Benutzername, Passwort
-5. **Verbindung testen** — bei Erfolg speichern
-6. **Ziel-Pfad** angeben (lokaler Speicher) oder rclone aktivieren (Cloud)
-7. Über **Einstellungen → Cache aufbauen** die Mediathek zum ersten Mal laden
+1. Im Browser `http://deine-domain.de` aufrufen
+2. **Setup-Wizard** ausfüllen — Admin-Benutzername und Passwort vergeben
+3. **Einstellungen → Xtream-Server** konfigurieren: IP/Domain, Port, Benutzername, Passwort
+4. **Verbindung testen** — bei Erfolg speichern
+5. **Ziel-Pfad** angeben (lokal) oder rclone aktivieren (Cloud)
+6. **Einstellungen → Cache aufbauen** — Mediathek zum ersten Mal laden
 
 ---
 
 ## Konfiguration
-
-Alle Einstellungen sind über **Einstellungen** im Frontend erreichbar.
 
 ### Xtream-Server
 
@@ -153,32 +138,25 @@ Alle Einstellungen sind über **Einstellungen** im Frontend erreichbar.
 |---|---|
 | Server IP / Domain | Adresse des Xtream-Codes-Servers |
 | Port | Standard: 80 |
-| Benutzername | Xtream-Zugangsdaten |
-| Passwort | Xtream-Zugangsdaten |
+| Benutzername / Passwort | Xtream-Zugangsdaten |
 
 ### Download-Ziel
 
 | Modus | Beschreibung |
 |---|---|
-| Lokal | Absoluter Pfad auf dem Server, z.B. `/mnt/nas/media` |
-| rclone | Direktes Streaming in Cloud-Speicher (kein lokaler Zwischenspeicher) |
-
-### Editor / Viewer — Sichtbarkeit
-
-Admins können Movies und Serien für editor/viewer-Accounts separat ausblenden.
+| Lokal | Absoluter Pfad, z.B. `/mnt/nas/media` |
+| rclone | Direktes Streaming in Cloud-Speicher |
 
 ---
 
 ## Server-Verwaltung
 
-Xtream Vault unterstützt mehrere Xtream-Server. Jeder Server bekommt eine eindeutige ID (Hash aus IP + Port + Username). Downloads, Queue, Cache und Verlauf sind **pro Server getrennt** — ein Serverwechsel verliert keine Daten.
+Mehrere Xtream-Server werden unterstützt. Jeder Server bekommt eine eindeutige ID (Hash aus IP + Port + Username). Downloads, Queue, Cache und Verlauf sind **pro Server getrennt**.
 
-Unter **Einstellungen → Gespeicherte Server**:
-- **↗ Wechseln** — lädt Zugangsdaten des gewählten Servers und startet neu
+Unter **Einstellungen → Gespeicherte Server:**
+- **↗ Wechseln** — lädt Zugangsdaten und startet neu
 - **✏️ Umbenennen** — gibt dem Server einen sprechenden Namen
 - **✕ Löschen** — entfernt ihn aus der Liste (Daten bleiben erhalten)
-
-Beim Speichern neuer Zugangsdaten wird der Server automatisch gespeichert.
 
 ---
 
@@ -190,65 +168,37 @@ rclone ermöglicht das direkte Streamen von VODs in einen Cloud-Speicher ohne lo
 
 ```bash
 curl https://rclone.org/install.sh | sudo bash
-rclone version
 ```
 
-### Remote konfigurieren
-
-Die Konfiguration muss als `www-data`-User erfolgen:
+### Remote konfigurieren (als www-data)
 
 ```bash
 sudo -u www-data rclone config
 ```
 
-Beispiel für MEGA:
-```
-n) New remote
-name> mega
-Storage> mega
-user> deine@email.de
-password> [Passwort eingeben]
-```
+> Konfigurationsdatei: `/var/www/.config/rclone/rclone.conf`
 
-Verbindung testen:
-```bash
-sudo -u www-data rclone lsd mega:
-```
+### In Xtream Vault aktivieren
 
-> **Konfigurationsdatei:** `/var/www/.config/rclone/rclone.conf`
-
-### rclone in Xtream Vault aktivieren
-
-1. **Einstellungen → rclone** öffnen
-2. **rclone aktivieren** anhaken
-3. **Remote-Name** eingeben (z.B. `mega`)
-4. **Ziel-Pfad** eingeben (z.B. `Media/VOD`)
-5. Mit **Verbindung testen** prüfen
-6. **Speichern**
+1. Einstellungen → rclone aktivieren
+2. Remote-Name eingeben (z.B. `mega`)
+3. Ziel-Pfad eingeben (z.B. `Media/VOD`)
+4. Verbindung testen → Speichern
 
 ### Remote-Cache
 
-Beim ersten Download-Run wird automatisch `data/rclone_cache.json` mit allen Dateinamen auf dem Remote angelegt. Damit werden bereits vorhandene Dateien vor dem Download-Start erkannt und übersprungen. Der Cache kann unter **Einstellungen → rclone → 🗂 Remote-Cache aktualisieren** manuell neu aufgebaut werden.
+Beim ersten Download-Run wird `data/rclone_cache.json` angelegt. Bereits vorhandene Dateien werden damit vor dem Download erkannt und übersprungen. Manuell aktualisieren: **Einstellungen → rclone → 🗂 Remote-Cache aktualisieren**
 
 ---
 
 ## Ordnerstruktur der Downloads
 
-### Filme
-
 ```
 Movies/
   DE/
     Action/
-      Der Pate.1972.mkv
-  US/
-    Action/
       Inception.2010.mkv
-```
 
-### Serien
-
-```
 TV Shows/
   DE/
     Dark/
@@ -256,11 +206,7 @@ TV Shows/
         Dark.S01E01.mkv
 ```
 
-**Länderkürzel** werden automatisch aus dem Serientitel oder der Kategorie extrahiert. Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
-
-**Dateinamen:**
-- Filme: `Titel.Jahr.ext`
-- Episoden: `Serienname.SxxExx.ext` — Serienname kommt aus dem Xtream-Serientitel
+Länderkürzel werden automatisch aus dem Titel oder der Kategorie extrahiert.
 
 ---
 
@@ -268,125 +214,77 @@ TV Shows/
 
 | Berechtigung | admin | editor | viewer |
 |---|:---:|:---:|:---:|
-| Movies browsen | ✅ | ✅* | ✅* |
-| Serien browsen | ✅ | ✅* | ✅* |
-| Suche | ✅ | ✅ | ✅ |
-| Favoriten | ✅ | ✅ | ✅ |
+| Movies / Serien browsen | ✅ | ✅* | ✅* |
+| Suche & Favoriten | ✅ | ✅ | ✅ |
 | Queue ansehen | ✅ | ✅ | ❌ |
 | Queue hinzufügen | ✅ | ✅ (Limit) | ❌ |
 | Queue verwalten / leeren | ✅ | ❌ | ❌ |
-| Download abbrechen / zurücksetzen | ✅ | ❌ | ❌ |
-| Cron-Log | ✅ | ❌ | ❌ |
 | Einstellungen | ✅ | ❌ | ❌ |
 | Benutzerverwaltung | ✅ | ❌ | ❌ |
+| Statistiken | ✅ | ❌ | ❌ |
 
-*\* Kann vom Admin pro Inhaltstyp deaktiviert werden*
+*Kann vom Admin pro Inhaltstyp deaktiviert werden*
+
+Editoren und Viewer sehen in der Queue und im Download-Verlauf nur ihre **eigenen** Einträge.
 
 ### Queue-Limits
 
-Das stündliche Queue-Limit ist in `auth.php` pro Rolle konfigurierbar:
-
-```php
-const QUEUE_ADD_HOURLY_LIMIT = [
-    'admin'  => null,  // unbegrenzt
-    'editor' => 3,     // 3 Anfragen/Stunde
-    'viewer' => 0,     // kein Zugriff
-];
-```
-
-Admins können in der **Benutzerverwaltung** für jeden User ein individuelles Limit setzen. Leer = Rollen-Standard, `0` = kein Zugriff, `5` = 5/h.
+Konfigurierbar in `auth.php` pro Rolle, individuell überschreibbar pro User unter **Benutzerverwaltung**.
 
 ---
 
 ## Download-Queue
 
-### Prioritäten
-
-🔴 Hoch (1) / 🟡 Normal (2) / 🔵 Niedrig (3) — Admins können die Priorität direkt in der Queue-Ansicht ändern.
-
-### Manuell starten
-
-Downloads können über **▶ Starten** im Dashboard oder in der Queue-Ansicht manuell angestoßen werden. Der Worker verhindert parallele Instanzen über eine `data/cron.lock`-Datei.
-
-### Speicherplatz-Prüfung (lokaler Modus)
-
-Vor jedem Download wird die Dateigröße per HEAD-Request ermittelt und mit dem freien Speicherplatz verglichen (Dateigröße + 512 MB Puffer).
-
-### Download abbrechen
-
-Laufende Downloads können über **✕ Abbrechen** in der Progress-Card gestoppt werden (nur Admins).
-
-### Fehlerbehandlung
-
-Fehlgeschlagene Downloads werden als `error` markiert. Admins können sie über **↻ Retry** manuell neu einreihen.
-
-### Download zurücksetzen
-
-Bereits heruntergeladene VODs können über **↺ Reset** zurückgesetzt und neu zur Queue hinzugefügt werden.
+- **Prioritäten:** 🔴 Hoch / 🟡 Normal / 🔵 Niedrig
+- **Manuell starten:** Dashboard → ▶ Starten
+- **Abbrechen:** nur Admins, über die Progress-Card
+- **Retry:** fehlgeschlagene Downloads über ↻ manuell neu einreihen
+- **Reset:** heruntergeladene VODs zurücksetzen und neu einreihen
 
 ### Doppelten-Prüfung beim Queue-Add
 
-Beim Hinzufügen zur Queue wird in dieser Reihenfolge geprüft:
-1. Bereits in der Queue vorhanden
-2. Bereits in `downloaded.json` (heruntergeladen)
-3. Dateiname bereits im rclone-Remote-Cache (nur rclone-Modus)
+1. Bereits in der Queue
+2. Bereits heruntergeladen (`downloaded.json`)
+3. Dateiname im rclone-Remote-Cache (nur rclone-Modus)
 
 ---
 
 ## Mediathek & Suche
 
-### Medien-Cache
-
-Der Cache (`library_cache_*.json` für Filme, `series_cache_*.json` für Serien) wird täglich um 4 Uhr automatisch aufgebaut. Er ist pro Server getrennt.
-
-### Suche
-
-Primär gegen den lokalen Cache — bei veraltetem oder leerem Cache Fallback auf den Xtream-Server. Ergebnisse werden in der Sitzung gecacht.
-
-- **Debouncing:** 350ms nach dem letzten Tastendruck
-- **Suchverlauf:** Die letzten 10 Suchanfragen und Kategorien pro User im Browser
-- **Quellenhinweis:** Bei Cache-Ergebnissen erscheint ein „Aktualisieren"-Link
-
-### Sortierung & Paginierung
-
-Filme und Serien können nach Standard, A→Z oder Z→A sortiert werden. Ab 50 Items erscheint eine Seitennavigation.
+- **Cache** wird täglich um 4 Uhr automatisch aufgebaut (pro Server getrennt)
+- **Suche** primär gegen lokalen Cache, Fallback auf Xtream-Server
+- **Suchverlauf:** letzte 10 Suchanfragen im Browser gespeichert
+- **Sortierung:** Standard, A→Z, Z→A
+- **Paginierung** ab 50 Items
 
 ---
 
 ## Neue Releases
 
-Die View **🆕 Neu** zeigt alle Titel die seit dem letzten Cache-Run neu hinzugekommen sind. `cache_builder.php` vergleicht beim Run die aktuellen IDs mit den beim letzten Run bekannten und speichert neue Einträge in `data/new_releases.json`.
+Die View **🆕 Neu** zeigt alle Titel die seit dem letzten Cache-Run neu hinzugekommen sind und noch nicht heruntergeladen wurden.
 
-Beim ersten Run werden alle IDs als bekannt markiert — kein False-Positive mit tausenden „neuen" Titeln.
+- Titel bleiben sichtbar bis sie **heruntergeladen** oder **manuell entfernt** (✕-Button) werden
+- Beim ersten Run werden alle IDs als bekannt markiert — kein False-Positive
+- Nach einem Download verschwindet der Titel automatisch aus der Liste
 
 ---
 
 ## Favoriten
 
-Jeder Benutzer kann Filme und Serien mit ♥ als Favoriten markieren. Erreichbar unter **Favoriten** in der Navigation, filterbar nach Typ und durchsuchbar. Favoriten werden pro User in `data/users.json` gespeichert.
+Jeder Benutzer kann Filme und Serien mit ♥ als Favoriten markieren. Erreichbar unter **Favoriten**, filterbar und durchsuchbar. Gespeichert pro User in `data/users.json`.
 
 ---
 
 ## TMDB-Integration
 
-Beim Klick auf eine Film- oder Serienkarte öffnet sich ein Modal mit Daten von The Movie Database:
-
-- Backdrop-Bild, Poster, Titel
-- Beschreibung (auf Deutsch)
-- Sternbewertung + Anzahl Bewertungen
-- Genres, Erscheinungsjahr, Laufzeit
-- **Stream-Info** via `ffprobe` (nur Filme): Auflösung, Codec, Bitrate, HDR, Audio, Dauer
+Klick auf eine Karte öffnet ein Modal mit Daten von The Movie Database:
+- Backdrop, Poster, Beschreibung, Bewertung, Genres
+- **Stream-Info** via `ffprobe` (Auflösung, Codec, Bitrate, HDR, Audio, Dauer)
 
 ### Setup
 
-1. API-Key unter [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) erstellen (v3 auth)
-2. **Einstellungen → 🎬 TMDB Integration** → Key eintragen → Speichern
-
-### ffprobe installieren
-
-```bash
-sudo apt install ffmpeg
-```
+1. API-Key unter [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) erstellen
+2. Einstellungen → 🎬 TMDB → Key eintragen → Speichern
 
 ---
 
@@ -394,11 +292,11 @@ sudo apt install ffmpeg
 
 Unter **📊 Statistiken** (nur Admins):
 
-- **Gesamtdownloads** und **Gesamtvolumen** als KPI-Cards
-- **Datenvolumen pro Monat** — Balkendiagramm mit Anzahl-Linie (Chart.js)
-- **Top-User-Rangliste** — Downloads und Volumen pro User mit Fortschrittsbalken
-
-Die Dateigröße wird seit diesem Update in `download_history.json` gespeichert. Ältere Einträge ohne Dateigröße werden bei der Anzahl berücksichtigt, beim Volumen als 0 gewertet.
+- KPI-Cards: Gesamtdownloads, Gesamtvolumen
+- **Datenvolumen pro Monat** — Balkendiagramm
+- **Downloads pro Monat** — Balkendiagramm
+- **Top Kategorien** — horizontales Balkendiagramm (Top 15)
+- **Top User** — Rangliste mit Fortschrittsbalken
 
 ---
 
@@ -409,8 +307,8 @@ Nach jedem abgeschlossenen Download wird eine Telegram-Nachricht gesendet.
 ### Setup
 
 1. Bot erstellen: [@BotFather](https://t.me/BotFather) → `/newbot`
-2. Chat-ID ermitteln: [@userinfobot](https://t.me/userinfobot) oder `https://api.telegram.org/bot<TOKEN>/getUpdates`
-3. **Einstellungen → 📨 Telegram** → Token + Chat-ID eintragen → Speichern
+2. Chat-ID ermitteln: [@userinfobot](https://t.me/userinfobot)
+3. Einstellungen → 📨 Telegram → Token + Chat-ID → Speichern
 4. **📨 Testnachricht senden** zur Überprüfung
 
 ### Nachrichtenformat
@@ -425,7 +323,7 @@ Nach jedem abgeschlossenen Download wird eine Telegram-Nachricht gesendet.
 
 ## VPN (WireGuard)
 
-Downloads können optional über einen WireGuard-VPN-Tunnel geleitet werden. Dabei wird **Policy-Based Routing** eingesetzt: nur der `www-data`-Prozess (der `cron.php` ausführt) nutzt den Tunnel. SSH, Apache und alle anderen Dienste bleiben auf dem normalen Gateway erreichbar.
+Downloads können über einen WireGuard-Tunnel geleitet werden. Nur der `www-data`-Prozess (`cron.php`) nutzt den Tunnel — SSH, Apache und alle anderen Dienste bleiben auf dem normalen Gateway.
 
 ### Voraussetzungen
 
@@ -433,25 +331,17 @@ Downloads können optional über einen WireGuard-VPN-Tunnel geleitet werden. Dab
 sudo apt install wireguard
 ```
 
-### WireGuard konfigurieren
-
-Konfigurationsdatei anlegen:
+### Konfiguration ablegen
 
 ```bash
 sudo nano /etc/wireguard/wg0.conf
 sudo chmod 600 /etc/wireguard/wg0.conf
-sudo chown root:root /etc/wireguard/wg0.conf
 ```
-
-Die Konfiguration kann `AllowedIPs = 0.0.0.0/0, ::/0` verwenden — das Policy-Based Routing sorgt dafür dass nur `cron.php` den Tunnel nutzt.
 
 ### sudo-Rechte einrichten
 
-`www-data` benötigt Rechte für `wg-quick` und `ip rule`:
-
 ```bash
 sudo tee /etc/sudoers.d/xtream-vpn << 'EOF'
-# Xtream Vault: www-data darf VPN-Befehle ohne Passwort ausführen
 www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick up *, /usr/bin/wg-quick down *
 www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip rule show, /usr/sbin/ip rule add *, /usr/sbin/ip rule del *
@@ -462,38 +352,39 @@ sudo chmod 0440 /etc/sudoers.d/xtream-vpn
 sudo visudo -c -f /etc/sudoers.d/xtream-vpn && echo "OK"
 ```
 
-> **Pfad prüfen:** `which ip` — auf Ubuntu meist `/usr/sbin/ip`. Falls abweichend, sudoers entsprechend anpassen.
+> **Pfad prüfen:** `which ip` — auf Ubuntu meist `/usr/sbin/ip`
 
 ### In Xtream Vault aktivieren
 
-1. **Einstellungen → 🔒 VPN (WireGuard)**
-2. **VPN für Downloads aktivieren** anhaken
-3. **Interface-Name** eingeben (z.B. `wg0`)
-4. **Speichern**
-5. **🔍 Status prüfen** — zeigt ob Interface aktiv ist + öffentliche IP
+Einstellungen → 🔒 VPN → Interface `wg0` → aktivieren → Speichern
 
-### Wie es funktioniert
+Der VPN-Status-Badge in der Topbar zeigt den aktuellen Zustand (automatische Aktualisierung alle 30 Sekunden).
 
-`cron.php` ruft vor dem ersten Download `vpn_up()` auf:
-
-1. `wg-quick up wg0` — Interface starten
-2. `wg-quick`-eigene system-weite `ip rule` Einträge entfernen (diese würden sonst **alle** User durch den Tunnel leiten)
-3. UID-spezifische Regel setzen: `ip rule add uidrange <www-data-uid>-<www-data-uid> lookup 51820`
-
-Nach dem letzten Download wird `vpn_down()` aufgerufen — UID-Regel entfernen, `wg-quick down wg0`.
-
-### Notfall-Wiederherstellung
+### Notfall-Reset
 
 Falls SSH-Verbindung nach `vpn_connect` verloren geht (z.B. über Hoster-Konsole):
 
 ```bash
 sudo wg-quick down wg0
-sudo ip rule del uidrange 33-33 lookup 51820 priority 100 2>/dev/null
-sudo ip -6 rule del uidrange 33-33 lookup 51820 priority 100 2>/dev/null
-# UID 33 ist der Standard für www-data — mit "id -u www-data" prüfen
+sudo ip rule del uidrange $(id -u www-data)-$(id -u www-data) lookup 51820 priority 100 2>/dev/null
 ```
 
-Nach einem Server-Neustart sind alle `ip rule` Einträge weg (nicht persistent). WireGuard startet nur automatisch wenn `wg-quick@wg0.service` enabled ist — das ist nach diesem Setup **nicht** der Fall.
+Nach einem Server-Neustart sind alle `ip rule` Einträge weg (nicht persistent).
+
+---
+
+## Themes
+
+Jeder Benutzer kann unter **👤 Mein Profil** ein Design wählen:
+
+| Theme | Beschreibung |
+|---|---|
+| Dark | Standard — dunkles Design mit gelbem Akzent |
+| AMOLED | Reines Schwarz für OLED-Displays |
+| Midnight | Dunkles Blau mit blauen Akzenten |
+| Light | Helles Design mit lila Akzenten |
+
+Die Auswahl wird pro User im Browser (`localStorage`) gespeichert.
 
 ---
 
@@ -501,36 +392,47 @@ Nach einem Server-Neustart sind alle `ip rule` Einträge weg (nicht persistent).
 
 Unter **👥 Benutzer** (nur Admins):
 
-- **Benutzer anlegen** und bearbeiten (Rolle, Passwort)
+- Benutzer anlegen, bearbeiten, sperren, löschen
 - **🔑 Passwort zurücksetzen** durch Admin
-- **Sperren / Entsperren** von Accounts
 - **Queue-Limit** individuell pro User setzen
 - **Download-Verlauf** pro User einsehen (Klick auf Username)
 - **Aktivitätslog** für alle Aktionen
 
-### Einladungslinks
+---
+
+## Einladungslinks
 
 Admins können unter **🔗 Einladung erstellen** einmalige Registrierungslinks generieren:
 
 - Rolle und Gültigkeitsdauer (6h bis 7 Tage) wählbar
-- Optionale Notiz
-- Link unter `https://deine-domain.de/invite.php?token=...`
-- Wird nach einmaliger Nutzung als verwendet markiert
+- Öffentliche Registrierungsseite: `https://deine-domain.de/invite.php?token=...`
+- Nach einmaliger Nutzung als verwendet markiert
+
+---
+
+## Updates
+
+Unter **Einstellungen → 🔄 Updates**:
+
+1. **🔍 Auf Updates prüfen** — vergleicht lokalen Commit mit GitHub
+2. **⬆️ Update installieren** — lädt ZIP von GitHub herunter, entpackt und installiert
+
+Vor jedem Update wird automatisch ein Backup von `data/` erstellt. `install.sh`, `README.md` und `.gitignore` werden beim Update nicht überschrieben. Die Seite lädt nach dem Update automatisch neu.
 
 ---
 
 ## Datensicherung
 
-Backup-Verwaltung unter **Einstellungen → 💾 Datensicherung**.
+Unter **Einstellungen → 💾 Datensicherung**:
 
-Gesichert werden alle Dateien in `data/` als ZIP-Archiv. Backups landen in `data/backups/` und werden nach 7 Kopien automatisch rotiert.
+- Sichert alle Dateien in `data/` als ZIP
+- Automatisch täglich um 3 Uhr, maximal 7 Backups
+- **↩ Restore** stellt ein Backup wieder her
 
-**Manuell ausführen:**
 ```bash
+# Manuell ausführen
 php /var/www/html/xtream/backup.php
 ```
-
-**Wiederherstellen:** Einstellungen → Datensicherung → **↩ Restore**
 
 ---
 
@@ -540,7 +442,7 @@ php /var/www/html/xtream/backup.php
 GET /api.php?action=health
 ```
 
-Kein Login erforderlich. HTTP 200 wenn OK, 503 bei Wartung oder nicht konfiguriert.
+Kein Login erforderlich. HTTP 200 wenn OK, 503 bei Wartung.
 
 ```json
 {
@@ -548,7 +450,6 @@ Kein Login erforderlich. HTTP 200 wenn OK, 503 bei Wartung oder nicht konfigurie
   "configured": true,
   "maintenance": false,
   "queue": { "pending": 2, "downloading": 1, "errors": 0 },
-  "cron": { "running": true, "pid": 12345 },
   "disk": { "free_bytes": 107374182400, "free_pct": 20.0 },
   "last_backup": "2026-03-23 03:00:00"
 }
@@ -558,39 +459,34 @@ Kein Login erforderlich. HTTP 200 wenn OK, 503 bei Wartung oder nicht konfigurie
 
 ## Externe API
 
-Externe Systeme können über API-Keys auf die Benutzerverwaltung zugreifen. Vollständige Dokumentation unter **📖 API-Dokumentation** (nur Admins).
+Authentifizierung via Header `X-API-Key: xv_...`
 
-**Authentifizierung:**
-```
-X-API-Key: xv_xxxxxxxxxxxx
-```
+Vollständige Dokumentation unter **📖 API-Dokumentation** (nur Admins).
 
-| Endpoint | Methode | Beschreibung |
-|---|---|---|
-| `external_create_user` | GET / POST | Benutzer anlegen |
-| `external_list_users` | GET | Alle Benutzer auflisten |
-| `external_suspend_user` | GET / POST | Benutzer sperren / entsperren |
-| `external_update_user` | POST | Passwort oder Rolle ändern |
-| `external_delete_user` | GET / POST | Benutzer löschen |
+| Endpoint | Beschreibung |
+|---|---|
+| `external_create_user` | Benutzer anlegen |
+| `external_list_users` | Alle Benutzer auflisten |
+| `external_suspend_user` | Benutzer sperren / entsperren |
+| `external_update_user` | Passwort oder Rolle ändern |
+| `external_delete_user` | Benutzer löschen |
 
 ---
 
 ## Sicherheit
 
-- **`data/`-Verzeichnis** ist per `.htaccess` vollständig vor HTTP-Zugriff geschützt
-- **Interne PHP-Dateien** (`config.php`, `auth.php`, `cron.php`, `cache_builder.php`, `backup.php`) sind per `.htaccess` gesperrt
-- **Stream-URLs** werden nur serverseitig aufgebaut und nie an den Client übertragen
-- **Gesperrte Benutzer** können sich nicht einloggen; der Wartungsmodus erlaubt nur Admin-Logins
-- **Aktivitätslog** protokolliert alle relevanten Aktionen
-- **API-Keys** können jederzeit widerrufen werden; vollständiger Key nur nach Passwort-Bestätigung einsehbar
-- **HTTPS** wird empfohlen (Let's Encrypt / Certbot)
+- `data/` vollständig vor HTTP-Zugriff geschützt (`.htaccess`)
+- Interne PHP-Dateien (`config.php`, `auth.php`, `cron.php`, `cache_builder.php`, `backup.php`) per `.htaccess` gesperrt
+- Stream-URLs werden nur serverseitig aufgebaut
+- Aktivitätslog protokolliert alle relevanten Aktionen
+- HTTPS wird empfohlen (Let's Encrypt / Certbot)
 
 ---
 
 ## Dateistruktur
 
 ```
-xtream-frontend/
+/var/www/html/xtream/
 ├── index.php              — Haupt-Frontend (gesamte UI)
 ├── api.php                — Backend-API (alle Endpoints)
 ├── auth.php               — Authentifizierung, Rollen, Rate-Limiting
@@ -599,31 +495,26 @@ xtream-frontend/
 ├── invite.php             — Öffentliche Einladungs-Registrierungsseite
 ├── cache_builder.php      — Hintergrundprozess für Medien-Cache
 ├── cron.php               — Download-Worker (Cronjob)
-├── backup.php             — Backup-Script (täglich 3 Uhr, max 7 Backups)
+├── backup.php             — Backup-Script
 ├── maintenance.php        — Wartungsseite
-├── install.sh             — Automatisches Installationsskript
 ├── style.css              — Stylesheet
 ├── .htaccess              — Sicherheitsregeln
 └── data/                  — Datendateien (automatisch erstellt)
-    ├── config.json                    — Server- & App-Konfiguration
-    ├── users.json                     — Benutzerdatenbank inkl. Favoriten
-    ├── servers.json                   — Gespeicherte Xtream-Server
-    ├── invites.json                   — Einladungslinks
-    ├── queue_<server-id>.json         — Download-Queue (pro Server)
-    ├── downloaded_<server-id>.json    — IDs heruntergeladener VODs (pro Server)
-    ├── downloaded_index_<server-id>.json — Metadaten heruntergeladener VODs
-    ├── download_history_<server-id>.json — Permanenter Download-Verlauf
-    ├── library_cache_<server-id>.json — Film-Metadaten-Cache (pro Server)
-    ├── series_cache_<server-id>.json  — Serien-Metadaten-Cache (pro Server)
-    ├── new_releases.json              — Neue Titel seit letztem Cache-Run
-    ├── rclone_cache.json              — Bekannte Dateien auf dem Remote
-    ├── activity.json                  — Aktivitätslog
-    ├── rate_limits.json               — Rate-Limit-Tracking
-    ├── api_keys.json                  — API-Keys
-    ├── progress.json                  — Aktueller Download-Fortschritt
-    ├── cron.lock                      — Download-Worker Lock-Datei
-    ├── cron.log                       — Download-Log
-    ├── backup.log                     — Backup-Log
-    └── backups/                       — Backup-Archiv
-        └── backup_YYYY-MM-DD_HH-II-SS.zip
+    ├── config.json
+    ├── users.json
+    ├── servers.json
+    ├── invites.json
+    ├── queue_<id>.json
+    ├── downloaded_<id>.json
+    ├── downloaded_index_<id>.json
+    ├── download_history_<id>.json
+    ├── library_cache_<id>.json
+    ├── series_cache_<id>.json
+    ├── new_releases.json
+    ├── rclone_cache.json
+    ├── activity.json
+    ├── api_keys.json
+    ├── progress.json
+    ├── cron.lock / cron.log
+    └── backups/
 ```
