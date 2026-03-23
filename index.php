@@ -361,8 +361,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     </div>
     <?php endif; ?>
 
-    <?php if ($can_cron_log): ?>
-    <!-- Log -->
+    <!-- Favoriten -->
     <div id="view-favourites" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
         <div>
@@ -571,6 +570,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     </div>
     <?php endif; ?>
 
+    <?php if ($can_cron_log): ?>
     <div id="view-log" style="display:none">      <div class="queue-toolbar">
         <div class="queue-toolbar-title">Cron Log</div>
         <button class="btn-sm" onclick="loadLog()">↻ Aktualisieren</button>
@@ -1183,10 +1183,13 @@ let queueRefreshInterval;
 
 // ── Theme Toggle ──────────────────────────────────────────────
 const THEMES = {
-  dark:     { label: 'Dark',    bg: '#0a0a0f', bg2: '#111118', accent: '#e8ff47' },
-  amoled:   { label: 'AMOLED',  bg: '#000000', bg2: '#080808', accent: '#e8ff47' },
-  midnight: { label: 'Midnight',bg: '#0a0e1a', bg2: '#111828', accent: '#64a0ff' },
-  light:    { label: 'Light',   bg: '#f0f0f5', bg2: '#ffffff', accent: '#6060e0' },
+  dark:     { label: 'Dark',       bg: '#0a0a0f', bg2: '#111118', accent: '#e8ff47' },
+  amoled:   { label: 'AMOLED',     bg: '#000000', bg2: '#080808', accent: '#e8ff47' },
+  midnight: { label: 'Midnight',   bg: '#0a0e1a', bg2: '#111828', accent: '#64a0ff' },
+  nord:     { label: 'Nord',       bg: '#2e3440', bg2: '#3b4252', accent: '#88c0d0' },
+  tokyo:    { label: 'Tokyo Night',bg: '#1a1b2e', bg2: '#16213e', accent: '#7aa2f7' },
+  rosepine: { label: 'Rosé Pine',  bg: '#191724', bg2: '#1f1d2e', accent: '#ebbcba' },
+  light:    { label: 'Light',      bg: '#f0f0f5', bg2: '#ffffff', accent: '#6060e0' },
 };
 const THEME_KEY = 'xv_theme_<?= $user['id'] ?>';
 
@@ -1905,17 +1908,16 @@ function switchNrTab(tab, el) {
 
 async function loadNewReleases() {
   const grid = document.getElementById('new-releases-grid');
-  grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>Lade…</p></div>`;
+  if (grid) grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>Lade…</p></div>`;
   _nrData = await api('get_new_releases');
   const meta = document.getElementById('new-releases-meta');
   if (_nrData.generated_at) {
     const total = (_nrData.movies?.length ?? 0) + (_nrData.series?.length ?? 0);
-    meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
-    // Badge aktualisieren
+    if (meta) meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
     const badge = document.getElementById('new-releases-badge');
     if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
   } else {
-    meta.textContent = 'Noch kein Cache-Run durchgeführt';
+    if (meta) meta.textContent = 'Noch kein Cache-Run durchgeführt';
   }
   renderNewReleases();
 }
@@ -2073,11 +2075,17 @@ async function clearAll() {
 }
 
 // ── Log ───────────────────────────────────────────────────────
-async function loadLog() {
+let _logInterval = null;
+
+async function loadLog(autoRefresh = false) {
   const wrap = document.getElementById('log-wrap');
-  wrap.textContent = 'Lade…';
+  if (!wrap) return;
+  // Bei manuellem Refresh: Lade-Indikator zeigen
+  if (!autoRefresh) wrap.textContent = 'Lade…';
   const d = await api('cron_log');
   if (!d.lines?.length) { wrap.textContent = 'Kein Log vorhanden.'; return; }
+  // Scroll-Position merken — nur nach unten scrollen wenn bereits am Ende
+  const atBottom = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 20;
   wrap.innerHTML = d.lines.map(line => {
     const l = line.replace(/&/g,'&amp;').replace(/</g,'&lt;');
     if (l.includes('DONE:'))       return `<span class="log-ok">${l}</span>`;
@@ -2088,7 +2096,16 @@ async function loadLog() {
     if (l.includes('==='))         return `<span class="log-head">${l}</span>`;
     return l;
   }).join('\n');
-  wrap.scrollTop = wrap.scrollHeight;
+  if (atBottom || !autoRefresh) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function startLogPolling() {
+  loadLog();
+  if (!_logInterval) _logInterval = setInterval(() => loadLog(true), 5000);
+}
+
+function stopLogPolling() {
+  if (_logInterval) { clearInterval(_logInterval); _logInterval = null; }
 }
 
 // ── Search (Movies + Series tabs) ────────────────────────────
@@ -2209,7 +2226,7 @@ function showView(v) {
   if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
-  if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
+  if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; startLogPolling(); stopProgressPolling(); }
   if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
@@ -2224,6 +2241,7 @@ function showView(v) {
     // queueRefreshInterval bleibt leer, refreshQueue läuft über startProgressPolling
   }
   if (v !== 'queue' && v !== 'dashboard') stopProgressPolling();
+  if (v !== 'log') stopLogPolling();
   <?php if ($can_settings): ?>if (v !== 'dashboard') stopDashboardPolling();<?php endif; ?>
   // Clear multi-select when leaving search
   if (v !== 'search') clearSelection();

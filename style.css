@@ -57,6 +57,51 @@
 }
 [data-theme="light"] body::before { opacity: .15; }
 [data-theme="light"] .sidebar { border-right-color: rgba(0,0,0,.1); }
+
+/* ── Nord ── */
+[data-theme="nord"] {
+  --bg:     #2e3440;
+  --bg2:    #3b4252;
+  --bg3:    #434c5e;
+  --border: rgba(216,222,233,.12);
+  --text:   #eceff4;
+  --muted:  #7b88a1;
+  --accent: #88c0d0;
+  --accent2:#81a1c1;
+  --orange: #d08770;
+  --red:    #bf616a;
+  --green:  #a3be8c;
+}
+
+/* ── Tokyo Night ── */
+[data-theme="tokyo"] {
+  --bg:     #1a1b2e;
+  --bg2:    #16213e;
+  --bg3:    #0f3460;
+  --border: rgba(122,162,247,.12);
+  --text:   #c0caf5;
+  --muted:  #565f89;
+  --accent: #7aa2f7;
+  --accent2:#7dcfff;
+  --orange: #ff9e64;
+  --red:    #f7768e;
+  --green:  #9ece6a;
+}
+
+/* ── Rosé Pine ── */
+[data-theme="rosepine"] {
+  --bg:     #191724;
+  --bg2:    #1f1d2e;
+  --bg3:    #26233a;
+  --border: rgba(196,167,231,.1);
+  --text:   #e0def4;
+  --muted:  #6e6a86;
+  --accent: #ebbcba;
+  --accent2:#9ccfd8;
+  --orange: #f6c177;
+  --red:    #eb6f92;
+  --green:  #31748f;
+}
 body, .sidebar, .topbar, .card, .settings-card, .queue-item, .modal, .dkpi, .dash-info-card {
   transition: background-color .2s, border-color .2s, color .2s;
 }

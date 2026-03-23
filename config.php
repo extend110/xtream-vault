@@ -353,8 +353,8 @@ function build_dest_path(array $item): array {
     if ($type !== 'movie') {
         $seriesBase = $safeCat ?: 'Unknown';
         $episode = '';
-        if (preg_match('/([Ss]\d{1,2}[Ee]\d{1,2})/u', $title, $m)) {
-            $episode = strtoupper($m[1]);
+        if (preg_match('/[Ss](\d{1,2})[Ee](\d{1,2})/u', $title, $m)) {
+            $episode = sprintf('S%02dE%02d', (int)$m[1], (int)$m[2]);
         }
         if ($episode === '' && isset($item['season'], $item['episode_num'])) {
             $episode = sprintf('S%02dE%02d', (int)$item['season'], (int)$item['episode_num']);
