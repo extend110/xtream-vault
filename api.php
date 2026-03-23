@@ -965,11 +965,19 @@ switch ($action) {
 
         // Sicherung von data/ vor dem Update
         $backupDir  = $dir . '/data/backups';
-        $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.zip';
         @mkdir($backupDir, 0775, true);
-        exec('zip -r ' . escapeshellarg($backupFile) . ' ' . escapeshellarg($dir . '/data') . ' 2>&1', $zipOut, $zipRet);
-        if ($zipRet !== 0) {
-            echo json_encode(['error' => 'Backup fehlgeschlagen: ' . implode(' ', $zipOut)]); break;
+
+        // zip bevorzugen, tar als Fallback
+        exec('which zip 2>/dev/null', $zipWhich, $zipCheck);
+        if ($zipCheck === 0) {
+            $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.zip';
+            exec('zip -r ' . escapeshellarg($backupFile) . ' ' . escapeshellarg($dir . '/data') . ' 2>&1', $bkpOut, $bkpRet);
+        } else {
+            $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.tar.gz';
+            exec('tar -czf ' . escapeshellarg($backupFile) . ' -C ' . escapeshellarg($dir) . ' data 2>&1', $bkpOut, $bkpRet);
+        }
+        if ($bkpRet !== 0) {
+            echo json_encode(['error' => 'Backup fehlgeschlagen: ' . implode(' ', $bkpOut)]); break;
         }
 
         // git pull

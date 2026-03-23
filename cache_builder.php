@@ -138,8 +138,10 @@ $db_nr       = load_db_local_early();
 $dlMovieIds  = array_flip(array_map('strval', $db_nr['movies']   ?? []));
 $dlSeriesIds = array_flip(array_map('strval', $db_nr['episodes'] ?? []));
 
-// Beim allerersten Run: alle IDs als bekannt markieren (kein False-Positive)
-$isFirstRun        = empty($prev);
+// Beim allerersten Run ODER wenn all_ids fehlt (altes Format):
+// alle IDs als bekannt markieren (kein False-Positive)
+$hasAllIds         = isset($prev['all_ids']) && is_array($prev['all_ids']) && count($prev['all_ids']) > 0;
+$isFirstRun        = empty($prev) || !$hasAllIds;
 $previousMovieIds  = $isFirstRun ? array_flip(array_keys($movieCache))  : array_flip($prev['all_ids']        ?? []);
 $previousSeriesIds = $isFirstRun ? array_flip(array_keys($seriesCache)) : array_flip($prev['all_series_ids'] ?? []);
 
