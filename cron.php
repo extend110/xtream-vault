@@ -229,14 +229,6 @@ function download_file(string $url, string $destPath, string $title, int $queueP
             return 1;
         }
 
-        // VPN-Prüfung alle 30s — nur wenn VPN beim Start aktiv war
-        if (VPN_ENABLED && ($GLOBALS['vpnActiveAtStart'] ?? false) && $now % 30 === 0 && $now !== $lastWrite) {
-            if (!vpn_is_up()) {
-                clog("  VPN-ABBRUCH: Interface " . VPN_INTERFACE . " nicht mehr aktiv");
-                return 1; // cURL abbrechen
-            }
-        }
-
         // Log alle 30s
         if ($dlTotal > 0 && $now % 30 === 0 && $now !== $lastWrite) {
             clog(sprintf("  Progress: %.1f / %.1f MB (%d%%) @ %s/s",
@@ -394,17 +386,6 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
                 format_bytes($bytesDone), format_bytes($bytesTotal),
                 $percent, format_bytes($speedBps), $now - $startTime));
             $lastLog = $now;
-
-            // VPN-Prüfung: nur wenn VPN beim Start aktiv war
-            if (VPN_ENABLED && $GLOBALS['vpnActiveAtStart'] && !vpn_is_up()) {
-                clog("  VPN-ABBRUCH: Interface " . VPN_INTERFACE . " nicht mehr aktiv — beende rclone…");
-                proc_terminate($proc, 9);
-                @unlink(CANCEL_FILE);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-                proc_close($proc);
-                return 'vpn_lost';
-            }
         }
 
         // Abbruch-Signal prüfen
@@ -500,21 +481,17 @@ $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
 // ── VPN: vor Downloads verbinden ─────────────────────────────────────────────
-$vpnStartedByUs  = false;
-$vpnActiveAtStart = false; // War VPN beim Start aktiv? Nur dann bei Wegfall abbrechen.
-
+$vpnStartedByUs = false;
 if (VPN_ENABLED && $totalPending > 0) {
     if (vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
-        $vpnActiveAtStart = true;
     } else {
         clog("VPN: verbinde " . VPN_INTERFACE . " …");
         $vpnResult = vpn_up();
         if ($vpnResult !== true) {
             clog("VPN ERROR: " . $vpnResult . " — Downloads werden trotzdem gestartet");
         } else {
-            $vpnStartedByUs   = true;
-            $vpnActiveAtStart = true;
+            $vpnStartedByUs = true;
             clog("VPN: " . VPN_INTERFACE . " verbunden");
         }
     }
@@ -666,14 +643,6 @@ foreach ($queue as &$item) {
         save_queue_item_status($sid, $item);
         clear_progress();
         break; // Gesamten cron-Loop beenden — nächster Cron-Run macht weiter
-    } elseif ($ok === 'vpn_lost') {
-        clog("VPN-ABBRUCH: $title — VPN-Verbindung verloren, zurück auf pending");
-        $item['status'] = 'pending';
-        $item['error']  = 'VPN-Verbindung während des Downloads verloren';
-        save_queue_item_status($sid, $item);
-        clear_progress();
-        $errors++;
-        break; // Cron-Loop beenden — kein VPN, keine weiteren Downloads
     } elseif ($ok) {
         $item['status'] = 'done';
         if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
@@ -806,18 +775,12 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 clear_progress();
 clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
 
-// ── VPN: nach Downloads trennen ───────────────────────────────────────────────
-// Nur trennen wenn cron ihn selbst gestartet hat.
-// War VPN bereits vorher aktiv, bleibt er nach den Downloads aktiv.
+// ── VPN: nach Downloads trennen (nur wenn wir ihn gestartet haben) ────────────
 if (VPN_ENABLED && $vpnStartedByUs) {
-    if (!vpn_is_up()) {
-        clog("VPN: " . VPN_INTERFACE . " bereits getrennt (extern)");
-    } else {
-        clog("VPN: trenne " . VPN_INTERFACE . " …");
-        $vpnDown = vpn_down();
-        if ($vpnDown !== true) clog("VPN WARN: " . $vpnDown);
-        else clog("VPN: " . VPN_INTERFACE . " getrennt");
-    }
+    clog("VPN: trenne " . VPN_INTERFACE . " …");
+    $vpnDown = vpn_down();
+    if ($vpnDown !== true) clog("VPN WARN: " . $vpnDown);
+    else clog("VPN: " . VPN_INTERFACE . " getrennt");
 }
 
 // Benachrichtigung: alle Downloads abgeschlossen
