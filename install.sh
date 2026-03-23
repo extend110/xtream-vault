@@ -63,7 +63,10 @@ apt-get install -y -qq \
     libapache2-mod-php \
     curl \
     cron \
-    ffmpeg
+    ffmpeg \
+    git \
+    wireguard \
+    zip
 log "Pakete installiert"
 
 # ── PHP-Version prüfen ────────────────────────────────────────
@@ -91,15 +94,6 @@ else
     warn "php.ini nicht gefunden — bitte manuell prüfen: allow_url_fopen = On"
 fi
 
-# ── ffmpeg installieren ───────────────────────────────────────
-section "ffmpeg installieren"
-if command -v ffprobe &>/dev/null; then
-    log "ffprobe bereits installiert: $(ffprobe -version 2>&1 | head -1)"
-else
-    apt-get install -y -qq ffmpeg
-    log "ffmpeg/ffprobe installiert"
-fi
-
 # ── Projektdateien kopieren ───────────────────────────────────
 section "Dateien installieren"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -121,7 +115,6 @@ section "Berechtigungen setzen"
 chown -R www-data:www-data "$PROJECT_PATH"
 chmod -R 755 "$PROJECT_PATH"
 chmod -R 775 "$PROJECT_PATH/data"
-chmod +x "$PROJECT_PATH/install.sh" 2>/dev/null || true
 log "Berechtigungen gesetzt"
 
 # ── Apache konfigurieren ──────────────────────────────────────
@@ -170,14 +163,8 @@ log "Cronjobs eingerichtet (alle 30 Min Downloads, 4 Uhr Cache, 3 Uhr Backup)"
 
 # ── git einrichten ────────────────────────────────────────────
 section "git einrichten"
-if ! command -v git &>/dev/null; then
-    apt-get install -y -qq git
-    log "git installiert"
-else
-    log "git bereits installiert"
-fi
+git config --global --add safe.directory "$PROJECT_PATH" 2>/dev/null || true
 
-# Falls Projektverzeichnis kein git-Repo ist, remote setzen
 if [ ! -d "$PROJECT_PATH/.git" ]; then
     cd "$PROJECT_PATH"
     git init -q
@@ -189,6 +176,10 @@ else
     log "git-Repository bereits vorhanden"
 fi
 
+# Webserver-Dateien aus git-Updates ausschließen
+echo "install.sh" >> "$PROJECT_PATH/.git/info/exclude" 2>/dev/null || true
+echo "README.md"  >> "$PROJECT_PATH/.git/info/exclude" 2>/dev/null || true
+
 # version.json mit aktuellem Commit befüllen
 CURRENT_COMMIT=$(git -C "$PROJECT_PATH" rev-parse HEAD 2>/dev/null || echo "unknown")
 cat > "$PROJECT_PATH/version.json" <<EOL
@@ -198,15 +189,9 @@ cat > "$PROJECT_PATH/version.json" <<EOL
 }
 EOL
 log "version.json aktualisiert (Commit: ${CURRENT_COMMIT:0:7})"
-section "WireGuard installieren"
-if command -v wg &>/dev/null; then
-    log "WireGuard bereits installiert: $(wg --version 2>&1 | head -1)"
-else
-    apt-get install -y -qq wireguard
-    log "WireGuard installiert"
-fi
 
-# sudo-Rechte für www-data: wg-quick, ip rule, ip route
+# ── WireGuard sudoers einrichten ──────────────────────────────
+section "WireGuard sudoers einrichten"
 SUDOERS_FILE="/etc/sudoers.d/xtream-vpn"
 if [ ! -f "$SUDOERS_FILE" ]; then
     cat > "$SUDOERS_FILE" <<'EOL'
@@ -218,10 +203,12 @@ www-data ALL=(root) NOPASSWD: /usr/sbin/ip -6 rule show, /usr/sbin/ip -6 rule ad
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip route add *, /usr/sbin/ip route del *
 EOL
     chmod 0440 "$SUDOERS_FILE"
-    log "sudoers-Eintrag für VPN erstellt"
+    visudo -c -f "$SUDOERS_FILE" && log "sudoers-Eintrag erstellt" || warn "sudoers-Syntaxfehler — bitte manuell prüfen"
 else
     log "sudoers-Eintrag bereits vorhanden"
 fi
+
+# ── rclone installieren (optional) ────────────────────────────
 if [ "$INSTALL_RCLONE" = "j" ] || [ "$INSTALL_RCLONE" = "y" ]; then
     section "rclone installieren"
     if command -v rclone &>/dev/null; then
@@ -263,12 +250,8 @@ echo "      sudo nano /etc/wireguard/wg0.conf"
 echo "      sudo chmod 600 /etc/wireguard/wg0.conf"
 echo "   2. In Xtream Vault: Einstellungen → VPN → Interface wg0 → aktivieren"
 echo ""
-echo -e "${YELLOW}⚠️  Wichtig:${RESET} SSH/Webseite bleiben erreichbar durch Policy-Based Routing."
-echo "   Nur www-data (cron.php) nutzt den VPN-Tunnel."
-echo "   Notfall-Reset falls Verbindung verloren geht:"
-echo "      sudo wg-quick down wg0"
-IP_CMD=/usr/sbin/ip
-echo "      sudo \$IP_CMD rule del uidrange \$(id -u www-data)-\$(id -u www-data) lookup 51820 priority 100 2>/dev/null"
+echo -e "${YELLOW}⚠️  Wichtig:${RESET} SSH/Webseite bleiben durch Policy-Based Routing erreichbar."
+echo "   Notfall-Reset: sudo wg-quick down wg0"
 if [ "$INSTALL_RCLONE" = "j" ] || [ "$INSTALL_RCLONE" = "y" ]; then
     echo ""
     echo -e "${CYAN}${BOLD}☁️  rclone einrichten:${RESET}"
