@@ -33,7 +33,7 @@ echo ""
 # ── Konfiguration ─────────────────────────────────────────────
 PROJECT_PATH="/var/www/html/xtream"
 APACHE_CONF_PATH="/etc/apache2/sites-available/xtream.conf"
-PHP_BIN=$(which php)
+PHP_BIN="/usr/bin/php"
 
 # ── Domain / IP abfragen ──────────────────────────────────────
 read -rp "🌐 Domain eingeben (leer lassen für Server-IP): " DOMAIN
