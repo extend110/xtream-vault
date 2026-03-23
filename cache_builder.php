@@ -126,34 +126,54 @@ $seriesCacheFile = DATA_DIR . '/series_cache.json';
 file_put_contents($seriesCacheFile, json_encode(array_values($seriesCache), JSON_UNESCAPED_UNICODE));
 blog(sprintf('Serien-Cache gespeichert: %d Einträge → %s', count($seriesCache), $seriesCacheFile));
 
-// ── Neue Releases ermitteln (Vergleich mit vorherigem Stand) ─────────────────
-$newReleasesFile   = DATA_DIR . '/new_releases.json';
-$prev              = file_exists($newReleasesFile)
+// ── Neue Releases ermitteln ──────────────────────────────────────────────────
+// Logik: Neue IDs hinzufügen, heruntergeladene entfernen, manuell entfernte behalten
+$newReleasesFile = DATA_DIR . '/new_releases.json';
+$prev            = file_exists($newReleasesFile)
     ? (json_decode(@file_get_contents($newReleasesFile), true) ?? [])
     : [];
 
-// Beim allerersten Run: alle IDs als bekannt markieren (kein False-Positive)
-$previousMovieIds  = $prev ? array_flip($prev['all_ids']        ?? []) : array_flip(array_keys($movieCache));
-$previousSeriesIds = $prev ? array_flip($prev['all_series_ids'] ?? []) : array_flip(array_keys($seriesCache));
+// Heruntergeladene IDs laden
+$db_nr       = load_db_local_early();
+$dlMovieIds  = array_flip(array_map('strval', $db_nr['movies']   ?? []));
+$dlSeriesIds = array_flip(array_map('strval', $db_nr['episodes'] ?? []));
 
-$newMovies = [];
-foreach ($movieCache as $id => $m) {
-    if (!isset($previousMovieIds[$id])) $newMovies[] = $m;
+// Beim allerersten Run: alle IDs als bekannt markieren (kein False-Positive)
+$isFirstRun        = empty($prev);
+$previousMovieIds  = $isFirstRun ? array_flip(array_keys($movieCache))  : array_flip($prev['all_ids']        ?? []);
+$previousSeriesIds = $isFirstRun ? array_flip(array_keys($seriesCache)) : array_flip($prev['all_series_ids'] ?? []);
+
+// Bestehende akkumulierte Listen laden (manuell entfernte sind nicht drin)
+$accMovies  = [];
+foreach ($prev['movies'] ?? [] as $m) {
+    $id = (string)($m['stream_id'] ?? $m['id'] ?? '');
+    if ($id !== '' && !isset($dlMovieIds[$id])) $accMovies[$id] = $m;
 }
-$newSeries = [];
-foreach ($seriesCache as $id => $s) {
-    if (!isset($previousSeriesIds[$id])) $newSeries[] = $s;
+$accSeries = [];
+foreach ($prev['series'] ?? [] as $s) {
+    $id = (string)($s['series_id'] ?? $s['id'] ?? '');
+    if ($id !== '' && !isset($dlSeriesIds[$id])) $accSeries[$id] = $s;
+}
+
+// Neue Einträge hinzufügen
+if (!$isFirstRun) {
+    foreach ($movieCache as $id => $m) {
+        if (!isset($previousMovieIds[$id]) && !isset($dlMovieIds[$id])) $accMovies[$id] = $m;
+    }
+    foreach ($seriesCache as $id => $s) {
+        if (!isset($previousSeriesIds[$id]) && !isset($dlSeriesIds[$id])) $accSeries[$id] = $s;
+    }
 }
 
 $newReleasesData = [
-    'generated_at'   => date('Y-m-d H:i:s'),
-    'all_ids'        => array_keys($movieCache),
-    'all_series_ids' => array_keys($seriesCache),
-    'movies'         => array_values($newMovies),
-    'series'         => array_values($newSeries),
+    'generated_at'      => date('Y-m-d H:i:s'),
+    'all_ids'           => array_keys($movieCache),
+    'all_series_ids'    => array_keys($seriesCache),
+    'movies'            => array_values($accMovies),
+    'series'            => array_values($accSeries),
 ];
 file_put_contents($newReleasesFile, json_encode($newReleasesData, JSON_UNESCAPED_UNICODE));
-blog(sprintf('Neue Releases: %d Filme, %d Serien → %s', count($newMovies), count($newSeries), $newReleasesFile));
+blog(sprintf('Neue Releases: %d Filme, %d Serien → %s', count($accMovies), count($accSeries), $newReleasesFile));
 
 // ── Schritt 3: Downloaded-Index aufbauen ──────────────────────────────────────
 blog('=== Baue Downloaded-Index auf ===');
@@ -161,6 +181,10 @@ blog('=== Baue Downloaded-Index auf ===');
 function load_db_local(): array {
     if (!file_exists(DOWNLOAD_DB)) return ['movies' => [], 'episodes' => []];
     return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
+}
+
+function load_db_local_early(): array {
+    return load_db_local();
 }
 
 $db         = load_db_local();

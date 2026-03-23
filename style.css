@@ -13,6 +13,35 @@
   --muted:     #5a5a70;
   --sidebar-w: 280px;
 }
+
+/* ── AMOLED ── */
+[data-theme="amoled"] {
+  --bg:     #000000;
+  --bg2:    #080808;
+  --bg3:    #111111;
+  --border: rgba(255,255,255,.08);
+  --text:   #f0f0f0;
+  --muted:  #505050;
+  --accent: #e8ff47;
+  --accent2:#47d4ff;
+}
+
+/* ── Midnight Blue ── */
+[data-theme="midnight"] {
+  --bg:     #0a0e1a;
+  --bg2:    #111828;
+  --bg3:    #1a2235;
+  --border: rgba(100,160,255,.1);
+  --text:   #d0e0ff;
+  --muted:  #5070a0;
+  --accent: #64a0ff;
+  --accent2:#a0d4ff;
+  --orange: #ffaa55;
+  --red:    #ff6070;
+  --green:  #40d990;
+}
+
+/* ── Light ── */
 [data-theme="light"] {
   --bg:     #f0f0f5;
   --bg2:    #ffffff;
@@ -20,7 +49,14 @@
   --border: rgba(0,0,0,.1);
   --text:   #1a1a2e;
   --muted:  #7a7a90;
+  --accent: #6060e0;
+  --accent2:#0090cc;
+  --orange: #e07030;
+  --red:    #cc2020;
+  --green:  #208040;
 }
+[data-theme="light"] body::before { opacity: .15; }
+[data-theme="light"] .sidebar { border-right-color: rgba(0,0,0,.1); }
 body, .sidebar, .topbar, .card, .settings-card, .queue-item, .modal, .dkpi, .dash-info-card {
   transition: background-color .2s, border-color .2s, color .2s;
 }
@@ -393,7 +429,6 @@ body::before {
   /* Queue */
   .queue-toolbar { flex-wrap: wrap; gap: 6px; padding: 10px 12px; }
   .queue-toolbar .btn-sm { font-size: .62rem; padding: 4px 8px; }
-  .queue-list { padding: 0 12px; }
   .queue-item { gap: 8px; padding: 10px 0; }
   .qi-thumb { width: 40px; height: 40px; flex-shrink: 0; }
   .qi-title { font-size: .8rem; }
@@ -423,7 +458,6 @@ body::before {
   /* Dashboard info cards */
   .dash-info-card { padding: 8px 10px; }
   .dic-val { font-size: .78rem; }
-  #dash-bottom-grid { --dash-bottom-cols: 1; }
 
   /* Schnellzugriff-Buttons wrappen */
   #view-dashboard .btn-secondary { flex: 1 1 calc(50% - 4px); text-align: center; justify-content: center; font-size: .7rem; padding: 8px 6px; }
@@ -563,7 +597,7 @@ body::before {
 .role-badge.admin  { background: rgba(232,255,71,.12); color: var(--accent); }
 .role-badge.editor { background: rgba(71,212,255,.12); color: var(--accent2); }
 .role-badge.viewer { background: rgba(255,255,255,.06); color: var(--muted); }
-.user-actions { display: flex; gap: 6px; }
+.user-actions { display: flex; gap: 6px; justify-content: flex-end; }
 .btn-icon {
   background: none; border: 1px solid var(--border); border-radius: 4px;
   padding: 4px 10px; font-size: .75rem; color: var(--muted); cursor: pointer;
@@ -750,3 +784,28 @@ body::before {
   background: linear-gradient(to bottom, transparent 40%, var(--bg2) 100%);
   pointer-events: none;
 }
+
+/* ── Theme Picker ── */
+.theme-picker { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.theme-swatch {
+  width: 64px; cursor: pointer; border-radius: 8px; overflow: hidden;
+  border: 2px solid transparent; transition: border-color .15s, transform .15s;
+}
+.theme-swatch:hover { transform: scale(1.06); }
+.theme-swatch.active { border-color: var(--accent); }
+.theme-swatch-preview {
+  height: 40px; display: flex;
+}
+.theme-swatch-sidebar { width: 30%; }
+.theme-swatch-content { flex: 1; }
+.theme-swatch-label {
+  font-family: 'DM Mono', monospace; font-size: .58rem; text-align: center;
+  padding: 4px 2px; background: var(--bg2); color: var(--muted);
+  letter-spacing: .05em; text-transform: uppercase; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ── User Dashboard horizontal scroll ── */
+#ue-new-releases { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+#ue-new-releases::-webkit-scrollbar { height: 4px; }
+#ue-new-releases::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }

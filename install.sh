@@ -168,7 +168,31 @@ crontab -u www-data "$CRON_TMP"
 rm -f "$CRON_TMP"
 log "Cronjobs eingerichtet (alle 30 Min Downloads, 4 Uhr Cache, 3 Uhr Backup)"
 
-# ── rclone installieren (optional) ────────────────────────────
+# ── WireGuard installieren ────────────────────────────────────
+section "WireGuard installieren"
+if command -v wg &>/dev/null; then
+    log "WireGuard bereits installiert: $(wg --version 2>&1 | head -1)"
+else
+    apt-get install -y -qq wireguard
+    log "WireGuard installiert"
+fi
+
+# sudo-Rechte für www-data: wg-quick, ip rule, ip route
+SUDOERS_FILE="/etc/sudoers.d/xtream-vpn"
+if [ ! -f "$SUDOERS_FILE" ]; then
+    cat > "$SUDOERS_FILE" <<'EOL'
+# Xtream Vault: www-data darf VPN-Befehle ohne Passwort ausführen
+www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick up *, /usr/bin/wg-quick down *
+www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip rule show, /usr/sbin/ip rule add *, /usr/sbin/ip rule del *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip -6 rule show, /usr/sbin/ip -6 rule add *, /usr/sbin/ip -6 rule del *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip route add *, /usr/sbin/ip route del *
+EOL
+    chmod 0440 "$SUDOERS_FILE"
+    log "sudoers-Eintrag für VPN erstellt"
+else
+    log "sudoers-Eintrag bereits vorhanden"
+fi
 if [ "$INSTALL_RCLONE" = "j" ] || [ "$INSTALL_RCLONE" = "y" ]; then
     section "rclone installieren"
     if command -v rclone &>/dev/null; then
@@ -203,6 +227,19 @@ echo "   2. Admin-Account anlegen"
 echo "   3. Einstellungen → Xtream-Server konfigurieren"
 echo "   4. Verbindung testen und Speichern"
 echo "   5. Einstellungen → Cache aufbauen"
+echo ""
+echo -e "${CYAN}${BOLD}🔒 VPN (WireGuard) einrichten:${RESET}"
+echo "   1. Konfigurationsdatei ablegen:"
+echo "      sudo nano /etc/wireguard/wg0.conf"
+echo "      sudo chmod 600 /etc/wireguard/wg0.conf"
+echo "   2. In Xtream Vault: Einstellungen → VPN → Interface wg0 → aktivieren"
+echo ""
+echo -e "${YELLOW}⚠️  Wichtig:${RESET} SSH/Webseite bleiben erreichbar durch Policy-Based Routing."
+echo "   Nur www-data (cron.php) nutzt den VPN-Tunnel."
+echo "   Notfall-Reset falls Verbindung verloren geht:"
+echo "      sudo wg-quick down wg0"
+IP_CMD=/usr/sbin/ip
+echo "      sudo \$IP_CMD rule del uidrange \$(id -u www-data)-\$(id -u www-data) lookup 51820 priority 100 2>/dev/null"
 if [ "$INSTALL_RCLONE" = "j" ] || [ "$INSTALL_RCLONE" = "y" ]; then
     echo ""
     echo -e "${CYAN}${BOLD}☁️  rclone einrichten:${RESET}"

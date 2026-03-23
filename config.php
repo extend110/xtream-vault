@@ -73,10 +73,110 @@ define('WEBHOOK_ON_ERROR',   (bool)($_cfg['webhook_on_error']   ?? true));
 define('WEBHOOK_ON_ALLDOWN', (bool)($_cfg['webhook_on_alldown'] ?? false));
 define('SERVERS_FILE',       DATA_DIR . '/servers.json');
 define('INVITES_FILE',       DATA_DIR . '/invites.json');
+define('NEW_RELEASES_FILE',  DATA_DIR . '/new_releases.json');
 
 // ── Telegram-Benachrichtigungen ───────────────────────────────────────────────
 define('TELEGRAM_BOT_TOKEN', $_cfg['telegram_bot_token'] ?? '');
 define('TELEGRAM_CHAT_ID',   $_cfg['telegram_chat_id']   ?? '');
+define('TELEGRAM_ENABLED',   (bool)($_cfg['telegram_enabled'] ?? false));
+
+// ── VPN (WireGuard) ───────────────────────────────────────────────────────────
+define('VPN_ENABLED',    (bool)($_cfg['vpn_enabled']    ?? false));
+define('VPN_INTERFACE',  preg_replace('/[^a-zA-Z0-9_\-]/', '', $_cfg['vpn_interface'] ?? 'wg0'));
+define('VPN_RT_TABLE',   51820); // Separate Routing-Tabelle für VPN-Traffic
+
+/**
+ * Prüft ob WireGuard (wg-quick) installiert ist.
+ */
+function vpn_wg_installed(): bool {
+    exec('which wg-quick 2>/dev/null', $out, $ret);
+    return $ret === 0 && !empty($out);
+}
+
+/**
+ * Prüft ob das WireGuard-Interface aktiv ist.
+ */
+function vpn_is_up(): bool {
+    if (!vpn_wg_installed()) return false;
+    if (VPN_INTERFACE === '') return false;
+    exec('/usr/sbin/ip link show ' . escapeshellarg(VPN_INTERFACE) . ' 2>/dev/null', $out, $ret);
+    return $ret === 0 && !empty(array_filter($out, fn($l) => str_contains($l, 'UP')));
+}
+
+/**
+ * Startet WireGuard via wg-quick, entfernt dann die system-weiten Routing-Regeln
+ * die wg-quick automatisch setzt, und ersetzt sie durch eine UID-spezifische Regel
+ * die nur www-data durch den Tunnel schickt.
+ */
+function vpn_up(): bool|string {
+    if (!vpn_wg_installed()) return 'WireGuard nicht installiert — bitte "apt install wireguard" ausführen';
+    if (VPN_INTERFACE === '') return 'Kein Interface konfiguriert';
+
+    $iface = VPN_INTERFACE;
+    $table = VPN_RT_TABLE;
+    $uid   = trim(shell_exec('id -u www-data 2>/dev/null') ?: '');
+    if ($uid === '') return 'www-data UID nicht ermittelbar';
+
+    // Interface hochfahren
+    if (!vpn_is_up()) {
+        exec('sudo /usr/bin/wg-quick up ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
+        if ($ret !== 0) return 'wg-quick up: ' . (implode(' ', $out) ?: 'Fehler');
+        sleep(1);
+    }
+
+    // wg-quick setzt automatisch system-weite ip rule Einträge mit fwmark 51820.
+    // Diese leiten Traffic ALLER User durch den Tunnel — das müssen wir rückgängig machen.
+    exec("sudo /usr/sbin/ip rule show 2>/dev/null", $rules);
+    foreach ($rules as $rule) {
+        // wg-quick-Regeln erkennen: "not fwmark 51820 lookup 51820" oder "lookup 51820"
+        if (preg_match('/lookup\s+51820/', $rule) && !str_contains($rule, "uidrange {$uid}")) {
+            // Priorität extrahieren und Regel löschen
+            if (preg_match('/^(\d+):/', trim($rule), $m)) {
+                exec("sudo /usr/sbin/ip rule del priority {$m[1]} 2>/dev/null");
+            }
+        }
+    }
+    // Gleiches für IPv6
+    exec("sudo /usr/sbin/ip -6 rule show 2>/dev/null", $rules6);
+    foreach ($rules6 as $rule) {
+        if (preg_match('/lookup\s+51820/', $rule) && !str_contains($rule, "uidrange {$uid}")) {
+            if (preg_match('/^(\d+):/', trim($rule), $m)) {
+                exec("sudo /usr/sbin/ip -6 rule del priority {$m[1]} 2>/dev/null");
+            }
+        }
+    }
+
+    // Eigene UID-Regel setzen: nur www-data nutzt Tabelle 51820
+    exec("sudo /usr/sbin/ip rule add uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
+
+    return true;
+}
+
+/**
+ * Stoppt WireGuard und entfernt die Routing-Regeln.
+ */
+function vpn_down(): bool|string {
+    if (!vpn_wg_installed()) return 'WireGuard nicht installiert';
+    if (VPN_INTERFACE === '') return 'Kein Interface konfiguriert';
+
+    $uid   = trim(shell_exec('id -u www-data 2>/dev/null') ?: '');
+    $table = VPN_RT_TABLE;
+    $iface = VPN_INTERFACE;
+
+    // UID-Regel entfernen
+    if ($uid !== '') {
+        exec("sudo /usr/sbin/ip rule del uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
+        exec("sudo /usr/sbin/ip -6 rule del uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
+    }
+
+    // Interface herunterfahren (wg-quick down bereinigt seine eigenen Routen)
+    if (vpn_is_up()) {
+        exec('sudo /usr/bin/wg-quick down ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
+        if ($ret !== 0) return 'wg-quick down: ' . (implode(' ', $out) ?: 'Fehler');
+    }
+
+    return true;
+}
 
 /**
  * Sendet eine Telegram-Nachricht via Bot API.

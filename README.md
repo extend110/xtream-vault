@@ -21,12 +21,13 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 13. [TMDB-Integration](#tmdb-integration)
 14. [Statistiken](#statistiken)
 15. [Telegram-Benachrichtigungen](#telegram-benachrichtigungen)
-16. [Benutzerverwaltung](#benutzerverwaltung)
-17. [Datensicherung](#datensicherung)
-18. [Health-Check](#health-check)
-19. [Externe API](#externe-api)
-20. [Sicherheit](#sicherheit)
-21. [Dateistruktur](#dateistruktur)
+16. [VPN (WireGuard)](#vpn-wireguard)
+17. [Benutzerverwaltung](#benutzerverwaltung)
+18. [Datensicherung](#datensicherung)
+19. [Health-Check](#health-check)
+20. [Externe API](#externe-api)
+21. [Sicherheit](#sicherheit)
+22. [Dateistruktur](#dateistruktur)
 
 ---
 
@@ -39,6 +40,7 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 | php.ini | `allow_url_fopen = On` |
 | Optional: rclone | Für Cloud-Speicher-Integration |
 | Optional: ffmpeg | Für Stream-Analyse im TMDB-Modal (`ffprobe`) |
+| Optional: WireGuard | Für VPN-geschützte Downloads (`wg-quick`) |
 
 PHP-Erweiterungen installieren:
 ```bash
@@ -418,6 +420,80 @@ Nach jedem abgeschlossenen Download wird eine Telegram-Nachricht gesendet.
 🎬 Film: Inception.2010
 📦 1.842 MB
 ```
+
+---
+
+## VPN (WireGuard)
+
+Downloads können optional über einen WireGuard-VPN-Tunnel geleitet werden. Dabei wird **Policy-Based Routing** eingesetzt: nur der `www-data`-Prozess (der `cron.php` ausführt) nutzt den Tunnel. SSH, Apache und alle anderen Dienste bleiben auf dem normalen Gateway erreichbar.
+
+### Voraussetzungen
+
+```bash
+sudo apt install wireguard
+```
+
+### WireGuard konfigurieren
+
+Konfigurationsdatei anlegen:
+
+```bash
+sudo nano /etc/wireguard/wg0.conf
+sudo chmod 600 /etc/wireguard/wg0.conf
+sudo chown root:root /etc/wireguard/wg0.conf
+```
+
+Die Konfiguration kann `AllowedIPs = 0.0.0.0/0, ::/0` verwenden — das Policy-Based Routing sorgt dafür dass nur `cron.php` den Tunnel nutzt.
+
+### sudo-Rechte einrichten
+
+`www-data` benötigt Rechte für `wg-quick` und `ip rule`:
+
+```bash
+sudo tee /etc/sudoers.d/xtream-vpn << 'EOF'
+# Xtream Vault: www-data darf VPN-Befehle ohne Passwort ausführen
+www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick up *, /usr/bin/wg-quick down *
+www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip rule show, /usr/sbin/ip rule add *, /usr/sbin/ip rule del *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip -6 rule show, /usr/sbin/ip -6 rule add *, /usr/sbin/ip -6 rule del *
+www-data ALL=(root) NOPASSWD: /usr/sbin/ip route add *, /usr/sbin/ip route del *
+EOF
+sudo chmod 0440 /etc/sudoers.d/xtream-vpn
+sudo visudo -c -f /etc/sudoers.d/xtream-vpn && echo "OK"
+```
+
+> **Pfad prüfen:** `which ip` — auf Ubuntu meist `/usr/sbin/ip`. Falls abweichend, sudoers entsprechend anpassen.
+
+### In Xtream Vault aktivieren
+
+1. **Einstellungen → 🔒 VPN (WireGuard)**
+2. **VPN für Downloads aktivieren** anhaken
+3. **Interface-Name** eingeben (z.B. `wg0`)
+4. **Speichern**
+5. **🔍 Status prüfen** — zeigt ob Interface aktiv ist + öffentliche IP
+
+### Wie es funktioniert
+
+`cron.php` ruft vor dem ersten Download `vpn_up()` auf:
+
+1. `wg-quick up wg0` — Interface starten
+2. `wg-quick`-eigene system-weite `ip rule` Einträge entfernen (diese würden sonst **alle** User durch den Tunnel leiten)
+3. UID-spezifische Regel setzen: `ip rule add uidrange <www-data-uid>-<www-data-uid> lookup 51820`
+
+Nach dem letzten Download wird `vpn_down()` aufgerufen — UID-Regel entfernen, `wg-quick down wg0`.
+
+### Notfall-Wiederherstellung
+
+Falls SSH-Verbindung nach `vpn_connect` verloren geht (z.B. über Hoster-Konsole):
+
+```bash
+sudo wg-quick down wg0
+sudo ip rule del uidrange 33-33 lookup 51820 priority 100 2>/dev/null
+sudo ip -6 rule del uidrange 33-33 lookup 51820 priority 100 2>/dev/null
+# UID 33 ist der Standard für www-data — mit "id -u www-data" prüfen
+```
+
+Nach einem Server-Neustart sind alle `ip rule` Einträge weg (nicht persistent). WireGuard startet nur automatisch wenn `wg-quick@wg0.service` enabled ist — das ist nach diesem Setup **nicht** der Fall.
 
 ---
 

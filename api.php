@@ -123,6 +123,40 @@ function stream_url(string $type, $id, string $ext): string {
 switch ($action) {
 
     // ── Health Check ──────────────────────────────────────────────────────────
+    case 'get_recent_downloads':
+        require_permission('browse');
+        $history = file_exists(DOWNLOAD_HISTORY_FILE)
+            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
+            : [];
+        // Editoren/Viewer sehen nur eigene Downloads
+        if (!in_array('settings', ROLE_PERMISSIONS[$current_user['role'] ?? 'viewer'] ?? [])) {
+            $history = array_values(array_filter($history, fn($h) => ($h['added_by'] ?? '') === $current_user['username']));
+        }
+        echo json_encode(['items' => array_slice($history, 0, 20)]);
+        break;
+
+    case 'dismiss_new_release':
+        require_permission('browse');
+        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $id   = (string)($d['id']   ?? '');
+        $type = $d['type'] ?? 'movie'; // 'movie' or 'series'
+        if ($id === '') { echo json_encode(['error' => 'Missing id']); break; }
+        $nr = file_exists(NEW_RELEASES_FILE)
+            ? (json_decode(file_get_contents(NEW_RELEASES_FILE), true) ?? [])
+            : [];
+        if ($type === 'series') {
+            $nr['series'] = array_values(array_filter($nr['series'] ?? [], fn($s) =>
+                (string)($s['series_id'] ?? $s['id'] ?? '') !== $id
+            ));
+        } else {
+            $nr['movies'] = array_values(array_filter($nr['movies'] ?? [], fn($m) =>
+                (string)($m['stream_id'] ?? $m['id'] ?? '') !== $id
+            ));
+        }
+        file_put_contents(NEW_RELEASES_FILE, json_encode($nr, JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'get_new_releases':
         require_permission('browse');
         $file = DATA_DIR . '/new_releases.json';
@@ -601,6 +635,9 @@ switch ($action) {
             'tmdb_api_key'           => isset($c['tmdb_api_key']) && $c['tmdb_api_key'] !== '' ? '••••••••' : '',
             'telegram_bot_token'     => isset($c['telegram_bot_token']) && $c['telegram_bot_token'] !== '' ? '••••••••' : '',
             'telegram_chat_id'       => $c['telegram_chat_id'] ?? '',
+            'telegram_enabled'       => (bool)($c['telegram_enabled'] ?? false),
+            'vpn_enabled'            => (bool)($c['vpn_enabled']    ?? false),
+            'vpn_interface'          => $c['vpn_interface'] ?? 'wg0',
         ]);
         break;
 
@@ -623,6 +660,9 @@ switch ($action) {
             'tmdb_api_key'          => trim($d['tmdb_api_key'] ?? '') !== '' ? trim($d['tmdb_api_key']) : ($current['tmdb_api_key'] ?? ''),
             'telegram_bot_token'    => trim($d['telegram_bot_token'] ?? '') !== '' ? trim($d['telegram_bot_token']) : ($current['telegram_bot_token'] ?? ''),
             'telegram_chat_id'      => trim($d['telegram_chat_id'] ?? $current['telegram_chat_id'] ?? ''),
+            'telegram_enabled'      => (bool)($d['telegram_enabled'] ?? $current['telegram_enabled'] ?? false),
+            'vpn_enabled'           => (bool)($d['vpn_enabled']   ?? $current['vpn_enabled']   ?? false),
+            'vpn_interface'         => preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($d['vpn_interface'] ?? $current['vpn_interface'] ?? 'wg0')),
         ];
         if (!empty($d['password']) && $d['password'] !== '••••••••') {
             $new['password'] = $d['password'];
@@ -861,6 +901,39 @@ switch ($action) {
         } else {
             echo json_encode(['ok' => true, 'http_code' => $code]);
         }
+        break;
+
+    // ── VPN ───────────────────────────────────────────────────────────────────
+    case 'vpn_status':
+        require_permission('settings');
+        $wgInstalled = vpn_wg_installed();
+        $up    = $wgInstalled ? vpn_is_up() : false;
+        $pubIp = '';
+        $raw   = @file_get_contents('https://api.ipify.org?format=text',
+            false, stream_context_create(['http' => ['timeout' => 5]]));
+        if ($raw) $pubIp = trim($raw);
+        echo json_encode([
+            'interface'    => VPN_INTERFACE,
+            'up'           => $up,
+            'public_ip'    => $pubIp,
+            'wg_installed' => $wgInstalled,
+        ]);
+        break;
+
+    case 'vpn_connect':
+        require_permission('settings');
+        $result = vpn_up();
+        if ($result !== true) { echo json_encode(['error' => $result]); break; }
+        log_activity($current_user['id'], $current_user['username'], 'vpn_connect', ['interface' => VPN_INTERFACE]);
+        echo json_encode(['ok' => true, 'up' => true]);
+        break;
+
+    case 'vpn_disconnect':
+        require_permission('settings');
+        $result = vpn_down();
+        if ($result !== true) { echo json_encode(['error' => $result]); break; }
+        log_activity($current_user['id'], $current_user['username'], 'vpn_disconnect', ['interface' => VPN_INTERFACE]);
+        echo json_encode(['ok' => true, 'up' => false]);
         break;
 
     case 'telegram_test':
@@ -1123,6 +1196,11 @@ switch ($action) {
         require_permission('queue_view');
         $queue = load_queue();
         if (!can('settings')) {
+            // Nicht-Admins sehen nur ihre eigenen Queue-Einträge
+            $queue = array_values(array_filter($queue, fn($item) =>
+                ($item['added_by'] ?? '') === $current_user['username']
+            ));
+            // Stream-URLs ausblenden
             $queue = array_map(function($item) {
                 unset($item['stream_url']);
                 return $item;
@@ -1802,13 +1880,22 @@ switch ($action) {
 
     case 'stats':
         $db    = load_db();
-        $queued = can('queue_view')
-            ? count(array_filter(load_queue(), fn($q) => $q['status'] === 'pending'))
-            : null;
+        if (can('queue_view')) {
+            $queue = load_queue();
+            if (!can('settings')) {
+                // Editoren/Viewer: nur eigene Einträge zählen
+                $queue = array_filter($queue, fn($q) => ($q['added_by'] ?? '') === $current_user['username']);
+            }
+            $qStats = ['pending' => 0, 'downloading' => 0, 'done' => 0, 'error' => 0];
+            foreach ($queue as $qi) { $s = $qi['status'] ?? 'pending'; if (isset($qStats[$s])) $qStats[$s]++; }
+        } else {
+            $qStats = null;
+        }
         echo json_encode([
             'movies'           => count($db['movies']),
             'episodes'         => count($db['episodes']),
-            'queued'           => $queued,
+            'total_downloaded' => count($db['movies']) + count($db['episodes']),
+            'queue_stats'      => $qStats,
             'downloaded_ids'   => array_map('strval', array_merge($db['movies'] ?? [], $db['episodes'] ?? [])),
             'configured'       => is_configured(),
             'can' => [

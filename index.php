@@ -101,7 +101,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_queue_view): ?>
     <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> in Queue</span>
     <?php endif; ?>
-    <button id="theme-toggle" onclick="toggleTheme()" title="Hell/Dunkel wechseln" style="background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:4px 8px;color:var(--muted);transition:color .2s" aria-label="Theme wechseln">🌙</button>
+    <button id="theme-toggle" onclick="showView('profile')" title="Theme wechseln" style="background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:4px 8px;color:var(--muted);transition:color .2s" aria-label="Theme wechseln">🎨</button>
     <?php if ($role === 'editor'): ?>
     <span id="limit-indicator" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
     <?php endif; ?>
@@ -211,40 +211,43 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       </div>
 
       <?php else: ?>
-      <!-- Viewer/Editor Dashboard: Mediathek -->
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
-        <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em">Meine Mediathek</div>
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px">
-            <span id="lib-count-movies">–</span> Filme · <span id="lib-count-episodes">–</span> Episoden
-          </div>
+      <!-- Viewer/Editor Dashboard -->
+
+      <!-- KPI-Zeile -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+        <div class="dkpi" style="flex:1;min-width:140px">
+          <div class="dkpi-l">Downloads gesamt</div>
+          <div class="dkpi-n" style="color:var(--green)" id="ue-total-dl">–</div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="filter-btn active" id="lib-tab-movies"  onclick="switchLibTab('movies',this)">🎬 Filme</button>
-          <button class="filter-btn"        id="lib-tab-episodes" onclick="switchLibTab('episodes',this)">📺 Episoden</button>
+        <?php if ($can_queue_view): ?>
+        <div class="dkpi" style="flex:1;min-width:140px">
+          <div class="dkpi-l">Ausstehend</div>
+          <div class="dkpi-n" style="color:var(--accent)" id="ue-pending">–</div>
+        </div>
+        <div class="dkpi" style="flex:1;min-width:140px">
+          <div class="dkpi-l">Lädt gerade</div>
+          <div class="dkpi-n" style="color:var(--orange)" id="ue-downloading">–</div>
+        </div>
+        <?php endif; ?>
+      </div>
+
+      <!-- Neue Releases -->
+      <div style="margin-bottom:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">🆕 Neue Releases</div>
+          <button class="btn-sm" onclick="showView('new-releases')">Alle →</button>
+        </div>
+        <div id="ue-new-releases" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px">
+          <div style="color:var(--muted);font-size:.8rem;padding:8px">Lade…</div>
         </div>
       </div>
-      <!-- Filter bar -->
-      <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-        <div class="search-wrap" style="max-width:280px;flex:1">
-          <input type="text" id="lib-search" placeholder="Titel suchen…" oninput="filterLibrary()">
-          <span class="search-icon">🔍</span>
+
+      <!-- Letzte Downloads -->
+      <div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">📥 Zuletzt heruntergeladen</div>
+        <div id="ue-recent" class="grid">
+          <div style="color:var(--muted);font-size:.8rem;padding:8px">Lade…</div>
         </div>
-        <select id="lib-cat-filter" onchange="filterLibrary()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none">
-          <option value="">Alle Kategorien</option>
-        </select>
-        <button class="btn-sm" onclick="filterLibrary(true)">↺ Zurücksetzen</button>
-      </div>
-      <!-- Loading state -->
-      <div id="lib-loading" class="state-box"><div class="spinner"></div><p>Lade Mediathek…</p></div>
-      <!-- Movies grid -->
-      <div id="lib-movies" class="grid" style="display:none"></div>
-      <!-- Episodes grid -->
-      <div id="lib-episodes" class="grid" style="display:none"></div>
-      <!-- Empty state -->
-      <div id="lib-empty" class="state-box" style="display:none">
-        <div class="icon">📭</div>
-        <p>Noch keine VODs heruntergeladen.</p>
       </div>
       <?php endif; ?>
     </div>
@@ -657,6 +660,28 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
+          <h3>🔒 VPN (WireGuard)</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            Downloads über WireGuard-VPN leiten. VPN wird vor dem ersten Download gestartet und danach automatisch getrennt.<br>
+            Die Konfigurationsdatei muss unter <code style="color:var(--accent2)">/etc/wireguard/&lt;interface&gt;.conf</code> liegen.
+          </div>
+          <label class="settings-toggle" style="margin-bottom:14px">
+            <input type="checkbox" id="cfg-vpn-enabled">
+            <span>VPN für Downloads aktivieren</span>
+          </label>
+          <div class="field">
+            <label>Interface-Name</label>
+            <input type="text" id="cfg-vpn-interface" placeholder="wg0" style="max-width:160px">
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn-secondary" onclick="checkVpnStatus()">🔍 Status prüfen</button>
+            <button class="btn-secondary" onclick="vpnConnect()">▶ Verbinden</button>
+            <button class="btn-secondary" onclick="vpnDisconnect()">■ Trennen</button>
+            <div class="settings-msg" id="vpn-status-msg" style="margin:0"></div>
+          </div>
+        </div>
+
+        <div class="settings-card">
           <h3>📨 Telegram-Benachrichtigungen</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             Benachrichtigung bei abgeschlossenem Download via Telegram Bot.<br>
@@ -671,6 +696,10 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <label>Chat ID</label>
             <input type="text" id="cfg-telegram-chat-id" placeholder="z.B. 123456789 oder -100123456789 (Gruppe)">
           </div>
+          <label class="settings-toggle" style="margin-bottom:14px">
+            <input type="checkbox" id="cfg-telegram-enabled">
+            <span>Benachrichtigungen aktivieren</span>
+          </label>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button class="btn-secondary" onclick="testTelegram()">📨 Testnachricht senden</button>
             <div class="settings-msg" id="telegram-test-msg" style="margin:0"></div>
@@ -790,6 +819,13 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <!-- Profile -->
     <div id="view-profile" style="display:none">
       <div class="settings-grid">
+        <div class="settings-card">
+          <h3>🎨 Theme</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
+            Wähle ein Design für deine Ansicht. Die Auswahl wird lokal gespeichert.
+          </div>
+          <div class="theme-picker" id="theme-picker"></div>
+        </div>
         <div class="settings-card">
           <h3>Passwort ändern</h3>
           <div class="field">
@@ -1062,7 +1098,7 @@ let queueRefreshInterval;
   catLoaders.push(loadFavourites());
   await Promise.all(catLoaders);
   <?php if ($can_queue_view): ?>updateQueueBadge();<?php endif; ?>
-  <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?>
+  <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?>
   <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?>
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
   initTheme();
@@ -1076,19 +1112,39 @@ let queueRefreshInterval;
 })();
 
 // ── Theme Toggle ──────────────────────────────────────────────
+const THEMES = {
+  dark:     { label: 'Dark',    bg: '#0a0a0f', bg2: '#111118', accent: '#e8ff47' },
+  amoled:   { label: 'AMOLED',  bg: '#000000', bg2: '#080808', accent: '#e8ff47' },
+  midnight: { label: 'Midnight',bg: '#0a0e1a', bg2: '#111828', accent: '#64a0ff' },
+  light:    { label: 'Light',   bg: '#f0f0f5', bg2: '#ffffff', accent: '#6060e0' },
+};
+const THEME_KEY = 'xv_theme_<?= $user['id'] ?>';
+
 function initTheme() {
-  const saved = localStorage.getItem('xv_theme') || 'dark';
-  applyTheme(saved);
+  const saved = localStorage.getItem(THEME_KEY) || 'dark';
+  applyTheme(saved, false);
 }
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme === 'light' ? 'light' : '');
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = theme === 'light' ? '🌙' : '☀️';
-  localStorage.setItem('xv_theme', theme);
+function applyTheme(theme, save = true) {
+  const t = THEMES[theme] ? theme : 'dark';
+  document.documentElement.setAttribute('data-theme', t === 'dark' ? '' : t);
+  if (save) localStorage.setItem(THEME_KEY, t);
+  // Aktiven Swatch markieren
+  document.querySelectorAll('.theme-swatch').forEach(el => {
+    el.classList.toggle('active', el.dataset.theme === t);
+  });
 }
-function toggleTheme() {
-  const cur = localStorage.getItem('xv_theme') || 'dark';
-  applyTheme(cur === 'dark' ? 'light' : 'dark');
+function renderThemePicker() {
+  const cur = localStorage.getItem(THEME_KEY) || 'dark';
+  return Object.entries(THEMES).map(([key, t]) => `
+    <div class="theme-swatch${cur === key ? ' active' : ''}" data-theme="${key}" onclick="applyTheme('${key}')" title="${t.label}">
+      <div class="theme-swatch-preview">
+        <div class="theme-swatch-sidebar" style="background:${t.bg2}"></div>
+        <div class="theme-swatch-content" style="background:${t.bg};display:flex;align-items:flex-end;padding:4px">
+          <div style="height:6px;width:60%;background:${t.accent};border-radius:2px"></div>
+        </div>
+      </div>
+      <div class="theme-swatch-label" style="background:${t.bg2};color:${t.accent}">${t.label}</div>
+    </div>`).join('');
 }
 
 // ── Search History ────────────────────────────────────────────
@@ -1803,21 +1859,29 @@ function renderNewReleases() {
   if (_nrTab === 'all')    items = [...movies, ...series];
   if (_nrTab === 'movie')  items = movies;
   if (_nrTab === 'series') items = series;
-  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Titel seit dem letzten Cache-Run'); return; }
+  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Titel'); return; }
 
   grid.innerHTML = items.map(item => {
-    if (item.type === 'series') {
-      return seriesCard({
+    const isSeries = item.type === 'series';
+    const itemId   = String(isSeries ? (item.series_id ?? item.id) : (item.stream_id ?? item.id));
+    const dismissBtn = `<button class="btn-icon" title="Entfernen"
+      onclick="dismissNewRelease('${itemId}','${isSeries?'series':'movie'}',this)"
+      style="position:absolute;top:4px;left:4px;z-index:10;background:rgba(0,0,0,.7);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.65rem;padding:0;border:none;cursor:pointer;color:#fff">✕</button>`;
+
+    if (isSeries) {
+      const card = seriesCard({
         series_id:   item.series_id,
         clean_title: item.clean_title ?? item.title ?? '',
         cover:       item.cover ?? '',
         category:    item.category ?? '',
         genre:       item.genre ?? '',
       });
+      // Inject dismiss button into card-thumb
+      return card.replace('<div class="card-thumb">', `<div class="card-thumb">${dismissBtn}`);
     }
     // Movie
     const sid = String(item.stream_id ?? item.id);
-    return movieCard({
+    const card = movieCard({
       stream_id:           sid,
       clean_title:         item.clean_title ?? item.title ?? '',
       stream_icon:         item.cover ?? '',
@@ -1827,8 +1891,31 @@ function renderNewReleases() {
       queued:              _queuedIds.has(sid),
       year:                item.year ?? '',
     });
+    return card.replace('<div class="card-thumb">', `<div class="card-thumb">${dismissBtn}`);
   }).join('');
   lazyLoadImages();
+}
+
+async function dismissNewRelease(id, type, btn) {
+  const card = btn?.closest('.card');
+  if (card) card.style.opacity = '.4';
+  const d = await apiPost('dismiss_new_release', {id, type});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); if (card) card.style.opacity = ''; return; }
+  // Remove from local data and re-render
+  if (_nrData) {
+    if (type === 'series') {
+      _nrData.series = (_nrData.series ?? []).filter(s => String(s.series_id ?? s.id) !== id);
+    } else {
+      _nrData.movies = (_nrData.movies ?? []).filter(m => String(m.stream_id ?? m.id) !== id);
+    }
+    // Update badge
+    const total = (_nrData.movies?.length ?? 0) + (_nrData.series?.length ?? 0);
+    const badge = document.getElementById('new-releases-badge');
+    if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
+    const meta = document.getElementById('new-releases-meta');
+    if (meta && _nrData.generated_at) meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
+  }
+  if (card) card.remove();
 }
 
 async function removeQueueItem(sid, el) {
@@ -2050,13 +2137,13 @@ function showView(v) {
   sb.style.display = v === 'search'  ? '' : 'none';
   fb.style.display = v === 'movies'  ? '' : 'none';
   if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
-  if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
+  if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
   if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
   if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
-  if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
+  if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
   if (v === 'favourites')    { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); loadStats(); updateQueueBadge(); }
   if (v === 'new-releases')  { document.getElementById('page-title').textContent = 'Neue Releases'; loadNewReleases(); }
   if (v === 'api-docs')     { document.getElementById('page-title').textContent = 'API-Dokumentation'; }
@@ -2246,6 +2333,12 @@ async function loadConfig() {
   const tgChat  = document.getElementById('cfg-telegram-chat-id');
   if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um Telegram zu deaktivieren'; }
   if (tgChat)  tgChat.value = c.telegram_chat_id ?? '';
+  const tgEnabled = document.getElementById('cfg-telegram-enabled');
+  if (tgEnabled) tgEnabled.checked = c.telegram_enabled ?? false;
+  const vpnEnabled = document.getElementById('cfg-vpn-enabled');
+  const vpnIface   = document.getElementById('cfg-vpn-interface');
+  if (vpnEnabled) vpnEnabled.checked  = c.vpn_enabled    ?? false;
+  if (vpnIface)   vpnIface.value      = c.vpn_interface  ?? 'wg0';
   setSettingsMsg('', '');
 }
 
@@ -2300,7 +2393,40 @@ function collectConfig() {
     tmdb_api_key:          (function() { const v = document.getElementById('cfg-tmdb-api-key').value.trim(); return (v === '••••••••' || v === '') ? '' : v; })(),
     telegram_bot_token:    (function() { const el = document.getElementById('cfg-telegram-bot-token'); const v = el?.value.trim() ?? ''; return (v === '••••••••' || v === '') ? '' : v; })(),
     telegram_chat_id:      document.getElementById('cfg-telegram-chat-id')?.value.trim() ?? '',
+    telegram_enabled:      document.getElementById('cfg-telegram-enabled')?.checked ?? false,
+    vpn_enabled:           document.getElementById('cfg-vpn-enabled')?.checked  ?? false,
+    vpn_interface:         document.getElementById('cfg-vpn-interface')?.value.trim() ?? 'wg0',
   };
+}
+
+// ── VPN ───────────────────────────────────────────────────────
+async function checkVpnStatus() {
+  const msg = document.getElementById('vpn-status-msg');
+  msg.textContent = '⏳ Prüfe…'; msg.className = 'settings-msg info';
+  const d = await api('vpn_status');
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  if (!d.wg_installed) {
+    msg.textContent = '⚠️ WireGuard nicht installiert — sudo apt install wireguard';
+    msg.className = 'settings-msg err'; return;
+  }
+  const upText  = d.up ? '🟢 Aktiv' : '🔴 Inaktiv';
+  const ipText  = d.public_ip ? ` · IP: ${d.public_ip}` : '';
+  msg.textContent = `${upText} (${d.interface})${ipText}`;
+  msg.className = d.up ? 'settings-msg ok' : 'settings-msg err';
+}
+async function vpnConnect() {
+  const msg = document.getElementById('vpn-status-msg');
+  msg.textContent = '⏳ Verbinde…'; msg.className = 'settings-msg info';
+  const d = await apiPost('vpn_connect', {});
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  msg.textContent = '🟢 Verbunden'; msg.className = 'settings-msg ok';
+}
+async function vpnDisconnect() {
+  const msg = document.getElementById('vpn-status-msg');
+  msg.textContent = '⏳ Trenne…'; msg.className = 'settings-msg info';
+  const d = await apiPost('vpn_disconnect', {});
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  msg.textContent = '🔴 Getrennt'; msg.className = 'settings-msg ok';
 }
 
 async function testTelegram() {
@@ -2441,254 +2567,6 @@ async function refreshDashboard() {
   if (ub) ub.style.display = 'none';
   <?php endif; ?>
 }
-
-<?php if ($can_settings): ?>
-async function loadDashboardData() {
-  const d = await api('dashboard_data');
-  if (!d || d.error) return;
-
-  // Queue-Statistiken
-  const qs = d.queue_stats ?? {};
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  set('dqs-pending',     qs.pending     ?? 0);
-  set('dqs-downloading', qs.downloading ?? 0);
-  set('dqs-done',        qs.done        ?? 0);
-  set('dqs-error',       qs.error       ?? 0);
-  set('dash-total-dl',   d.total_downloaded ?? 0);
-
-  // Speicherplatz
-  const disk = document.getElementById('dash-disk');
-  if (disk && d.disk) {
-    if (d.disk.rclone) {
-      disk.innerHTML = `<div style="font-size:.85rem">☁️ rclone</div><div style="color:var(--muted);font-size:.75rem;margin-top:4px">${esc(d.disk.remote)}</div>`;
-    } else {
-      const pct  = d.disk.percent ?? 0;
-      const col  = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
-      disk.innerHTML = `
-        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-          <span style="font-size:.85rem">${fmtBytes(d.disk.used)} / ${fmtBytes(d.disk.total)}</span>
-          <span style="color:${col};font-size:.85rem">${pct}%</span>
-        </div>
-        <div style="background:var(--bg3);border-radius:3px;height:6px;overflow:hidden">
-          <div style="background:${col};width:${pct}%;height:100%;border-radius:3px;transition:width .4s"></div>
-        </div>
-        <div style="color:var(--muted);font-size:.7rem;margin-top:6px">${fmtBytes(d.disk.free)} frei</div>`;
-    }
-  } else if (disk) {
-    disk.innerHTML = `<div style="color:var(--muted);font-size:.8rem">–</div>`;
-  }
-
-  // System-Status
-  const sys = document.getElementById('dash-system');
-  if (sys && d.system) {
-    const s = d.system;
-    sys.innerHTML = `
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(s.php_version)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${fmtBytes(s.mem_used)}</span></div>
-      ${s.uptime ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Uptime</span><span>${esc(s.uptime)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Downloads</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
-  }
-
-  // Letzte Downloads
-  const recent = document.getElementById('dash-recent');
-  if (recent) {
-    if (!d.recent_downloads?.length) {
-      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">Noch keine Downloads</div>`;
-    } else {
-      recent.innerHTML = d.recent_downloads.map(item => {
-        const icon = item.type === 'episode' ? '📺' : '🎬';
-        const sid  = item.stream_id ?? '';
-        const resetBtn = (canQueueRemove && sid)
-          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${sid}','${item.type ?? 'movie'}',this.closest('.dl-row'))" title="Zurücksetzen">↺</button>`
-          : '';
-        return `<div class="dl-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
-          ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
-            <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
-          </div>
-          ${resetBtn}
-        </div>`;
-      }).join('');
-    }
-  }
-}
-
-// ── Dashboard Schnellzugriff ──────────────────────────────────
-async function cancelDownload() {
-  if (!confirm('Laufenden Download wirklich abbrechen?')) return;
-  const d = await fetch(`${API}?action=queue_cancel`, {method:'POST'});
-  const r = await d.json();
-  if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
-  showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
-}
-
-async function startQueue(btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '▶ Startet…'; }
-  try {
-    const d = await apiPost('queue_start', {});
-    if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-    showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
-  } finally {
-    if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset.label || '▶ Starten'; }, 3000);
-  }
-}
-
-async function dashRebuildCache() {
-  const d = await api('rebuild_library_cache');
-  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast('Cache-Rebuild gestartet', 'success');
-}
-async function dashClearDone() {
-  await api('queue_clear_done');
-  showToast('Erledigte Einträge entfernt', 'info');
-  loadDashboardData();
-}
-async function dashClearAll() {
-  if (!confirm('Wirklich die gesamte Queue löschen?')) return;
-  const r = await fetch(`${API}?action=queue_clear_all`, {method:'POST'});
-  showToast('Queue geleert', 'info');
-  loadDashboardData();
-}
-// ── Xtream Server Info ────────────────────────────────────────
-async function loadServerInfo() {
-  const d = await api('get_server_info');
-  if (d.error) return;
-  const u = d.user   ?? {};
-  const s = d.server ?? {};
-
-  const set = (id, val, cls = '') => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = val;
-    if (cls) el.className = 'dic-val ' + cls;
-  };
-
-  const statusCls = u.status === 'Active' ? 'ok' : u.status === 'Banned' ? 'error' : 'warn';
-  set('si-status',  u.status  || '–', statusCls);
-
-  // Ablaufdatum: Unix-Timestamp → lesbares Datum
-  if (u.exp_date && u.exp_date !== '0') {
-    const d = new Date(parseInt(u.exp_date) * 1000);
-    const now = Date.now();
-    const daysLeft = Math.ceil((d - now) / 86400000);
-    const dateStr = d.toLocaleDateString('de-DE');
-    const cls = daysLeft < 7 ? 'error' : daysLeft < 30 ? 'warn' : 'ok';
-    set('si-exp', `${dateStr} (${daysLeft}d)`, cls);
-  } else {
-    set('si-exp', 'Unbegrenzt', 'ok');
-  }
-
-  set('si-cons',    `${u.active_cons ?? '–'} / ${u.max_connections ?? '–'}`);
-  set('si-trial',   u.is_trial === '1' ? 'Ja' : 'Nein');
-  set('si-formats', Array.isArray(u.allowed_output_formats) ? u.allowed_output_formats.join(', ') : '–');
-  set('si-tz',      s.timezone || '–');
-  set('si-time',    s.time_now || '–');
-  set('si-proto',   s.server_protocol || '–');
-}
-
-// ── Statistiken ───────────────────────────────────────────────
-<?php if ($can_settings): ?>
-let _statsChart = null;
-
-async function loadStatsView() {
-  const d = await api('stats_data');
-  if (d.error) return;
-
-  // Gesamt-KPIs
-  document.getElementById('stats-total-count').textContent = (d.total_count ?? 0).toLocaleString();
-  document.getElementById('stats-total-gb').textContent    = fmtBytes(d.total_bytes ?? 0);
-
-  // GB/Monat Chart
-  const months  = Object.keys(d.by_month ?? {});
-  const gbVals  = months.map(m => +((d.by_month[m].bytes / 1073741824).toFixed(2)));
-  const cntVals = months.map(m => d.by_month[m].count);
-  const labels  = months.map(m => {
-    const [y, mo] = m.split('-');
-    return new Date(y, mo - 1).toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
-  });
-
-  const ctx = document.getElementById('stats-chart-gb')?.getContext('2d');
-  if (ctx) {
-    if (_statsChart) _statsChart.destroy();
-    _statsChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'GB',
-          data: gbVals,
-          backgroundColor: 'rgba(100,210,255,.25)',
-          borderColor:     'rgba(100,210,255,.8)',
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y',
-        }, {
-          label: 'Downloads',
-          data: cntVals,
-          type: 'line',
-          borderColor:     'rgba(255,159,67,.8)',
-          backgroundColor: 'rgba(255,159,67,.1)',
-          borderWidth: 2,
-          pointRadius: 3,
-          tension: 0.3,
-          yAxisID: 'y2',
-          fill: false,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { labels: { color: 'var(--text)', font: { family: 'DM Mono', size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: ctx => ctx.dataset.label === 'GB'
-                ? `${ctx.parsed.y.toFixed(2)} GB`
-                : `${ctx.parsed.y} Downloads`
-            }
-          }
-        },
-        scales: {
-          x:  { ticks: { color: 'var(--muted)', font: { family: 'DM Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
-          y:  { position: 'left',  ticks: { color: 'rgba(100,210,255,.8)', font: { family: 'DM Mono', size: 10 }, callback: v => v + ' GB' }, grid: { color: 'rgba(255,255,255,.05)' } },
-          y2: { position: 'right', ticks: { color: 'rgba(255,159,67,.8)', font: { family: 'DM Mono', size: 10 } }, grid: { drawOnChartArea: false } },
-        }
-      }
-    });
-  }
-
-  // Top User Tabelle
-  const topEl = document.getElementById('stats-top-users');
-  if (topEl && d.top_users) {
-    const entries = Object.entries(d.top_users);
-    if (!entries.length) {
-      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten vorhanden</div>`;
-    } else {
-      const maxCount = entries[0]?.[1]?.count ?? 1;
-      topEl.innerHTML = entries.map(([user, data], i) => {
-        const pct = Math.round((data.count / maxCount) * 100);
-        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-        return `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:.95rem;width:28px;text-align:center;flex-shrink:0">${medal}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:500;font-size:.85rem">${esc(user)}</div>
-            <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:5px;overflow:hidden">
-              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
-            </div>
-          </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:'DM Mono',monospace;font-size:.8rem">${data.count.toLocaleString()} Downloads</div>
-            ${data.bytes ? `<div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">${fmtBytes(data.bytes)}</div>` : ''}
-          </div>
-        </div>`;
-      }).join('');
-    }
-  }
-}
-<?php endif; ?>
 
 // ── TMDB Info Modal ───────────────────────────────────────────
 function handleCardClick(event, card) {
@@ -2973,6 +2851,255 @@ async function deleteApiKey(id) {
   showToast('API-Key gelöscht', 'success');
   loadApiKeys();
 }
+
+<?php if ($can_settings): ?>
+async function loadDashboardData() {
+  const d = await api('dashboard_data');
+  if (!d || d.error) return;
+
+  // Queue-Statistiken
+  const qs = d.queue_stats ?? {};
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('dqs-pending',     qs.pending     ?? 0);
+  set('dqs-downloading', qs.downloading ?? 0);
+  set('dqs-done',        qs.done        ?? 0);
+  set('dqs-error',       qs.error       ?? 0);
+  set('dash-total-dl',   d.total_downloaded ?? 0);
+
+  // Speicherplatz
+  const disk = document.getElementById('dash-disk');
+  if (disk && d.disk) {
+    if (d.disk.rclone) {
+      disk.innerHTML = `<div style="font-size:.85rem">☁️ rclone</div><div style="color:var(--muted);font-size:.75rem;margin-top:4px">${esc(d.disk.remote)}</div>`;
+    } else {
+      const pct  = d.disk.percent ?? 0;
+      const col  = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
+      disk.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:.85rem">${fmtBytes(d.disk.used)} / ${fmtBytes(d.disk.total)}</span>
+          <span style="color:${col};font-size:.85rem">${pct}%</span>
+        </div>
+        <div style="background:var(--bg3);border-radius:3px;height:6px;overflow:hidden">
+          <div style="background:${col};width:${pct}%;height:100%;border-radius:3px;transition:width .4s"></div>
+        </div>
+        <div style="color:var(--muted);font-size:.7rem;margin-top:6px">${fmtBytes(d.disk.free)} frei</div>`;
+    }
+  } else if (disk) {
+    disk.innerHTML = `<div style="color:var(--muted);font-size:.8rem">–</div>`;
+  }
+
+  // System-Status
+  const sys = document.getElementById('dash-system');
+  if (sys && d.system) {
+    const s = d.system;
+    sys.innerHTML = `
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(s.php_version)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${fmtBytes(s.mem_used)}</span></div>
+      ${s.uptime ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Uptime</span><span>${esc(s.uptime)}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Downloads</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
+  }
+
+  // Letzte Downloads
+  const recent = document.getElementById('dash-recent');
+  if (recent) {
+    if (!d.recent_downloads?.length) {
+      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">Noch keine Downloads</div>`;
+    } else {
+      recent.innerHTML = d.recent_downloads.map(item => {
+        const icon = item.type === 'episode' ? '📺' : '🎬';
+        const sid  = item.stream_id ?? '';
+        const resetBtn = (canQueueRemove && sid)
+          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${sid}','${item.type ?? 'movie'}',this.closest('.dl-row'))" title="Zurücksetzen">↺</button>`
+          : '';
+        return `<div class="dl-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
+          ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
+            <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
+          </div>
+          ${resetBtn}
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ── Dashboard Schnellzugriff ──────────────────────────────────
+async function cancelDownload() {
+  if (!confirm('Laufenden Download wirklich abbrechen?')) return;
+  const d = await fetch(`${API}?action=queue_cancel`, {method:'POST'});
+  const r = await d.json();
+  if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
+  showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
+}
+
+async function startQueue(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '▶ Startet…'; }
+  try {
+    const d = await apiPost('queue_start', {});
+    if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+    showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
+  } finally {
+    if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset.label || '▶ Starten'; }, 3000);
+  }
+}
+
+async function dashRebuildCache() {
+  const d = await api('rebuild_library_cache');
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('Cache-Rebuild gestartet', 'success');
+}
+async function dashClearDone() {
+  await api('queue_clear_done');
+  showToast('Erledigte Einträge entfernt', 'info');
+  loadDashboardData();
+}
+async function dashClearAll() {
+  if (!confirm('Wirklich die gesamte Queue löschen?')) return;
+  const r = await fetch(`${API}?action=queue_clear_all`, {method:'POST'});
+  showToast('Queue geleert', 'info');
+  loadDashboardData();
+}
+// ── Xtream Server Info ────────────────────────────────────────
+async function loadServerInfo() {
+  const d = await api('get_server_info');
+  if (d.error) return;
+  const u = d.user   ?? {};
+  const s = d.server ?? {};
+
+  const set = (id, val, cls = '') => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = val;
+    if (cls) el.className = 'dic-val ' + cls;
+  };
+
+  const statusCls = u.status === 'Active' ? 'ok' : u.status === 'Banned' ? 'error' : 'warn';
+  set('si-status',  u.status  || '–', statusCls);
+
+  // Ablaufdatum: Unix-Timestamp → lesbares Datum
+  if (u.exp_date && u.exp_date !== '0') {
+    const d = new Date(parseInt(u.exp_date) * 1000);
+    const now = Date.now();
+    const daysLeft = Math.ceil((d - now) / 86400000);
+    const dateStr = d.toLocaleDateString('de-DE');
+    const cls = daysLeft < 7 ? 'error' : daysLeft < 30 ? 'warn' : 'ok';
+    set('si-exp', `${dateStr} (${daysLeft}d)`, cls);
+  } else {
+    set('si-exp', 'Unbegrenzt', 'ok');
+  }
+
+  set('si-cons',    `${u.active_cons ?? '–'} / ${u.max_connections ?? '–'}`);
+  set('si-trial',   u.is_trial === '1' ? 'Ja' : 'Nein');
+  set('si-formats', Array.isArray(u.allowed_output_formats) ? u.allowed_output_formats.join(', ') : '–');
+  set('si-tz',      s.timezone || '–');
+  set('si-time',    s.time_now || '–');
+  set('si-proto',   s.server_protocol || '–');
+}
+
+// ── Statistiken ───────────────────────────────────────────────
+<?php if ($can_settings): ?>
+let _statsChart = null;
+
+async function loadStatsView() {
+  const d = await api('stats_data');
+  if (d.error) return;
+
+  // Gesamt-KPIs
+  document.getElementById('stats-total-count').textContent = (d.total_count ?? 0).toLocaleString();
+  document.getElementById('stats-total-gb').textContent    = fmtBytes(d.total_bytes ?? 0);
+
+  // GB/Monat Chart
+  const months  = Object.keys(d.by_month ?? {});
+  const gbVals  = months.map(m => +((d.by_month[m].bytes / 1073741824).toFixed(2)));
+  const cntVals = months.map(m => d.by_month[m].count);
+  const labels  = months.map(m => {
+    const [y, mo] = m.split('-');
+    return new Date(y, mo - 1).toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
+  });
+
+  const ctx = document.getElementById('stats-chart-gb')?.getContext('2d');
+  if (ctx) {
+    if (_statsChart) _statsChart.destroy();
+    _statsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'GB',
+          data: gbVals,
+          backgroundColor: 'rgba(100,210,255,.25)',
+          borderColor:     'rgba(100,210,255,.8)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y',
+        }, {
+          label: 'Downloads',
+          data: cntVals,
+          type: 'line',
+          borderColor:     'rgba(255,159,67,.8)',
+          backgroundColor: 'rgba(255,159,67,.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          yAxisID: 'y2',
+          fill: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: 'var(--text)', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.dataset.label === 'GB'
+                ? `${ctx.parsed.y.toFixed(2)} GB`
+                : `${ctx.parsed.y} Downloads`
+            }
+          }
+        },
+        scales: {
+          x:  { ticks: { color: 'var(--muted)', font: { family: 'DM Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y:  { position: 'left',  ticks: { color: 'rgba(100,210,255,.8)', font: { family: 'DM Mono', size: 10 }, callback: v => v + ' GB' }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y2: { position: 'right', ticks: { color: 'rgba(255,159,67,.8)', font: { family: 'DM Mono', size: 10 } }, grid: { drawOnChartArea: false } },
+        }
+      }
+    });
+  }
+
+  // Top User Tabelle
+  const topEl = document.getElementById('stats-top-users');
+  if (topEl && d.top_users) {
+    const entries = Object.entries(d.top_users);
+    if (!entries.length) {
+      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten vorhanden</div>`;
+    } else {
+      const maxCount = entries[0]?.[1]?.count ?? 1;
+      topEl.innerHTML = entries.map(([user, data], i) => {
+        const pct = Math.round((data.count / maxCount) * 100);
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.95rem;width:28px;text-align:center;flex-shrink:0">${medal}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:.85rem">${esc(user)}</div>
+            <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:5px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:'DM Mono',monospace;font-size:.8rem">${data.count.toLocaleString()} Downloads</div>
+            ${data.bytes ? `<div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">${fmtBytes(data.bytes)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+<?php endif; ?>
+
 <?php endif; ?>
 
 // ── Live Progress Polling ─────────────────────────────────────
@@ -3174,116 +3301,60 @@ function showToast(msg, type = '') {
 
 // ── Library (viewer/editor dashboard) ────────────────────────
 <?php if (!$can_settings): ?>
-let libraryData  = null;
-let libActiveTab = 'movies';
+// ── User Dashboard (Editor/Viewer) ──────────────────────────
 
-async function loadLibrary(forceReload = false) {
-  if (libraryData && !forceReload) { renderLibrary(); return; }
-  libraryData = null;
-  const loading = document.getElementById('lib-loading');
-  const empty   = document.getElementById('lib-empty');
-  if (loading) { loading.innerHTML = '<div class="spinner"></div><p>Lade Mediathek...</p>'; loading.style.display = ''; }
-  if (empty)   empty.style.display = 'none';
-  document.getElementById('lib-movies').style.display   = 'none';
-  document.getElementById('lib-episodes').style.display = 'none';
-  const data = await api('get_library');
-  if (!data.cache_ready) {
-    if (loading) loading.innerHTML = `
-      <div class="icon" style="font-size:2rem;opacity:.5">📦</div>
-      <p style="max-width:320px">Der Medien-Cache wurde noch nicht aufgebaut.<br>
-      Bitte wende dich an deinen Administrator.</p>`;
-    return;
+async function loadUserDashboard() {
+  // KPI: Stats
+  const s = await api('stats');
+  if (s && !s.error) {
+    const uel = document.getElementById('ue-total-dl');
+    if (uel) uel.textContent = (s.total_downloaded ?? 0).toLocaleString();
+    const ueP = document.getElementById('ue-pending');
+    const ueD = document.getElementById('ue-downloading');
+    if (ueP) ueP.textContent = s.queue_stats?.pending     ?? 0;
+    if (ueD) ueD.textContent = s.queue_stats?.downloading ?? 0;
   }
-  libraryData = data;
-  // Kategorien-Dropdown befüllen
-  const catSel = document.getElementById('lib-cat-filter');
-  if (catSel && data.categories?.length) {
-    const cur = catSel.value;
-    catSel.innerHTML = '<option value="">Alle Kategorien</option>' +
-      data.categories.map(c => `<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
-  }
-  renderLibrary();
-}
 
-async function filterLibrary(reset = false) {
-  if (reset) {
-    const s = document.getElementById('lib-search');
-    const c = document.getElementById('lib-cat-filter');
-    if (s) s.value = '';
-    if (c) c.value = '';
+  // Neue Releases (max 12 horizontal)
+  const nr = await api('get_new_releases');
+  const nrEl = document.getElementById('ue-new-releases');
+  if (nrEl) {
+    const items = [...(nr?.movies ?? []), ...(nr?.series ?? [])].slice(0, 12);
+    if (!items.length) {
+      nrEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem;padding:8px">Keine neuen Releases</div>`;
+    } else {
+      nrEl.innerHTML = items.map(item => `
+        <div style="flex-shrink:0;width:100px;cursor:pointer" onclick="openTmdbModal('${esc(item.name??item.title??'')}','${item.stream_id?'movie':'series'}','',null)">
+          <div style="width:100px;height:148px;border-radius:6px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);position:relative">
+            ${item.stream_icon||item.cover ? `<img src="${esc(item.stream_icon||item.cover)}" alt="" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.8rem">${item.stream_id?'🎬':'📺'}</div>`}
+            ${item.downloaded ? `<span class="card-badge badge-done" style="top:4px;right:4px;font-size:.55rem">✓</span>` : ''}
+          </div>
+          <div style="font-size:.72rem;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${esc(item.name??item.title??'')}</div>
+        </div>`).join('');
+    }
   }
-  const q   = (document.getElementById('lib-search')?.value ?? '').trim().toLowerCase();
-  const cat = document.getElementById('lib-cat-filter')?.value ?? '';
-  // Wenn Filter gesetzt → frisch vom Server laden (serverseitig gefiltert)
-  const loading = document.getElementById('lib-loading');
-  const empty   = document.getElementById('lib-empty');
-  if (loading) { loading.innerHTML = '<div class="spinner"></div><p>Filtere…</p>'; loading.style.display = ''; }
-  document.getElementById('lib-movies').style.display   = 'none';
-  document.getElementById('lib-episodes').style.display = 'none';
-  const params = {};
-  if (q)   params.q        = q;
-  if (cat) params.category = cat;
-  const data = await api('get_library', params);
-  if (!data.cache_ready) {
-    if (loading) loading.innerHTML = `<div class="icon" style="font-size:2rem;opacity:.5">📦</div><p>Kein Cache vorhanden.</p>`;
-    return;
-  }
-  libraryData = data;
-  renderLibrary();
-}
 
-function renderLibrary() {
-  const loading = document.getElementById('lib-loading');
-  const empty   = document.getElementById('lib-empty');
-  const movGrid = document.getElementById('lib-movies');
-  const epGrid  = document.getElementById('lib-episodes');
-  const cntMov  = document.getElementById('lib-count-movies');
-  const cntEp   = document.getElementById('lib-count-episodes');
-  if (loading) loading.style.display = 'none';
-  if (cntMov)  cntMov.textContent = libraryData.movies.length;
-  if (cntEp)   cntEp.textContent  = libraryData.episodes.length;
-  if (!libraryData.total) { if (empty) empty.style.display = ''; return; }
-  if (movGrid) {
-    movGrid.innerHTML = libraryData.movies.length
-      ? libraryData.movies.map(libCard).join('')
-      : `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>Keine Filme gefunden</p></div>`;
-    movGrid.style.display = libActiveTab === 'movies' ? '' : 'none';
-    lazyLoadImages();
+  // Letzte Downloads (aus download_history — eigene Downloads wenn editor, alle wenn admin)
+  const h = await api('get_recent_downloads');
+  const recentEl = document.getElementById('ue-recent');
+  if (recentEl) {
+    if (!h?.items?.length) {
+      recentEl.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>Noch keine Downloads</p></div>`;
+    } else {
+      recentEl.innerHTML = h.items.map(item => `
+        <div class="card downloaded">
+          <div class="card-thumb">
+            <div class="card-thumb-placeholder">${item.type==='episode'?'📺':'🎬'}</div>
+            ${item.cover ? `<img src="${esc(item.cover)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">` : ''}
+            <span class="card-badge badge-done">✓</span>
+          </div>
+          <div class="card-body">
+            <div class="card-title">${esc(item.title)}</div>
+            <div class="card-meta">${esc(item.category??'')}${item.done_at ? ' · ' + item.done_at.slice(0,10) : ''}</div>
+          </div>
+        </div>`).join('');
+    }
   }
-  if (epGrid) {
-    epGrid.innerHTML = libraryData.episodes.length
-      ? libraryData.episodes.map(libCard).join('')
-      : `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>Keine Episoden gefunden</p></div>`;
-    epGrid.style.display = libActiveTab === 'episodes' ? '' : 'none';
-    lazyLoadImages();
-  }
-}
-
-function libCard(item) {
-  const thumb = item.cover ? `<img data-src="${item.cover}" alt="">` : '';
-  const icon  = item.type === 'episode' ? '📺' : '🎬';
-  return `
-  <div class="card downloaded">
-    <div class="card-thumb">
-      <div class="card-thumb-placeholder">${icon}</div>
-      ${thumb}
-      <span class="card-badge badge-done">✓</span>
-    </div>
-    <div class="card-body">
-      <div class="card-title">${esc(item.title)}</div>
-      <div class="card-meta">${esc(item.category)}</div>
-    </div>
-  </div>`;
-}
-
-function switchLibTab(tab, btn) {
-  libActiveTab = tab;
-  document.querySelectorAll('#lib-tab-movies, #lib-tab-episodes').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const movGrid = document.getElementById('lib-movies');
-  const epGrid  = document.getElementById('lib-episodes');
-  if (movGrid) movGrid.style.display = tab === 'movies'   ? '' : 'none';
-  if (epGrid)  epGrid.style.display  = tab === 'episodes' ? '' : 'none';
 }
 <?php endif; ?>
 

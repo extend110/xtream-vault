@@ -480,6 +480,23 @@ save_queue($queue);
 $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
+// ── VPN: vor Downloads verbinden ─────────────────────────────────────────────
+$vpnStartedByUs = false;
+if (VPN_ENABLED && $totalPending > 0) {
+    if (vpn_is_up()) {
+        clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
+    } else {
+        clog("VPN: verbinde " . VPN_INTERFACE . " …");
+        $vpnResult = vpn_up();
+        if ($vpnResult !== true) {
+            clog("VPN ERROR: " . $vpnResult . " — Downloads werden trotzdem gestartet");
+        } else {
+            $vpnStartedByUs = true;
+            clog("VPN: " . VPN_INTERFACE . " verbunden");
+        }
+    }
+}
+
 $processed = 0;
 $errors    = 0;
 $position  = 0;
@@ -554,13 +571,13 @@ foreach ($queue as &$item) {
 
     clog("START: $title  →  $destDisplay");
 
-    // Speicherplatz-Prüfung (nur im lokalen Modus — rclone braucht keinen lokalen Speicher)
+    // Speicherplatz-Prüfung (nur im lokalen Modus)
+    $fileSize = 0;
     if (!RCLONE_ENABLED) {
         $checkDir = is_dir(DEST_PATH) ? DEST_PATH : dirname(DEST_PATH);
         $freeDisk = @disk_free_space($checkDir);
         if ($freeDisk !== false) {
             // Dateigröße per HEAD-Request ermitteln
-            $fileSize = 0;
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_NOBODY         => true,
@@ -571,10 +588,11 @@ foreach ($queue as &$item) {
                 CURLOPT_RETURNTRANSFER => true,
             ]);
             curl_exec($ch);
-            $fileSize = (int)curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+            $contentLength = (int)curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
             curl_close($ch);
+            if ($contentLength > 0) $fileSize = $contentLength;
 
-            $minFree = 512 * 1024 * 1024; // 512 MB Puffer zusätzlich zur Dateigröße
+            $minFree = 512 * 1024 * 1024;
             $needed  = $fileSize + $minFree;
             if ($fileSize > 0 && $freeDisk < $needed) {
                 $msg = sprintf(
@@ -587,7 +605,6 @@ foreach ($queue as &$item) {
                 $item['status'] = 'error';
                 $item['error']  = $msg;
                 save_queue_item_status($sid, $item);
-                // Gesamten cron-Run abbrechen — kein Platz für weitere Downloads
                 break;
             }
             if ($fileSize > 0) {
@@ -681,13 +698,42 @@ foreach ($queue as &$item) {
         clog("DONE:  $title");
         $processed++;
 
-        // Telegram-Benachrichtigung
-        if (TELEGRAM_BOT_TOKEN !== '' && TELEGRAM_CHAT_ID !== '') {
-            $typeLabel = $type === 'movie' ? '🎬 Film' : '📺 Episode';
-            $sizeStr   = $downloadedBytes > 0 ? "\n📦 " . round($downloadedBytes / 1048576) . ' MB' : '';
+        // Aus new_releases.json entfernen (damit es nicht mehr als "neu" erscheint)
+        if (file_exists(DATA_DIR . '/new_releases.json')) {
+            $nr = json_decode(@file_get_contents(DATA_DIR . '/new_releases.json'), true) ?? [];
+            if ($type === 'movie') {
+                $nr['movies'] = array_values(array_filter($nr['movies'] ?? [],
+                    fn($m) => (string)($m['stream_id'] ?? $m['id'] ?? '') !== (string)$sid));
+            } else {
+                $nr['series'] = array_values(array_filter($nr['series'] ?? [],
+                    fn($s) => (string)($s['series_id'] ?? $s['id'] ?? '') !== (string)$sid));
+            }
+            @file_put_contents(DATA_DIR . '/new_releases.json', json_encode($nr, JSON_UNESCAPED_UNICODE));
+        }
+
+        // Telegram-Benachrichtigung — live aus config lesen (Einstellungen können sich während des Runs ändern)
+        $liveConfig  = load_config();
+        $tgEnabled   = (bool)($liveConfig['telegram_enabled']   ?? false);
+        $tgToken     = $liveConfig['telegram_bot_token'] ?? '';
+        $tgChatId    = $liveConfig['telegram_chat_id']   ?? '';
+        if ($tgEnabled && $tgToken !== '' && $tgChatId !== '') {
+            // Dateigröße: tatsächlich übertragene Bytes
+            $reportSize = $downloadedBytes;
+            $typeLabel  = $type === 'movie' ? '🎬 Film' : '📺 Episode';
+            $sizeStr    = $reportSize > 0 ? "\n📦 " . round($reportSize / 1048576) . ' MB' : '';
             $msg = "✅ <b>Download abgeschlossen</b>\n{$typeLabel}: <b>" . htmlspecialchars($title, ENT_XML1) . "</b>{$sizeStr}";
-            $result = send_telegram($msg);
-            if ($result !== true) clog("WARN: Telegram-Benachrichtigung fehlgeschlagen — {$result}");
+            // Temporär define-Werte mit Live-Werten überschreiben geht nicht —
+            // send_telegram() direkt aufrufen mit lokalen Variablen
+            $tgUrl  = 'https://api.telegram.org/bot' . $tgToken . '/sendMessage';
+            $tgBody = json_encode(['chat_id' => $tgChatId, 'text' => $msg, 'parse_mode' => 'HTML']);
+            $tgCtx  = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $tgBody, 'timeout' => 8]]);
+            $tgRaw  = @file_get_contents($tgUrl, false, $tgCtx);
+            if ($tgRaw === false) {
+                clog("WARN: Telegram nicht erreichbar");
+            } else {
+                $tgResp = json_decode($tgRaw, true);
+                if (!($tgResp['ok'] ?? false)) clog("WARN: Telegram-Fehler — " . ($tgResp['description'] ?? 'unbekannt'));
+            }
         }
         // rclone-Cache aktualisieren: neu hochgeladene Datei eintragen
         if (RCLONE_ENABLED && isset($rcloneFileCache, $rcloneCacheFile)) {
@@ -728,6 +774,14 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 
 clear_progress();
 clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
+
+// ── VPN: nach Downloads trennen (nur wenn wir ihn gestartet haben) ────────────
+if (VPN_ENABLED && $vpnStartedByUs) {
+    clog("VPN: trenne " . VPN_INTERFACE . " …");
+    $vpnDown = vpn_down();
+    if ($vpnDown !== true) clog("VPN WARN: " . $vpnDown);
+    else clog("VPN: " . VPN_INTERFACE . " getrennt");
+}
 
 // Benachrichtigung: alle Downloads abgeschlossen
 if ($processed > 0) {
