@@ -43,19 +43,65 @@ define('RCLONE_PATH',    $_cfg['rclone_path']    ?? '');   // z.B. "Media/VOD"
 define('RCLONE_BIN',     $_cfg['rclone_bin']     ?? 'rclone'); // Pfad zum rclone-Binary
 
 define('DATA_PATH',          DATA_DIR);
-define('DOWNLOAD_DB',        DATA_DIR . '/downloaded.json');
-define('QUEUE_FILE',         DATA_DIR . '/queue.json');
+
+// ── Server-ID: Hash aus IP + Port + Username (identifiziert den Xtream-Server) ─
+$_server_id = (SERVER_IP !== '' && USERNAME !== '')
+    ? substr(md5(SERVER_IP . ':' . PORT . ':' . USERNAME), 0, 8)
+    : 'default';
+define('SERVER_ID', $_server_id);
+
+// ── Per-Server-Dateipfade ──────────────────────────────────────────────────────
+define('DOWNLOAD_DB',           DATA_DIR . '/downloaded_' . SERVER_ID . '.json');
+define('QUEUE_FILE',            DATA_DIR . '/queue_'      . SERVER_ID . '.json');
+define('DOWNLOADED_INDEX_FILE', DATA_DIR . '/downloaded_index_' . SERVER_ID . '.json');
+define('DOWNLOAD_HISTORY_FILE', DATA_DIR . '/download_history_' . SERVER_ID . '.json');
+define('LIBRARY_CACHE_FILE',    DATA_DIR . '/library_cache_'    . SERVER_ID . '.json');
+define('SERIES_CACHE_FILE',     DATA_DIR . '/series_cache_'     . SERVER_ID . '.json');
+
+// ── Globale Dateipfade (server-unabhängig) ────────────────────────────────────
 define('CRON_LOG',           DATA_DIR . '/cron.log');
 define('PROGRESS_FILE',      DATA_DIR . '/progress.json');
-define('LIBRARY_CACHE_FILE',   DATA_DIR . '/library_cache.json');
-define('SERIES_CACHE_FILE',    DATA_DIR . '/series_cache.json');
-define('DOWNLOADED_INDEX_FILE', DATA_DIR . '/downloaded_index.json');
-define('DOWNLOAD_HISTORY_FILE', DATA_DIR . '/download_history.json');
 define('CANCEL_FILE',        DATA_DIR . '/cancel.lock');
 define('MAINTENANCE_FILE',   DATA_DIR . '/maintenance.lock');
-define('TMDB_API_KEY',       $_cfg['tmdb_api_key'] ?? '');
 define('API_KEYS_FILE',      DATA_DIR . '/api_keys.json');
 define('ACTIVITY_LOG_FILE',  DATA_DIR . '/activity.json');
+define('TMDB_API_KEY',       $_cfg['tmdb_api_key']    ?? '');
+define('WEBHOOK_URL',        $_cfg['webhook_url']     ?? '');
+define('WEBHOOK_TYPE',       $_cfg['webhook_type']    ?? 'discord'); // discord | telegram | generic
+define('WEBHOOK_ON_DONE',    (bool)($_cfg['webhook_on_done']    ?? true));
+define('WEBHOOK_ON_ERROR',   (bool)($_cfg['webhook_on_error']   ?? true));
+define('WEBHOOK_ON_ALLDOWN', (bool)($_cfg['webhook_on_alldown'] ?? false));
+define('SERVERS_FILE',       DATA_DIR . '/servers.json');
+define('INVITES_FILE',       DATA_DIR . '/invites.json');
+
+// ── Telegram-Benachrichtigungen ───────────────────────────────────────────────
+define('TELEGRAM_BOT_TOKEN', $_cfg['telegram_bot_token'] ?? '');
+define('TELEGRAM_CHAT_ID',   $_cfg['telegram_chat_id']   ?? '');
+
+/**
+ * Sendet eine Telegram-Nachricht via Bot API.
+ * Gibt true bei Erfolg zurück, Fehlermeldung als String bei Fehler.
+ */
+function send_telegram(string $text): bool|string {
+    if (TELEGRAM_BOT_TOKEN === '' || TELEGRAM_CHAT_ID === '') return 'Telegram nicht konfiguriert';
+    $url  = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendMessage';
+    $body = json_encode([
+        'chat_id'    => TELEGRAM_CHAT_ID,
+        'text'       => $text,
+        'parse_mode' => 'HTML',
+    ]);
+    $ctx = stream_context_create(['http' => [
+        'method'  => 'POST',
+        'header'  => "Content-Type: application/json\r\nUser-Agent: XtreamVault/1.0\r\n",
+        'content' => $body,
+        'timeout' => 8,
+    ]]);
+    $raw = @file_get_contents($url, false, $ctx);
+    if ($raw === false) return 'Telegram nicht erreichbar';
+    $resp = json_decode($raw, true);
+    if (!($resp['ok'] ?? false)) return $resp['description'] ?? 'Unbekannter Fehler';
+    return true;
+}
 
 // ── Prüfen ob Grundkonfiguration vorhanden ────────────────────────────────────
 function is_configured(): bool {
@@ -141,6 +187,104 @@ function remove_year_suffix(string $name): string {
  */
 function display_title(string $name): string {
     return trim($name);
+}
+
+/**
+ * Bereinigt einen String für die Verwendung als Dateiname.
+ */
+function safe_filename(string $name): string {
+    $name = str_replace(':', '-', $name);
+    $name = preg_replace('/[<>"|?*\/\\\\]/', '', $name);
+    $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name);
+    $name = preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '', $name);
+    return trim(preg_replace('/\s+/', ' ', $name)) ?: 'file';
+}
+
+/**
+ * Berechnet den relativen Zielpfad für einen Download.
+ * Wird von cron.php (Download) und api.php (Queue-Add-Prüfung) verwendet.
+ *
+ * @param array $item  Queue-Item mit title, type, category, container_extension, season, episode_num
+ * @return array       ['rel_path' => string, 'filename' => string, 'safe_title' => string]
+ */
+function build_dest_path(array $item): array {
+    $title  = $item['title']  ?? '';
+    $ext    = $item['container_extension'] ?? 'mp4';
+    $type   = $item['type']   ?? 'movie';
+    $cat    = !empty($item['category']) ? $item['category'] : 'Uncategorized';
+    $season = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
+    $sub    = $item['dest_subfolder'] ?? ($type === 'movie' ? 'Movies' : 'TV Shows');
+
+    // Länderkürzel
+    if ($type === 'episode') {
+        $countryPrefix = extract_country_prefix($cat);
+        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
+    } else {
+        $countryPrefix = extract_country_prefix($title);
+        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
+    }
+
+    // Kategorie bereinigen
+    $catTrimmed = preg_replace('/\xc2\xa0/', ' ', trim($cat));
+    $cleanCat   = remove_country_prefix($catTrimmed);
+    if ($cleanCat === $catTrimmed) {
+        $cleanCat = preg_replace('/^[A-Z]{2,4}\s+/u', '', $catTrimmed);
+    }
+    $cleanCat = trim($cleanCat) ?: $catTrimmed;
+    $safeCat  = safe_filename($cleanCat) ?: 'Uncategorized';
+    $safeCat  = trim($safeCat, ' -_.') ?: 'Uncategorized';
+
+    $safePrefix = $countryPrefix !== '' ? $countryPrefix : '';
+
+    if ($type === 'episode') {
+        if ($safePrefix !== '' && str_starts_with($safeCat, $safePrefix)) {
+            $safeCat = trim(substr($safeCat, strlen($safePrefix)), ' -_.');
+            $safeCat = $safeCat ?: 'Uncategorized';
+        }
+        if ($safePrefix === '') {
+            $safePrefix = extract_country_prefix($safeCat);
+            $safeCat    = remove_country_prefix($safeCat);
+            $safeCat    = trim($safeCat, ' -_.') ?: 'Uncategorized';
+        }
+    }
+
+    // Dateiname
+    $fileTitle = clean_title($title);
+    if ($type !== 'movie') {
+        $seriesBase = $safeCat ?: 'Unknown';
+        $episode = '';
+        if (preg_match('/([Ss]\d{1,2}[Ee]\d{1,2})/u', $title, $m)) {
+            $episode = strtoupper($m[1]);
+        }
+        if ($episode === '' && isset($item['season'], $item['episode_num'])) {
+            $episode = sprintf('S%02dE%02d', (int)$item['season'], (int)$item['episode_num']);
+        }
+        $fileTitle = $episode !== '' ? $seriesBase . '.' . $episode : $seriesBase;
+    }
+    $safeTitle = safe_filename($fileTitle) ?: safe_filename($title) ?: 'item_' . ($item['stream_id'] ?? '0');
+    $safeTitle = trim($safeTitle, ' -_.') ?: 'item_' . ($item['stream_id'] ?? '0');
+
+    // Pfad zusammenbauen
+    $sep = DIRECTORY_SEPARATOR;
+    if ($type === 'episode') {
+        $staffel = $season !== null ? ('Staffel ' . $season) : '';
+        $relPath = $sub
+            . ($safePrefix !== '' ? $sep . $safePrefix : '')
+            . $sep . $safeCat
+            . ($staffel !== '' ? $sep . $staffel : '')
+            . $sep . $safeTitle . '.' . $ext;
+    } else {
+        $relPath = $sub
+            . ($safePrefix !== '' ? $sep . $safePrefix : '')
+            . $sep . $safeCat
+            . $sep . $safeTitle . '.' . $ext;
+    }
+
+    return [
+        'rel_path'   => $relPath,
+        'filename'   => $safeTitle . '.' . $ext,
+        'safe_title' => $safeTitle,
+    ];
 }
 
 /**

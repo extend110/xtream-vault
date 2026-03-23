@@ -25,6 +25,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__.'/style.css') ?>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -56,6 +57,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php endif; ?>
     <div class="nav-section-title" style="margin-top:8px">Tools</div>
     <div class="nav-item" onclick="showView('favourites')"><span class="nav-icon">♥</span> Favoriten <span class="nav-badge" id="fav-badge" style="display:none">0</span></div>
+    <div class="nav-item" onclick="showView('new-releases')"><span class="nav-icon">🆕</span> Neu <span class="nav-badge" id="new-releases-badge" style="display:none">0</span></div>
     <div class="nav-item" onclick="showView('search')"><span class="nav-icon">🔍</span> Suche</div>
     <?php if ($can_queue_view): ?>
     <div class="nav-item queue-nav" onclick="showView('queue')">
@@ -68,6 +70,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php endif; ?>
     <?php if ($can_settings): ?>
     <div class="nav-item" onclick="showView('api-docs')"><span class="nav-icon">📖</span> API-Dokumentation</div>
+    <?php endif; ?>
+    <?php if ($can_settings): ?>
+    <div class="nav-item" onclick="showView('stats')"><span class="nav-icon">📊</span> Statistiken</div>
     <?php endif; ?>
     <?php if ($can_users): ?>
     <div class="nav-item" onclick="showView('users')"><span class="nav-icon">👥</span> Benutzer</div>
@@ -355,6 +360,49 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div class="grid" id="fav-grid"></div>
     </div>
 
+    <!-- Neue Releases -->
+    <div id="view-new-releases" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em">Neue Releases</div>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px" id="new-releases-meta">–</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="filter-btn active" id="nr-tab-all"    onclick="switchNrTab('all',this)">Alle</button>
+          <button class="filter-btn"        id="nr-tab-movies" onclick="switchNrTab('movie',this)">🎬 Filme</button>
+          <button class="filter-btn"        id="nr-tab-series" onclick="switchNrTab('series',this)">📺 Serien</button>
+        </div>
+      </div>
+      <div class="grid" id="new-releases-grid"></div>
+    </div>
+
+    <!-- Statistiken (admin only) -->
+    <?php if ($can_settings): ?>
+    <div id="view-stats" style="display:none">
+      <div style="margin-bottom:20px">
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Gesamtstatistik</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" id="stats-total-count">–</div></div>
+          <div class="dkpi"><div class="dkpi-l">Datenvolumen gesamt</div><div class="dkpi-n" id="stats-total-gb">–</div></div>
+        </div>
+      </div>
+
+      <!-- GB pro Monat Chart -->
+      <div class="settings-card" style="margin-bottom:16px">
+        <h3>📦 Datenvolumen pro Monat</h3>
+        <div style="position:relative;height:260px">
+          <canvas id="stats-chart-gb"></canvas>
+        </div>
+      </div>
+
+      <!-- Top User -->
+      <div class="settings-card">
+        <h3>👤 Top User</h3>
+        <div id="stats-top-users"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
+      </div>
+    </div>
+    <?php endif; ?>
+
     <!-- API Docs -->
     <?php if ($can_settings): ?>
     <div id="view-api-docs" style="display:none">
@@ -493,6 +541,18 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
         <div class="settings-card">
           <h3>Xtream Server</h3>
+          <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px;font-family:'DM Mono',monospace">
+            Server-ID: <span id="cfg-server-id-display" style="color:var(--accent2)">–</span>
+            <span style="margin-left:8px;font-size:.65rem;opacity:.6">Downloads und Queue sind pro Server getrennt</span>
+          </div>
+
+          <!-- Gespeicherte Server -->
+          <div id="saved-servers-box" style="margin-bottom:18px">
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Gespeicherte Server</div>
+            <div id="saved-servers-list" style="display:flex;flex-direction:column;gap:6px">
+              <div style="color:var(--muted);font-size:.8rem">Lade…</div>
+            </div>
+          </div>
           <div class="field">
             <label>Server IP / Domain</label>
             <input type="text" id="cfg-server-ip" placeholder="z.B. line.example.com">
@@ -566,8 +626,10 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <button class="btn-secondary" onclick="testRclone()">🔌 rclone testen</button>
+              <button class="btn-secondary" id="btn-rclone-cache" onclick="refreshRcloneCache(this)">🗂 Remote-Cache aktualisieren</button>
               <div class="settings-msg" id="rclone-test-msg" style="margin:0"></div>
             </div>
+            <div id="rclone-cache-status" style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:10px"></div>
           </div>
         </div>
 
@@ -591,6 +653,27 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="field">
             <label>TMDB API-Key (v3 auth)</label>
             <input type="password" id="cfg-tmdb-api-key" placeholder="Leer lassen um TMDB zu deaktivieren" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>📨 Telegram-Benachrichtigungen</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            Benachrichtigung bei abgeschlossenem Download via Telegram Bot.<br>
+            Bot erstellen: <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent2)">@BotFather</a> →
+            Chat-ID ermitteln: <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent2)">@userinfobot</a>
+          </div>
+          <div class="field">
+            <label>Bot Token</label>
+            <input type="password" id="cfg-telegram-bot-token" placeholder="Leer lassen um Telegram zu deaktivieren" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Chat ID</label>
+            <input type="text" id="cfg-telegram-chat-id" placeholder="z.B. 123456789 oder -100123456789 (Gruppe)">
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn-secondary" onclick="testTelegram()">📨 Testnachricht senden</button>
+            <div class="settings-msg" id="telegram-test-msg" style="margin:0"></div>
           </div>
         </div>
 
@@ -659,6 +742,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div class="queue-toolbar">
         <div class="queue-toolbar-title">Benutzerverwaltung</div>
         <button class="btn-sm" onclick="showView('activity-log')">📋 Aktivitätslog</button>
+        <button class="btn-sm" onclick="openInviteModal()">🔗 Einladung erstellen</button>
         <button class="btn-sm" onclick="openCreateUser()">+ Benutzer anlegen</button>
       </div>
       <div class="user-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px">
@@ -677,6 +761,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Lade…</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Aktive Einladungslinks -->
+      <div style="margin-top:24px">
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Einladungslinks</div>
+        <div id="invite-list"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
       </div>
       <?php else: ?>
       <div class="state-box"><div class="icon">🔒</div><p>Keine Berechtigung</p></div>
@@ -776,6 +866,97 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   </div>
 </div>
 
+<!-- Invite Modal -->
+<?php if ($can_users): ?>
+
+<!-- Passwort-Reset Modal -->
+<div class="modal-overlay" id="pw-reset-modal" onclick="if(event.target===this)closePwResetModal()" style="display:none;z-index:1040">
+  <div class="umodal-box" style="max-width:380px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="font-size:1rem;font-weight:600">🔑 Passwort zurücksetzen</h3>
+      <button class="modal-close" onclick="closePwResetModal()">✕</button>
+    </div>
+    <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px">
+      Passwort für <strong id="pw-reset-username" style="color:var(--text)"></strong> zurücksetzen.
+    </div>
+    <div class="field">
+      <label>Neues Passwort</label>
+      <input type="password" id="pw-reset-new" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+    </div>
+    <div class="field">
+      <label>Passwort bestätigen</label>
+      <input type="password" id="pw-reset-confirm" placeholder="Passwort wiederholen" autocomplete="new-password">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-primary" onclick="submitPwReset()" style="flex:1">💾 Speichern</button>
+      <button class="btn-secondary" onclick="closePwResetModal()">Abbrechen</button>
+    </div>
+    <div class="settings-msg" id="pw-reset-msg" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- User-Verlauf Modal -->
+<div class="modal-overlay" id="user-history-modal" onclick="if(event.target===this)closeUserHistoryModal()" style="display:none;z-index:1040">
+  <div class="umodal-box" style="max-width:560px;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-shrink:0">
+      <div>
+        <h3 style="font-size:1rem;font-weight:600">📋 Download-Verlauf</h3>
+        <div id="user-history-meta" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeUserHistoryModal()">✕</button>
+    </div>
+    <div id="user-history-list" style="overflow-y:auto;flex:1">
+      <div style="color:var(--muted);text-align:center;padding:24px">⏳ Lade…</div>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
+<?php if ($can_users): ?>
+<div class="modal-overlay" id="invite-modal" onclick="if(event.target===this)closeInviteModal()" style="display:none;z-index:1040">
+  <div class="umodal-box" style="max-width:420px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h3 style="font-size:1rem;font-weight:600">🔗 Einladungslink erstellen</h3>
+      <button class="modal-close" onclick="closeInviteModal()">✕</button>
+    </div>
+    <div class="field">
+      <label>Rolle</label>
+      <select id="invite-role" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none">
+        <option value="viewer">Viewer</option>
+        <option value="editor">Editor</option>
+        <option value="admin">Admin</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Gültigkeitsdauer</label>
+      <select id="invite-hours" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none">
+        <option value="6">6 Stunden</option>
+        <option value="24" selected>24 Stunden</option>
+        <option value="72">3 Tage</option>
+        <option value="168">7 Tage</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Notiz (optional)</label>
+      <input type="text" id="invite-note" placeholder="z.B. Für Familie Müller" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none">
+    </div>
+    <!-- Ergebnis -->
+    <div id="invite-result" style="display:none;margin-top:4px">
+      <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px">Link kopieren</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="invite-link-output" readonly
+          style="flex:1;background:var(--bg3);border:1px solid var(--accent);border-radius:6px;padding:8px 12px;color:var(--accent2);font-family:'DM Mono',monospace;font-size:.72rem;outline:none">
+        <button class="btn-secondary" onclick="copyInviteLink()">📋</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn-primary" id="btn-create-invite" onclick="createInvite()" style="flex:1">Link generieren</button>
+      <button class="btn-secondary" onclick="closeInviteModal()">Schließen</button>
+    </div>
+    <div class="settings-msg" id="invite-msg" style="margin-top:8px"></div>
+  </div>
+</div>
+<?php endif; ?>
+
 <!-- TMDB Info Modal -->
 <div class="modal-overlay" id="tmdb-modal" onclick="if(event.target===this)closeTmdbModal()" style="display:none;z-index:1050">
   <div class="modal" style="max-width:520px;overflow:hidden;padding:0">
@@ -793,6 +974,10 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div id="tmdb-rating" style="display:flex;align-items:center;gap:8px;margin-bottom:14px"></div>
       <div id="tmdb-overview" style="font-size:.875rem;line-height:1.6;color:var(--muted)"></div>
       <div id="tmdb-genres" style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px"></div>
+      <div id="tmdb-stream-info" style="margin-top:14px;display:none">
+        <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Stream-Info</div>
+        <div id="tmdb-stream-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
       <div id="tmdb-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap"></div>
       <div id="tmdb-loading" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">⏳ Lade Informationen…</div>
       <div id="tmdb-error" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:.82rem"></div>
@@ -848,6 +1033,7 @@ const canSeeAddedBy     = <?= $can_settings         ? 'true' : 'false' ?>;
 const currentUsername   = <?= json_encode($user['username']) ?>;
 let currentView   = 'dashboard';
 let _queuedIds    = new Set(); // stream_ids aktuell in der Queue (non-done)
+let _downloadedIds = new Set(); // stream_ids bereits heruntergeladen (done)
 let currentFilter = 'all';
 let allMovies     = [];
 let searchDebounce;
@@ -881,6 +1067,12 @@ let queueRefreshInterval;
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
   initTheme();
   startBadgePolling();
+  // Neue-Releases-Badge beim Start laden
+  api('get_new_releases').then(d => {
+    const total = (d.movies?.length ?? 0) + (d.series?.length ?? 0);
+    const badge = document.getElementById('new-releases-badge');
+    if (badge && total > 0) { badge.textContent = total; badge.style.display = ''; }
+  });
 })();
 
 // ── Theme Toggle ──────────────────────────────────────────────
@@ -963,6 +1155,12 @@ async function loadStats() {
   document.getElementById('stat-episodes').textContent = d.episodes ?? '–';
   document.getElementById('stat-queued').textContent   = d.queued   ?? 0;
   updateQueuePill(d.queued ?? 0);
+  // _downloadedIds aus stats befüllen (vollständig — inkl. aus Queue entfernter Items)
+  if (Array.isArray(d.downloaded_ids)) {
+    _downloadedIds = new Set(d.downloaded_ids);
+  }
+  // Favoriten neu rendern falls aktiv, damit Status sofort korrekt ist
+  if (currentView === 'favourites') renderFavourites();
 }
 
 function updateQueuePill(n) {
@@ -978,8 +1176,16 @@ function updateQueuePill(n) {
 
 async function updateQueueBadge() {
   <?php if ($can_queue_view): ?>
-  const d = await api('queue_stats');
-  updateQueuePill(d.pending ?? 0);
+  const items = await api('get_queue');
+  if (Array.isArray(items)) {
+    // _queuedIds: alle nicht-done Items
+    _queuedIds    = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
+    // _downloadedIds aus Queue-done Items ergänzen (nicht überschreiben — stats ist maßgeblich)
+    items.filter(i => i.status === 'done').forEach(i => _downloadedIds.add(String(i.stream_id)));
+    updateQueuePill(items.filter(i => i.status === 'pending').length);
+    // Favoriten neu rendern falls aktiv
+    if (currentView === 'favourites') renderFavourites();
+  }
   <?php endif; ?>
 }
 
@@ -1298,7 +1504,16 @@ async function queueItem(item) {
     body: JSON.stringify(item)
   });
   const d = await r.json();
-  if (d.already) { showToast('Bereits in der Queue', 'info'); return null; }
+  if (d.already) {
+    if (d.reason === 'on_remote') {
+      showToast(`☁️ Bereits auf Remote vorhanden: ${d.filename}`, 'info');
+    } else if (d.reason === 'downloaded') {
+      showToast('✓ Bereits heruntergeladen', 'info');
+    } else {
+      showToast('Bereits in der Queue', 'info');
+    }
+    return null;
+  }
   if (d.rate_limit) {
     const mins = Math.ceil((d.resets_in ?? 3600) / 60);
     showToast(`⛔ Stundenlimit erreicht (${d.limit}/h). Noch ${mins} Min. warten.`, 'error');
@@ -1509,14 +1724,20 @@ function renderFavourites() {
 
     // Queue-Button: Filme direkt queuen, Serien → Modal öffnen
     let actionBtn = '';
-    const isQueued     = _queuedIds.has(String(f.stream_id));
-    const isDownloaded = false; // Favoriten haben keinen Downloaded-Status — wird nicht gecacht
-    if (f.type === 'movie' && canQueueAdd) {
-      if (isQueued) {
+    const sid          = String(f.stream_id);
+    const isDownloaded = _downloadedIds.has(sid);
+    const isQueued     = !isDownloaded && _queuedIds.has(sid);
+
+    if (f.type === 'movie') {
+      if (isDownloaded) {
+        actionBtn = canQueueRemove
+          ? `<button class="btn-q done" onclick="resetDownload('${sid}','movie',this.closest('.card'))" title="Zurücksetzen">↺ Reset</button>`
+          : `<button class="btn-q done" disabled>✓ Done</button>`;
+      } else if (isQueued) {
         actionBtn = canQueueRemove || canQueueRemoveOwn
-          ? `<button class="btn-q remove" onclick="removeFromQueue('${f.stream_id}',this.closest('.card'))">✕ Remove</button>`
+          ? `<button class="btn-q remove" onclick="removeFromQueue('${sid}',this.closest('.card'))">✕ Remove</button>`
           : `<button class="btn-q done" disabled>⏳ Queued</button>`;
-      } else {
+      } else if (canQueueAdd) {
         const movieObj = JSON.stringify({
           stream_id: f.stream_id, type: 'movie', title: f.title,
           container_extension: ext, cover: f.cover, category: f.category,
@@ -1541,6 +1762,71 @@ function renderFavourites() {
       </div>
       ${actionBtn ? `<div class="card-actions">${actionBtn}</div>` : ''}
     </div>`;
+  }).join('');
+  lazyLoadImages();
+}
+
+// ── Neue Releases ─────────────────────────────────────────────
+let _nrData  = null;
+let _nrTab   = 'all';
+
+function switchNrTab(tab, el) {
+  _nrTab = tab;
+  document.querySelectorAll('#nr-tab-all,#nr-tab-movies,#nr-tab-series').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderNewReleases();
+}
+
+async function loadNewReleases() {
+  const grid = document.getElementById('new-releases-grid');
+  grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>Lade…</p></div>`;
+  _nrData = await api('get_new_releases');
+  const meta = document.getElementById('new-releases-meta');
+  if (_nrData.generated_at) {
+    const total = (_nrData.movies?.length ?? 0) + (_nrData.series?.length ?? 0);
+    meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
+    // Badge aktualisieren
+    const badge = document.getElementById('new-releases-badge');
+    if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
+  } else {
+    meta.textContent = 'Noch kein Cache-Run durchgeführt';
+  }
+  renderNewReleases();
+}
+
+function renderNewReleases() {
+  const grid = document.getElementById('new-releases-grid');
+  if (!grid || !_nrData) return;
+  let movies = _nrData.movies ?? [];
+  let series = _nrData.series ?? [];
+  let items  = [];
+  if (_nrTab === 'all')    items = [...movies, ...series];
+  if (_nrTab === 'movie')  items = movies;
+  if (_nrTab === 'series') items = series;
+  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Titel seit dem letzten Cache-Run'); return; }
+
+  grid.innerHTML = items.map(item => {
+    if (item.type === 'series') {
+      return seriesCard({
+        series_id:   item.series_id,
+        clean_title: item.clean_title ?? item.title ?? '',
+        cover:       item.cover ?? '',
+        category:    item.category ?? '',
+        genre:       item.genre ?? '',
+      });
+    }
+    // Movie
+    const sid = String(item.stream_id ?? item.id);
+    return movieCard({
+      stream_id:           sid,
+      clean_title:         item.clean_title ?? item.title ?? '',
+      stream_icon:         item.cover ?? '',
+      container_extension: item.ext ?? 'mp4',
+      category:            item.category ?? '',
+      downloaded:          _downloadedIds.has(sid),
+      queued:              _queuedIds.has(sid),
+      year:                item.year ?? '',
+    });
   }).join('');
   lazyLoadImages();
 }
@@ -1751,7 +2037,7 @@ function clearSearchCache() {
 function showView(v) {
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
-  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','api-docs'].forEach(name => {
+  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats'].forEach(name => {
     const el = document.getElementById('view-' + name);
     if (el) el.style.display = name === v ? '' : 'none';
   });
@@ -1767,12 +2053,14 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadLibrary();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
   if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; loadLog(); stopProgressPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups();<?php endif; ?> }
-  if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers();<?php endif; ?> }
+  if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; }
-  if (v === 'favourites')   { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); }
+  if (v === 'favourites')    { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); loadStats(); updateQueueBadge(); }
+  if (v === 'new-releases')  { document.getElementById('page-title').textContent = 'Neue Releases'; loadNewReleases(); }
   if (v === 'api-docs')     { document.getElementById('page-title').textContent = 'API-Dokumentation'; }
+  if (v === 'stats')        { document.getElementById('page-title').textContent = 'Statistiken'; loadStatsView(); }
   clearInterval(queueRefreshInterval);
   if (v === 'queue') {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
@@ -1884,6 +2172,54 @@ async function toggleMaintenance() {
   showToast(current ? 'Wartungsmodus deaktiviert' : 'Wartungsmodus aktiviert', current ? 'success' : 'info');
 }
 
+// ── Server-Verwaltung ─────────────────────────────────────────
+async function loadServers() {
+  const list = document.getElementById('saved-servers-list');
+  if (!list) return;
+  const servers = await api('list_servers');
+  if (!servers?.length) {
+    list.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine gespeicherten Server</div>`;
+    return;
+  }
+  list.innerHTML = servers.map(s => `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid ${s.active ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.85rem;font-weight:500;${s.active ? 'color:var(--accent)' : ''}">${esc(s.name)}${s.active ? ' <span style="font-size:.6rem;font-family:\'DM Mono\',monospace;opacity:.7">(aktiv)</span>' : ''}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">${esc(s.server_ip)}:${esc(s.port)} · ${esc(s.username)} · ID: ${esc(s.id)}</div>
+      </div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        ${!s.active ? `<button class="btn-icon" onclick="switchServer('${esc(s.id)}','${esc(s.name)}')">↗ Wechseln</button>` : ''}
+        <button class="btn-icon" onclick="renameServer('${esc(s.id)}','${esc(s.name)}')">✏️</button>
+        ${!s.active ? `<button class="btn-icon danger" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function switchServer(serverId, name) {
+  if (!confirm(`Zu Server "${name}" wechseln?`)) return;
+  const d = await apiPost('switch_server', {server_id: serverId});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast(`✅ Gewechselt zu "${name}" — Seite wird neu geladen`, 'success');
+  setTimeout(() => location.reload(), 1200);
+}
+
+async function renameServer(serverId, currentName) {
+  const name = prompt('Neuer Name für diesen Server:', currentName);
+  if (!name || name.trim() === '') return;
+  const d = await apiPost('save_server', {server_id: serverId, name: name.trim()});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('✅ Umbenannt', 'success');
+  loadServers();
+}
+
+async function deleteServer(serverId, name) {
+  if (!confirm(`Server "${name}" wirklich löschen?\n\nDownloads und Queue dieses Servers bleiben erhalten.`)) return;
+  const d = await apiPost('delete_server', {server_id: serverId});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast('🗑 Server entfernt', 'info');
+  loadServers();
+}
+
 async function loadConfig() {
   const c = await api('get_config');
   document.getElementById('cfg-server-ip').value    = c.server_ip     ?? '';
@@ -1904,12 +2240,48 @@ async function loadConfig() {
   document.getElementById('cfg-editor-series').checked = c.editor_series_enabled ?? true;
   document.getElementById('cfg-tmdb-api-key').value    = c.tmdb_api_key ?? '';
   document.getElementById('cfg-tmdb-api-key').placeholder = c.tmdb_api_key === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um TMDB zu deaktivieren';
+  const sidEl = document.getElementById('cfg-server-id-display');
+  if (sidEl && c.server_id) sidEl.textContent = c.server_id;
+  const tgToken = document.getElementById('cfg-telegram-bot-token');
+  const tgChat  = document.getElementById('cfg-telegram-chat-id');
+  if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um Telegram zu deaktivieren'; }
+  if (tgChat)  tgChat.value = c.telegram_chat_id ?? '';
   setSettingsMsg('', '');
 }
 
 function toggleRcloneFields(enabled) {
   const fields = document.getElementById('rclone-fields');
   if (fields) fields.style.display = enabled ? '' : 'none';
+  if (enabled) loadRcloneCacheStatus();
+}
+
+async function loadRcloneCacheStatus() {
+  const el = document.getElementById('rclone-cache-status');
+  if (!el) return;
+  const d = await api('rclone_cache_status');
+  if (!d.exists) {
+    el.textContent = '🗂 Kein Remote-Cache vorhanden — wird beim nächsten Download-Run automatisch aufgebaut';
+  } else {
+    el.textContent = `🗂 Remote-Cache: ${d.count.toLocaleString()} Dateien bekannt · Stand: ${d.cached_at}`;
+  }
+}
+
+async function refreshRcloneCache(btn) {
+  const statusEl = document.getElementById('rclone-cache-status');
+  const msgEl    = document.getElementById('rclone-test-msg');
+  btn.disabled = true;
+  btn.textContent = '⏳ Lade…';
+  if (statusEl) statusEl.textContent = '⏳ Lade Dateiliste vom Remote… (kann je nach Größe etwas dauern)';
+  const d = await api('rclone_cache_refresh');
+  btn.disabled = false;
+  btn.textContent = '🗂 Remote-Cache aktualisieren';
+  if (d.error) {
+    if (msgEl) { msgEl.textContent = '❌ ' + d.error; msgEl.className = 'settings-msg err'; }
+    if (statusEl) statusEl.textContent = '❌ Fehler beim Laden';
+  } else {
+    if (msgEl) { msgEl.textContent = `✅ ${d.count.toLocaleString()} Dateien gecacht`; msgEl.className = 'settings-msg ok'; }
+    if (statusEl) statusEl.textContent = `🗂 Remote-Cache: ${d.count.toLocaleString()} Dateien bekannt · Stand: ${d.cached_at}`;
+  }
 }
 
 function collectConfig() {
@@ -1926,7 +2298,24 @@ function collectConfig() {
     editor_movies_enabled: document.getElementById('cfg-editor-movies').checked,
     editor_series_enabled: document.getElementById('cfg-editor-series').checked,
     tmdb_api_key:          (function() { const v = document.getElementById('cfg-tmdb-api-key').value.trim(); return (v === '••••••••' || v === '') ? '' : v; })(),
+    telegram_bot_token:    (function() { const el = document.getElementById('cfg-telegram-bot-token'); const v = el?.value.trim() ?? ''; return (v === '••••••••' || v === '') ? '' : v; })(),
+    telegram_chat_id:      document.getElementById('cfg-telegram-chat-id')?.value.trim() ?? '',
   };
+}
+
+async function testTelegram() {
+  const msgEl = document.getElementById('telegram-test-msg');
+  msgEl.textContent = '⏳ Sende…'; msgEl.className = 'settings-msg info';
+  const cfg = collectConfig();
+  const d = await apiPost('telegram_test', {
+    bot_token: cfg.telegram_bot_token,
+    chat_id:   cfg.telegram_chat_id,
+  });
+  if (d.error) {
+    msgEl.textContent = '❌ ' + d.error; msgEl.className = 'settings-msg err';
+  } else {
+    msgEl.textContent = '✅ Testnachricht gesendet'; msgEl.className = 'settings-msg ok';
+  }
 }
 
 async function testRclone() {
@@ -1976,9 +2365,15 @@ async function saveConfig() {
   if (d.error) {
     setSettingsMsg('❌ ' + d.error, 'err');
   } else {
-    setSettingsMsg('✅ Einstellungen gespeichert', 'ok');
+    if (d.server_changed) {
+      setSettingsMsg('✅ Gespeichert — Server gewechselt, neue Datenbasis aktiv', 'ok');
+      showToast('🔄 Server gewechselt — Downloads, Queue und Cache sind jetzt server-spezifisch', 'info');
+    } else {
+      setSettingsMsg('✅ Einstellungen gespeichert', 'ok');
+    }
     loadStats();
     refreshDashboard();
+    loadServers();
     const ub = document.getElementById('unconfigured-banner');
     if (ub) ub.style.display = 'none';
   }
@@ -2192,6 +2587,109 @@ async function loadServerInfo() {
   set('si-proto',   s.server_protocol || '–');
 }
 
+// ── Statistiken ───────────────────────────────────────────────
+<?php if ($can_settings): ?>
+let _statsChart = null;
+
+async function loadStatsView() {
+  const d = await api('stats_data');
+  if (d.error) return;
+
+  // Gesamt-KPIs
+  document.getElementById('stats-total-count').textContent = (d.total_count ?? 0).toLocaleString();
+  document.getElementById('stats-total-gb').textContent    = fmtBytes(d.total_bytes ?? 0);
+
+  // GB/Monat Chart
+  const months  = Object.keys(d.by_month ?? {});
+  const gbVals  = months.map(m => +((d.by_month[m].bytes / 1073741824).toFixed(2)));
+  const cntVals = months.map(m => d.by_month[m].count);
+  const labels  = months.map(m => {
+    const [y, mo] = m.split('-');
+    return new Date(y, mo - 1).toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
+  });
+
+  const ctx = document.getElementById('stats-chart-gb')?.getContext('2d');
+  if (ctx) {
+    if (_statsChart) _statsChart.destroy();
+    _statsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'GB',
+          data: gbVals,
+          backgroundColor: 'rgba(100,210,255,.25)',
+          borderColor:     'rgba(100,210,255,.8)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y',
+        }, {
+          label: 'Downloads',
+          data: cntVals,
+          type: 'line',
+          borderColor:     'rgba(255,159,67,.8)',
+          backgroundColor: 'rgba(255,159,67,.1)',
+          borderWidth: 2,
+          pointRadius: 3,
+          tension: 0.3,
+          yAxisID: 'y2',
+          fill: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: 'var(--text)', font: { family: 'DM Mono', size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ctx.dataset.label === 'GB'
+                ? `${ctx.parsed.y.toFixed(2)} GB`
+                : `${ctx.parsed.y} Downloads`
+            }
+          }
+        },
+        scales: {
+          x:  { ticks: { color: 'var(--muted)', font: { family: 'DM Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y:  { position: 'left',  ticks: { color: 'rgba(100,210,255,.8)', font: { family: 'DM Mono', size: 10 }, callback: v => v + ' GB' }, grid: { color: 'rgba(255,255,255,.05)' } },
+          y2: { position: 'right', ticks: { color: 'rgba(255,159,67,.8)', font: { family: 'DM Mono', size: 10 } }, grid: { drawOnChartArea: false } },
+        }
+      }
+    });
+  }
+
+  // Top User Tabelle
+  const topEl = document.getElementById('stats-top-users');
+  if (topEl && d.top_users) {
+    const entries = Object.entries(d.top_users);
+    if (!entries.length) {
+      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten vorhanden</div>`;
+    } else {
+      const maxCount = entries[0]?.[1]?.count ?? 1;
+      topEl.innerHTML = entries.map(([user, data], i) => {
+        const pct = Math.round((data.count / maxCount) * 100);
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:.95rem;width:28px;text-align:center;flex-shrink:0">${medal}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:500;font-size:.85rem">${esc(user)}</div>
+            <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:5px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-family:'DM Mono',monospace;font-size:.8rem">${data.count.toLocaleString()} Downloads</div>
+            ${data.bytes ? `<div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">${fmtBytes(data.bytes)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+<?php endif; ?>
+
 // ── TMDB Info Modal ───────────────────────────────────────────
 function handleCardClick(event, card) {
   // Klicks auf Buttons/Links innerhalb der Karte ignorieren
@@ -2218,15 +2716,28 @@ async function openTmdbModal(title, type, year, queueData) {
   document.getElementById('tmdb-overview').textContent = '';
   document.getElementById('tmdb-genres').innerHTML = '';
   document.getElementById('tmdb-actions').innerHTML = '';
+  document.getElementById('tmdb-stream-info').style.display = 'none';
+  document.getElementById('tmdb-stream-badges').innerHTML = '';
 
-  // Queue-Button vorbelegen
+  // Queue-Button vorbelegen — Status aus _queuedIds / _downloadedIds prüfen
   if (queueData) {
-    const label = type === 'series' ? '📋 Episodes' : '+ Queue';
-    const onclick = type === 'series'
-      ? `closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}')`
-      : `closeTmdbModal();addMovieToQueue(${JSON.stringify(queueData).replace(/"/g,'&quot;')},null)`;
-    document.getElementById('tmdb-actions').innerHTML =
-      `<button class="btn-primary" onclick="${onclick}">${label}</button>`;
+    const sid = String(queueData.stream_id ?? queueData.series_id ?? '');
+    let actionHtml = '';
+    if (type === 'series') {
+      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}')">📋 Episodes</button>`;
+    } else if (_downloadedIds.has(sid) && canQueueRemove) {
+      actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();resetDownload('${sid}','movie',null)">↺ Reset</button>`;
+    } else if (_downloadedIds.has(sid)) {
+      actionHtml = `<button class="btn-secondary" disabled>✓ Heruntergeladen</button>`;
+    } else if (_queuedIds.has(sid) && (canQueueRemove || canQueueRemoveOwn)) {
+      actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();removeFromQueue('${sid}',null)">✕ Aus Queue entfernen</button>`;
+    } else if (_queuedIds.has(sid)) {
+      actionHtml = `<button class="btn-secondary" disabled>⏳ In Queue</button>`;
+    } else if (canQueueAdd) {
+      const qd = JSON.stringify(queueData).replace(/"/g,'&quot;');
+      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();addMovieToQueue(${qd},null)">+ Queue</button>`;
+    }
+    document.getElementById('tmdb-actions').innerHTML = actionHtml;
   }
 
   const cacheKey = `${type}:${title}:${year||''}`;
@@ -2291,6 +2802,60 @@ async function openTmdbModal(title, type, year, queueData) {
     document.getElementById('tmdb-actions').innerHTML +=
       `<a href="${esc(d.tmdb_url)}" target="_blank" class="btn-secondary" style="text-decoration:none;font-size:.75rem">🔗 TMDB</a>`;
   }
+
+  // Stream-Info asynchron laden (nur für Filme, nicht Serien)
+  if (queueData && type === 'movie') {
+    const sid = String(queueData.stream_id ?? '');
+    const ext = queueData.container_extension ?? queueData.ext ?? 'mp4';
+    if (sid) loadStreamInfo(sid, 'movie', ext);
+  }
+}
+
+async function loadStreamInfo(sid, type, ext) {
+  const infoEl   = document.getElementById('tmdb-stream-info');
+  const badgesEl = document.getElementById('tmdb-stream-badges');
+  if (!infoEl || !badgesEl) return;
+
+  // Lade-Indikator
+  infoEl.style.display = '';
+  badgesEl.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">⏳ Analysiere Stream…</span>`;
+
+  const d = await api('stream_info', {stream_id: sid, type, ext});
+
+  if (!d || d.error) {
+    infoEl.style.display = 'none';
+    return;
+  }
+
+  const badges = [];
+  const badge = (text, color) =>
+    `<span style="background:var(--bg3);border:1px solid ${color ?? 'var(--border)'};border-radius:4px;padding:3px 9px;font-size:.68rem;font-family:'DM Mono',monospace;color:${color ?? 'var(--text)'}">${text}</span>`;
+
+  if (d.video) {
+    const v = d.video;
+    if (v.hdr)        badges.push(badge(v.hdr, 'var(--orange)'));
+    if (v.resolution) badges.push(badge(v.resolution, 'var(--accent)'));
+    if (v.codec)      badges.push(badge(v.codec));
+    if (v.fps)        badges.push(badge(v.fps));
+    if (v.bitrate_kbps) {
+      const mbps = (v.bitrate_kbps / 1000).toFixed(1);
+      badges.push(badge(mbps + ' Mbps'));
+    }
+  }
+  if (d.audio) {
+    const a = d.audio;
+    const audioStr = [a.codec, a.layout].filter(Boolean).join(' ');
+    if (audioStr) badges.push(badge(audioStr));
+    if (a.sample_rate) badges.push(badge(a.sample_rate));
+  }
+  if (d.duration) badges.push(badge('⏱ ' + d.duration));
+
+  if (!badges.length) {
+    infoEl.style.display = 'none';
+    return;
+  }
+
+  badgesEl.innerHTML = badges.join('');
 }
 
 function closeTmdbModal() {
@@ -2771,7 +3336,7 @@ async function loadUsers() {
     return `
     <tr style="${isSuspended ? 'opacity:.6' : ''}">
       <td>
-        <strong>${esc(u.username)}</strong>
+        <strong style="cursor:pointer" onclick="openUserHistoryModal('${esc(u.username)}')" title="Download-Verlauf anzeigen">${esc(u.username)}</strong>
         <div style="font-size:.65rem;color:var(--muted);font-family:'DM Mono',monospace;cursor:pointer" onclick="viewUserActivity('${esc(u.id)}')">📋 Log</div>
       </td>
       <td><span class="role-badge ${u.role}">${u.role}</span></td>
@@ -2786,6 +3351,7 @@ async function loadUsers() {
       <td>
         <div class="user-actions">
           <button class="btn-icon" onclick="openEditUser('${esc(u.id)}','${esc(u.username)}','${u.role}')">✏️ Bearbeiten</button>
+          <button class="btn-icon" onclick="openPwResetModal('${esc(u.id)}','${esc(u.username)}')">🔑 Passwort</button>
           ${suspendBtn}
           <button class="btn-icon danger" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')">✕ Löschen</button>
         </div>
@@ -3010,6 +3576,158 @@ async function deleteUser(id, username) {
   showToast(`"${username}" gelöscht`, 'success');
   loadUsers();
 }
+
+// ── Passwort-Reset durch Admin ────────────────────────────────
+<?php if ($can_users): ?>
+let _pwResetUserId = null;
+
+function openPwResetModal(id, username) {
+  _pwResetUserId = id;
+  document.getElementById('pw-reset-username').textContent = username;
+  document.getElementById('pw-reset-new').value     = '';
+  document.getElementById('pw-reset-confirm').value = '';
+  document.getElementById('pw-reset-msg').textContent = '';
+  document.getElementById('pw-reset-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('pw-reset-new').focus(), 50);
+}
+
+function closePwResetModal() {
+  document.getElementById('pw-reset-modal').style.display = 'none';
+  _pwResetUserId = null;
+}
+
+async function submitPwReset() {
+  const pw  = document.getElementById('pw-reset-new').value;
+  const pw2 = document.getElementById('pw-reset-confirm').value;
+  const msg = document.getElementById('pw-reset-msg');
+  if (pw.length < 6) { msg.textContent = '❌ Mindestens 6 Zeichen'; msg.className = 'settings-msg err'; return; }
+  if (pw !== pw2)    { msg.textContent = '❌ Passwörter stimmen nicht überein'; msg.className = 'settings-msg err'; return; }
+  const d = await apiPost('update_user', {id: _pwResetUserId, password: pw});
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  showToast('✅ Passwort zurückgesetzt', 'success');
+  closePwResetModal();
+}
+
+// ── Per-User Download-Verlauf ─────────────────────────────────
+async function openUserHistoryModal(username) {
+  document.getElementById('user-history-modal').style.display = 'flex';
+  document.getElementById('user-history-meta').textContent = username;
+  document.getElementById('user-history-list').innerHTML =
+    `<div style="color:var(--muted);text-align:center;padding:24px">⏳ Lade…</div>`;
+
+  const d = await api('user_download_history', {username});
+  if (d.error) {
+    document.getElementById('user-history-list').innerHTML =
+      `<div style="color:var(--red);text-align:center;padding:16px">${esc(d.error)}</div>`;
+    return;
+  }
+
+  document.getElementById('user-history-meta').textContent =
+    `${username} · ${d.count} Downloads · ${fmtBytes(d.total_bytes ?? 0)}`;
+
+  if (!d.items?.length) {
+    document.getElementById('user-history-list').innerHTML =
+      `<div style="color:var(--muted);text-align:center;padding:24px">Noch keine Downloads</div>`;
+    return;
+  }
+
+  document.getElementById('user-history-list').innerHTML = d.items.map(h => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      ${h.cover ? `<img src="${esc(h.cover)}" alt="" style="width:36px;height:52px;object-fit:cover;border-radius:4px;flex-shrink:0">` :
+        `<div style="width:36px;height:52px;background:var(--bg3);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:1rem">${h.type==='series'?'📺':'🎬'}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(h.title)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--muted);margin-top:2px">
+          ${esc(h.category ?? '')} · ${h.done_at ?? ''}${h.bytes ? ' · ' + fmtBytes(h.bytes) : ''}
+        </div>
+      </div>
+      <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);flex-shrink:0">${h.type === 'episode' ? '📺' : '🎬'}</span>
+    </div>`).join('');
+}
+
+function closeUserHistoryModal() {
+  document.getElementById('user-history-modal').style.display = 'none';
+}
+<?php endif; ?>
+<?php if ($can_users): ?>
+function openInviteModal() {
+  document.getElementById('invite-modal').style.display = 'flex';
+  document.getElementById('invite-result').style.display = 'none';
+  document.getElementById('invite-msg').textContent = '';
+  document.getElementById('invite-note').value = '';
+}
+function closeInviteModal() {
+  document.getElementById('invite-modal').style.display = 'none';
+}
+
+async function createInvite() {
+  const btn  = document.getElementById('btn-create-invite');
+  const msg  = document.getElementById('invite-msg');
+  btn.disabled = true;
+  const d = await apiPost('create_invite', {
+    role:         document.getElementById('invite-role').value,
+    expires_hours: parseInt(document.getElementById('invite-hours').value),
+    note:         document.getElementById('invite-note').value.trim(),
+  });
+  btn.disabled = false;
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  const link = `${location.origin}${location.pathname.replace('index.php','').replace(/\/$/, '')}/invite.php?token=${d.token}`;
+  document.getElementById('invite-link-output').value = link;
+  document.getElementById('invite-result').style.display = '';
+  msg.textContent = '✅ Link erstellt — jetzt kopieren!';
+  msg.className = 'settings-msg ok';
+  loadInvites();
+}
+
+function copyInviteLink() {
+  const input = document.getElementById('invite-link-output');
+  input.select();
+  navigator.clipboard?.writeText(input.value);
+  showToast('📋 Link kopiert', 'success');
+}
+
+async function loadInvites() {
+  const el = document.getElementById('invite-list');
+  if (!el) return;
+  const invites = await api('list_invites');
+  if (!invites?.length) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Keine aktiven Einladungslinks</div>`;
+    return;
+  }
+  const roleColors = {viewer:'var(--muted)', editor:'var(--accent2)', admin:'var(--red)'};
+  el.innerHTML = invites.map(inv => `
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg2);border:1px solid ${inv.expired||inv.used ? 'var(--border)' : 'rgba(100,210,255,.2)'};border-radius:6px;padding:10px 14px;margin-bottom:6px;opacity:${inv.expired||inv.used ? '.5' : '1'}">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-family:'DM Mono',monospace;font-size:.68rem;color:${roleColors[inv.role]??'var(--muted)'}">${esc(inv.role.toUpperCase())}</span>
+          ${inv.used ? `<span style="font-size:.68rem;color:var(--green)">✓ Verwendet von ${esc(inv.used_by)}</span>` : inv.expired ? `<span style="font-size:.68rem;color:var(--red)">Abgelaufen</span>` : `<span style="font-size:.68rem;color:var(--accent)">Aktiv</span>`}
+          ${inv.note ? `<span style="font-size:.72rem;color:var(--muted)">${esc(inv.note)}</span>` : ''}
+        </div>
+        <div style="font-family:'DM Mono',monospace;font-size:.63rem;color:var(--muted);margin-top:3px">
+          Von ${esc(inv.created_by)} · ${inv.used ? 'Verwendet ' + esc(inv.used_at ?? '') : 'Läuft ab ' + esc(inv.expires_at)}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${!inv.used && !inv.expired ? `<button class="btn-icon" onclick="copyTokenLink('${esc(inv.token)}')">📋</button>` : ''}
+        <button class="btn-icon danger" onclick="deleteInvite('${esc(inv.token)}',this)">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+function copyTokenLink(token) {
+  const link = `${location.origin}${location.pathname.replace('index.php','').replace(/\/$/, '')}/invite.php?token=${token}`;
+  navigator.clipboard?.writeText(link);
+  showToast('📋 Link kopiert', 'success');
+}
+
+async function deleteInvite(token, btn) {
+  btn.disabled = true;
+  const d = await apiPost('delete_invite', {token});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); btn.disabled = false; return; }
+  showToast('Einladung gelöscht', 'info');
+  loadInvites();
+}
+<?php endif; ?>
 
 // ── Profile / Change own password ─────────────────────────────
 async function changeOwnPassword() {

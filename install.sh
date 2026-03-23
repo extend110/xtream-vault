@@ -62,14 +62,14 @@ apt-get install -y -qq \
     php-common \
     libapache2-mod-php \
     curl \
-    cron
+    cron \
+    ffmpeg
 log "Pakete installiert"
 
 # ── PHP-Version prüfen ────────────────────────────────────────
 section "PHP prüfen"
 PHP_VERSION=$($PHP_BIN -r "echo PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;")
 PHP_MAJOR=$($PHP_BIN -r "echo PHP_MAJOR_VERSION;")
-PHP_MINOR=$($PHP_BIN -r "echo PHP_MINOR_VERSION;")
 
 if [ "$PHP_MAJOR" -lt 8 ]; then
     error "PHP 8.0+ erforderlich. Installierte Version: $PHP_VERSION"
@@ -89,6 +89,15 @@ if [ -f "$PHP_INI" ]; then
     fi
 else
     warn "php.ini nicht gefunden — bitte manuell prüfen: allow_url_fopen = On"
+fi
+
+# ── ffmpeg installieren ───────────────────────────────────────
+section "ffmpeg installieren"
+if command -v ffprobe &>/dev/null; then
+    log "ffprobe bereits installiert: $(ffprobe -version 2>&1 | head -1)"
+else
+    apt-get install -y -qq ffmpeg
+    log "ffmpeg/ffprobe installiert"
 fi
 
 # ── Projektdateien kopieren ───────────────────────────────────
@@ -147,12 +156,10 @@ log "Apache konfiguriert und neu geladen"
 # ── Cronjobs einrichten ───────────────────────────────────────
 section "Cronjobs einrichten"
 CRON_TMP=$(mktemp)
-# Bestehende Crontab laden (ohne Fehler bei leerer Crontab)
-crontab -u www-data -l 2>/dev/null | grep -v "xtream\|cache_builder\|backup.php" > "$CRON_TMP" || true
+crontab -u www-data -l 2>/dev/null | grep -v "xtream\|cache_builder\|backup\.php" > "$CRON_TMP" || true
 
-# Neue Einträge anhängen
 cat >> "$CRON_TMP" <<EOL
-*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>&11
+*/30 * * * * $PHP_BIN $PROJECT_PATH/cron.php >> /dev/null 2>&1
 0 4 * * * $PHP_BIN $PROJECT_PATH/cache_builder.php >> /dev/null 2>&1
 0 3 * * * $PHP_BIN $PROJECT_PATH/backup.php >> /dev/null 2>&1
 EOL
@@ -185,7 +192,7 @@ echo -e "${GREEN}${BOLD}✓ Installation abgeschlossen!${RESET}"
 echo ""
 echo -e "${CYAN}${BOLD}🌐 Zugriff:${RESET}"
 if [ "$DOMAIN" = "_" ]; then
-    echo -e "   → ${BOLD}http://$SERVER_IP${RESET}"
+    echo -e "   → ${BOLD}http://$SERVER_IP/xtream${RESET}"
 else
     echo -e "   → ${BOLD}http://$DOMAIN${RESET}"
 fi
@@ -194,7 +201,8 @@ echo -e "${CYAN}${BOLD}📋 Nächste Schritte:${RESET}"
 echo "   1. Browser öffnen und Setup-Wizard ausfüllen"
 echo "   2. Admin-Account anlegen"
 echo "   3. Einstellungen → Xtream-Server konfigurieren"
-echo "   4. Einstellungen → Cache aufbauen"
+echo "   4. Verbindung testen und Speichern"
+echo "   5. Einstellungen → Cache aufbauen"
 if [ "$INSTALL_RCLONE" = "j" ] || [ "$INSTALL_RCLONE" = "y" ]; then
     echo ""
     echo -e "${CYAN}${BOLD}☁️  rclone einrichten:${RESET}"

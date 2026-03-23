@@ -126,6 +126,35 @@ $seriesCacheFile = DATA_DIR . '/series_cache.json';
 file_put_contents($seriesCacheFile, json_encode(array_values($seriesCache), JSON_UNESCAPED_UNICODE));
 blog(sprintf('Serien-Cache gespeichert: %d Einträge → %s', count($seriesCache), $seriesCacheFile));
 
+// ── Neue Releases ermitteln (Vergleich mit vorherigem Stand) ─────────────────
+$newReleasesFile   = DATA_DIR . '/new_releases.json';
+$prev              = file_exists($newReleasesFile)
+    ? (json_decode(@file_get_contents($newReleasesFile), true) ?? [])
+    : [];
+
+// Beim allerersten Run: alle IDs als bekannt markieren (kein False-Positive)
+$previousMovieIds  = $prev ? array_flip($prev['all_ids']        ?? []) : array_flip(array_keys($movieCache));
+$previousSeriesIds = $prev ? array_flip($prev['all_series_ids'] ?? []) : array_flip(array_keys($seriesCache));
+
+$newMovies = [];
+foreach ($movieCache as $id => $m) {
+    if (!isset($previousMovieIds[$id])) $newMovies[] = $m;
+}
+$newSeries = [];
+foreach ($seriesCache as $id => $s) {
+    if (!isset($previousSeriesIds[$id])) $newSeries[] = $s;
+}
+
+$newReleasesData = [
+    'generated_at'   => date('Y-m-d H:i:s'),
+    'all_ids'        => array_keys($movieCache),
+    'all_series_ids' => array_keys($seriesCache),
+    'movies'         => array_values($newMovies),
+    'series'         => array_values($newSeries),
+];
+file_put_contents($newReleasesFile, json_encode($newReleasesData, JSON_UNESCAPED_UNICODE));
+blog(sprintf('Neue Releases: %d Filme, %d Serien → %s', count($newMovies), count($newSeries), $newReleasesFile));
+
 // ── Schritt 3: Downloaded-Index aufbauen ──────────────────────────────────────
 blog('=== Baue Downloaded-Index auf ===');
 

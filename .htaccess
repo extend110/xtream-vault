@@ -15,7 +15,7 @@ RewriteRule ^data/ - [F,L]
 </FilesMatch>
 
 # Interne PHP-Dateien – nicht direkt aufrufbar
-<FilesMatch "^(config|auth|cron|cache_builder)\.php$">
+<FilesMatch "^(config|auth|cron|cache_builder|backup|notify)\.php$">
     Require all denied
 </FilesMatch>
 

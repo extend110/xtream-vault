@@ -86,6 +86,26 @@ function clog(string $msg): void {
     }
 }
 
+function list_rclone_files(string $remote, string $path): array {
+    $cmd = escapeshellcmd(RCLONE_BIN) . ' lsf -R ' . escapeshellarg($remote . ':' . $path) . ' 2>&1';
+    exec($cmd, $out, $ret);
+    if ($ret !== 0) {
+        clog("ERROR: rclone lsf fehlgeschlagen für {$remote}:{$path} — " . implode(' ', $out));
+        return [];
+    }
+    $files = [];
+    foreach ($out as $line) {
+        $line = trim($line);
+        if ($line === '' || substr($line, -1) === '/') continue;
+        $files[] = basename($line);
+    }
+    $files = array_values(array_unique(array_filter(
+        $files,
+        fn($f) => preg_match('/\.(mp4|mkv|avi|mov|mp3|flac|srt|sub)$/i', $f)
+    )));
+    return $files;
+}
+
 function load_queue(): array {
     if (!file_exists(QUEUE_FILE)) return [];
     return json_decode(file_get_contents(QUEUE_FILE), true) ?? [];
@@ -104,19 +124,6 @@ function load_db(): array {
 function save_db(array $db): void {
     @mkdir(DEST_PATH, 0777, true);
     file_put_contents(DOWNLOAD_DB, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-}
-
-function safe_filename(string $name): string {
-    // Doppelpunkt durch Bindestrich ersetzen (vor dem Entfernen anderer Sonderzeichen)
-    $name = str_replace(':', '-', $name);
-    // Dateisystem-Sonderzeichen entfernen (< > " | ? * / \)
-    $name = preg_replace('/[<>"|?*\/\\\\]/', '', $name);
-    // Steuerzeichen entfernen
-    $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name);
-    // Unicode-Symbole entfernen, aber Buchstaben (inkl. Umlaute ä ö ü ß etc.),
-    // Zahlen, Leerzeichen, Bindestrich, Unterstrich und Punkt behalten
-    $name = preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '', $name);
-    return trim(preg_replace('/\s+/', ' ', $name)) ?: 'file';
 }
 
 /** Schreibt den aktuellen Download-Fortschritt in progress.json */
@@ -490,79 +497,10 @@ foreach ($queue as &$item) {
     $cat        = !empty($item['category']) ? $item['category'] : 'Uncategorized';
     $season     = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
 
-    // Länderkürzel: für Episoden primär aus dem Serientitel ($cat), dann aus $title
-    // Für Filme: aus $title, dann aus $cat
-    if ($type === 'episode') {
-        $countryPrefix = extract_country_prefix($cat);
-        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
-    } else {
-        $countryPrefix = extract_country_prefix($title);
-        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
-    }
-
-    // Kategorie: Länderkürzel entfernen
-    $catTrimmed = preg_replace('/\xc2\xa0/', ' ', trim($cat)); // non-breaking space normalisieren
-    $cleanCat   = remove_country_prefix($catTrimmed);
-    if ($cleanCat === $catTrimmed) {
-        $cleanCat = preg_replace('/^[A-Z]{2,4}\s+/u', '', $catTrimmed);
-    }
-    $cleanCat = trim($cleanCat) ?: $catTrimmed;
-    $safeCat  = safe_filename($cleanCat) ?: 'Uncategorized';
-    $safeCat  = trim($safeCat, ' -_.') ?: 'Uncategorized';
-
-    $safePrefix = $countryPrefix !== '' ? $countryPrefix : '';
-
-    if ($type === 'episode') {
-        // Letzter Fallback: Kürzel vom Anfang des Ordnernamens entfernen falls noch vorhanden
-        if ($safePrefix !== '' && str_starts_with($safeCat, $safePrefix)) {
-            $safeCat = trim(substr($safeCat, strlen($safePrefix)), ' -_.');
-            $safeCat = $safeCat ?: 'Uncategorized';
-        }
-        if ($safePrefix === '') {
-            // Kürzel noch nicht gefunden — aus $safeCat extrahieren
-            $safePrefix = extract_country_prefix($safeCat);
-            $safeCat    = remove_country_prefix($safeCat);
-            $safeCat    = trim($safeCat, ' -_.') ?: 'Uncategorized';
-        }
-    }
-
-    // Dateiname: jetzt wo $safeCat final ist, $fileTitle aufbauen
-    $fileTitle = clean_title($title);
-    if ($type !== 'movie') {
-        // Serienname immer aus dem finalisierten $safeCat
-        $seriesBase = $safeCat ?: 'Unknown';
-
-        // SxxExx aus Stream-Titel extrahieren
-        $episode = '';
-        if (preg_match('/([Ss]\d{1,2}[Ee]\d{1,2})/u', $title, $m)) {
-            $episode = strtoupper($m[1]);
-        }
-        // Fallback: aus season + episode_num Feldern im Queue-Item
-        if ($episode === '' && isset($item['season'], $item['episode_num'])) {
-            $episode = sprintf('S%02dE%02d', (int)$item['season'], (int)$item['episode_num']);
-        }
-
-        $fileTitle = $episode !== '' ? $seriesBase . '.' . $episode : $seriesBase;
-    }
-    $safeTitle = safe_filename($fileTitle) ?: safe_filename($title) ?: 'film_' . $sid;
-    $safeTitle = trim($safeTitle, ' -_.');
-    $safeTitle = $safeTitle ?: 'film_' . $sid;
-
-    if ($type === 'episode') {
-        // Serien-Struktur: TV Shows / [CC /] Serienname / [Staffel N /] Episode.mkv
-        $staffel = $season !== null ? ('Staffel ' . $season) : '';
-        $relPath = $sub
-            . ($safePrefix !== '' ? DIRECTORY_SEPARATOR . $safePrefix : '')
-            . DIRECTORY_SEPARATOR . $safeCat
-            . ($staffel !== '' ? DIRECTORY_SEPARATOR . $staffel : '')
-            . DIRECTORY_SEPARATOR . $safeTitle . '.' . $ext;
-    } else {
-        // Film-Struktur: Movies / [CC /] Kategorie / Film.2010.mkv
-        $relPath = $sub
-            . ($safePrefix !== '' ? DIRECTORY_SEPARATOR . $safePrefix : '')
-            . DIRECTORY_SEPARATOR . $safeCat
-            . DIRECTORY_SEPARATOR . $safeTitle . '.' . $ext;
-    }
+    // Zielpfad berechnen (gemeinsame Logik mit api.php via config.php)
+    $destInfo  = build_dest_path($item);
+    $relPath   = $destInfo['rel_path'];
+    $safeTitle = $destInfo['safe_title'];
 
     if (RCLONE_ENABLED) {
         $remoteBase  = rtrim(RCLONE_PATH, '/');
@@ -588,6 +526,30 @@ foreach ($queue as &$item) {
         if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
         save_queue_item_status($sid, $item);
         continue;
+    }
+
+    // rclone-Cache: prüfen ob Datei bereits auf dem Remote vorhanden ist
+    if (RCLONE_ENABLED) {
+        $rcloneCacheFile = DATA_DIR . '/rclone_cache.json';
+        if (!isset($rcloneFileCache)) {
+            if (file_exists($rcloneCacheFile)) {
+                $rcloneFileCache = json_decode(file_get_contents($rcloneCacheFile), true) ?? [];
+                clog("INFO: rclone-Cache geladen — " . count($rcloneFileCache) . " Dateien bekannt");
+            } else {
+                clog("INFO: rclone-Cache nicht gefunden, lade Dateiliste vom Remote…");
+                $rcloneFileCache = list_rclone_files(RCLONE_REMOTE, RCLONE_PATH);
+                file_put_contents($rcloneCacheFile, json_encode($rcloneFileCache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+                clog("INFO: rclone-Cache erstellt — " . count($rcloneFileCache) . " Dateien gefunden");
+            }
+        }
+        $destFilename = basename($relPath);
+        if (in_array($destFilename, $rcloneFileCache)) {
+            clog("SKIP (already on remote): $destDisplay");
+            $item['status'] = 'done';
+            if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
+            save_queue_item_status($sid, $item);
+            continue;
+        }
     }
 
     clog("START: $title  →  $destDisplay");
@@ -686,6 +648,16 @@ foreach ($queue as &$item) {
         @file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($existingIndex, JSON_UNESCAPED_UNICODE));
         unset($existingIndex);
 
+        // Dateigröße ermitteln (für Statistiken)
+        $downloadedBytes = 0;
+        if (!RCLONE_ENABLED && $destFile && file_exists($destFile)) {
+            $downloadedBytes = (int)@filesize($destFile);
+        } else {
+            // rclone: bytes_done aus progress.json lesen (direkt nach dem Transfer noch vorhanden)
+            $prog = file_exists(PROGRESS_FILE) ? (json_decode(@file_get_contents(PROGRESS_FILE), true) ?? []) : [];
+            $downloadedBytes = (int)($prog['bytes_done'] ?? 0);
+        }
+
         // Download-Verlauf schreiben (unabhängig von Queue — überlebt queue_clear)
         $historyEntry = [
             'title'    => $title,
@@ -694,6 +666,7 @@ foreach ($queue as &$item) {
             'category' => $item['category'] ?? '',
             'added_by' => $item['added_by'] ?? '',
             'done_at'  => date('Y-m-d H:i:s'),
+            'bytes'    => $downloadedBytes,
         ];
         $history = [];
         if (file_exists(DOWNLOAD_HISTORY_FILE)) {
@@ -707,6 +680,23 @@ foreach ($queue as &$item) {
 
         clog("DONE:  $title");
         $processed++;
+
+        // Telegram-Benachrichtigung
+        if (TELEGRAM_BOT_TOKEN !== '' && TELEGRAM_CHAT_ID !== '') {
+            $typeLabel = $type === 'movie' ? '🎬 Film' : '📺 Episode';
+            $sizeStr   = $downloadedBytes > 0 ? "\n📦 " . round($downloadedBytes / 1048576) . ' MB' : '';
+            $msg = "✅ <b>Download abgeschlossen</b>\n{$typeLabel}: <b>" . htmlspecialchars($title, ENT_XML1) . "</b>{$sizeStr}";
+            $result = send_telegram($msg);
+            if ($result !== true) clog("WARN: Telegram-Benachrichtigung fehlgeschlagen — {$result}");
+        }
+        // rclone-Cache aktualisieren: neu hochgeladene Datei eintragen
+        if (RCLONE_ENABLED && isset($rcloneFileCache, $rcloneCacheFile)) {
+            $uploadedFilename = basename($relPath);
+            if (!in_array($uploadedFilename, $rcloneFileCache)) {
+                $rcloneFileCache[] = $uploadedFilename;
+                @file_put_contents($rcloneCacheFile, json_encode($rcloneFileCache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            }
+        }
     } else {
         $item['status'] = 'error';
         $item['error']  = 'Download fehlgeschlagen (' . date('Y-m-d H:i:s') . ')';
@@ -738,6 +728,16 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 
 clear_progress();
 clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
+
+// Benachrichtigung: alle Downloads abgeschlossen
+if ($processed > 0) {
+    $totalBytes = 0;
+    if (file_exists(DOWNLOAD_HISTORY_FILE)) {
+        $hist = json_decode(@file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [];
+        // Bytes der letzten $processed Einträge summieren
+        $totalBytes = array_sum(array_column(array_slice($hist, 0, $processed), 'bytes'));
+    }
+}
 
 // Cache neu aufbauen wenn neue Dateien heruntergeladen wurden
 if ($processed > 0) {

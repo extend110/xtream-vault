@@ -4,6 +4,23 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 
+// ── Einmalige Migration: alte Dateinamen → server-spezifische Namen ───────────
+if (is_configured() && SERVER_ID !== 'default') {
+    $migrations = [
+        DATA_DIR . '/downloaded.json'       => DOWNLOAD_DB,
+        DATA_DIR . '/queue.json'            => QUEUE_FILE,
+        DATA_DIR . '/downloaded_index.json' => DOWNLOADED_INDEX_FILE,
+        DATA_DIR . '/download_history.json' => DOWNLOAD_HISTORY_FILE,
+        DATA_DIR . '/library_cache.json'    => LIBRARY_CACHE_FILE,
+        DATA_DIR . '/series_cache.json'     => SERIES_CACHE_FILE,
+    ];
+    foreach ($migrations as $old => $new) {
+        if (file_exists($old) && !file_exists($new)) {
+            @rename($old, $new);
+        }
+    }
+}
+
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 // ─── API-Key-Authentifizierung (für externe Aufrufe) ──────────────────────────
@@ -106,6 +123,160 @@ function stream_url(string $type, $id, string $ext): string {
 switch ($action) {
 
     // ── Health Check ──────────────────────────────────────────────────────────
+    case 'get_new_releases':
+        require_permission('browse');
+        $file = DATA_DIR . '/new_releases.json';
+        if (!file_exists($file)) {
+            echo json_encode(['movies' => [], 'series' => [], 'generated_at' => null]);
+            break;
+        }
+        $data = json_decode(file_get_contents($file), true) ?? [];
+        $db   = load_db();
+        // Downloaded-Status anreichern
+        foreach (($data['movies'] ?? []) as &$m) {
+            $m['downloaded'] = in_array((string)$m['id'], $db['movies']);
+            $m['stream_id']  = $m['id'];
+            $m['clean_title'] = display_title($m['title'] ?? '');
+        }
+        unset($m);
+        echo json_encode([
+            'movies'       => $data['movies']       ?? [],
+            'series'       => $data['series']       ?? [],
+            'generated_at' => $data['generated_at'] ?? null,
+        ]);
+        break;
+
+    case 'stream_info':
+        require_permission('browse');
+        $d   = $_GET + (json_decode(file_get_contents('php://input'), true) ?? []);
+        $sid = (string)($d['stream_id'] ?? '');
+        $type = $d['type'] ?? 'movie';
+        $ext  = $d['ext']  ?? 'mp4';
+        if ($sid === '') { echo json_encode(['error' => 'Missing stream_id']); break; }
+        if (!is_configured()) { echo json_encode(['error' => 'Nicht konfiguriert']); break; }
+
+        // ffprobe verfügbar?
+        exec('ffprobe -version 2>&1', $verOut, $verRet);
+        if ($verRet !== 0) { echo json_encode(['error' => 'ffprobe nicht installiert']); break; }
+
+        $url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
+
+        // ffprobe: nur Header lesen (keine Daten herunterladen), Timeout 10s
+        $cmd = 'ffprobe -v quiet -print_format json -show_streams -show_format'
+             . ' -analyzeduration 3000000 -probesize 1000000'
+             . ' ' . escapeshellarg($url) . ' 2>&1';
+        exec($cmd, $ffOut, $ffRet);
+        $raw = implode('', $ffOut);
+        $probe = json_decode($raw, true);
+
+        if (!$probe || empty($probe['streams'])) {
+            echo json_encode(['error' => 'Stream nicht erreichbar oder kein Video gefunden']);
+            break;
+        }
+
+        $video = null;
+        $audio = null;
+        foreach ($probe['streams'] as $s) {
+            if ($s['codec_type'] === 'video' && !$video) $video = $s;
+            if ($s['codec_type'] === 'audio' && !$audio) $audio = $s;
+        }
+
+        $result = [];
+
+        if ($video) {
+            $w = (int)($video['width']  ?? 0);
+            $h = (int)($video['height'] ?? 0);
+            // Auflösungs-Label
+            $label = '';
+            if    ($h >= 2160) $label = '4K UHD';
+            elseif ($h >= 1440) $label = '1440p';
+            elseif ($h >= 1080) $label = '1080p';
+            elseif ($h >= 720)  $label = '720p';
+            elseif ($h >= 480)  $label = '480p';
+            elseif ($h >  0)    $label = $h . 'p';
+
+            // Bitrate
+            $bitrate = 0;
+            if (!empty($video['bit_rate'])) {
+                $bitrate = (int)$video['bit_rate'];
+            } elseif (!empty($probe['format']['bit_rate'])) {
+                $bitrate = (int)$probe['format']['bit_rate'];
+            }
+
+            // Framerate
+            $fps = '';
+            if (!empty($video['r_frame_rate'])) {
+                $parts = explode('/', $video['r_frame_rate']);
+                if (count($parts) === 2 && (int)$parts[1] > 0) {
+                    $fps = round((int)$parts[0] / (int)$parts[1], 1) . ' fps';
+                }
+            }
+
+            // Codec-Profil
+            $codecName = strtoupper($video['codec_name'] ?? '');
+            $profile   = $video['profile'] ?? '';
+            $codecStr  = $codecName;
+            if ($profile && $profile !== 'unknown') {
+                // Kürzen: "High" → "H", "Main" → "M" etc.
+                $codecStr .= ' ' . $profile;
+            }
+            // HDR-Erkennung
+            $colorTransfer = $video['color_transfer'] ?? '';
+            $hdr = '';
+            if (str_contains($colorTransfer, 'smpte2084') || str_contains($colorTransfer, 'arib-std-b67')) {
+                $hdr = 'HDR';
+            }
+
+            $result['video'] = [
+                'codec'      => $codecStr,
+                'width'      => $w,
+                'height'     => $h,
+                'resolution' => $label,
+                'fps'        => $fps,
+                'bitrate_kbps' => $bitrate > 0 ? round($bitrate / 1000) : null,
+                'hdr'        => $hdr,
+            ];
+        }
+
+        if ($audio) {
+            $audioCodec    = strtoupper($audio['codec_name'] ?? '');
+            $channels      = (int)($audio['channels'] ?? 0);
+            $channelLayout = $audio['channel_layout'] ?? '';
+            $sampleRate    = !empty($audio['sample_rate']) ? ((int)$audio['sample_rate'] / 1000) . ' kHz' : '';
+
+            // Kanal-Label
+            $chLabel = '';
+            if ($channelLayout) {
+                $chLabel = $channelLayout;
+            } elseif ($channels === 8) {
+                $chLabel = '7.1';
+            } elseif ($channels === 6) {
+                $chLabel = '5.1';
+            } elseif ($channels === 2) {
+                $chLabel = 'Stereo';
+            } elseif ($channels === 1) {
+                $chLabel = 'Mono';
+            } elseif ($channels > 0) {
+                $chLabel = $channels . 'ch';
+            }
+
+            $result['audio'] = [
+                'codec'       => $audioCodec,
+                'channels'    => $channels,
+                'layout'      => $chLabel,
+                'sample_rate' => $sampleRate,
+            ];
+        }
+
+        // Gesamtdauer
+        if (!empty($probe['format']['duration'])) {
+            $dur = (int)$probe['format']['duration'];
+            $result['duration'] = sprintf('%d:%02d:%02d', $dur / 3600, ($dur % 3600) / 60, $dur % 60);
+        }
+
+        echo json_encode(['ok' => true] + $result);
+        break;
+
     case 'tmdb_info':
         require_permission('browse');
         $d     = $_GET + (json_decode(file_get_contents('php://input'), true) ?? []);
@@ -308,6 +479,22 @@ switch ($action) {
         }
         break;
 
+    case 'user_download_history':
+        require_permission('users');
+        $username = trim($_GET['username'] ?? '');
+        if ($username === '') { echo json_encode(['error' => 'Missing username']); break; }
+        $history = file_exists(DOWNLOAD_HISTORY_FILE)
+            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
+            : [];
+        $filtered = array_values(array_filter($history, fn($h) => ($h['added_by'] ?? '') === $username));
+        echo json_encode([
+            'username' => $username,
+            'count'    => count($filtered),
+            'total_bytes' => array_sum(array_column($filtered, 'bytes')),
+            'items'    => array_slice($filtered, 0, 100), // max 100
+        ]);
+        break;
+
     case 'update_user':
         require_permission('users');
         $d  = json_decode(file_get_contents('php://input'), true) ?? [];
@@ -404,6 +591,7 @@ switch ($action) {
             'password'               => isset($c['password']) && $c['password'] !== '' ? '••••••••' : '',
             'dest_path'              => $c['dest_path']              ?? '',
             'configured'             => is_configured(),
+            'server_id'              => SERVER_ID,
             'rclone_enabled'         => (bool)($c['rclone_enabled']  ?? false),
             'rclone_remote'          => $c['rclone_remote']          ?? '',
             'rclone_path'            => $c['rclone_path']            ?? '',
@@ -411,6 +599,8 @@ switch ($action) {
             'editor_movies_enabled'  => (bool)($c['editor_movies_enabled']  ?? true),
             'editor_series_enabled'  => (bool)($c['editor_series_enabled']  ?? true),
             'tmdb_api_key'           => isset($c['tmdb_api_key']) && $c['tmdb_api_key'] !== '' ? '••••••••' : '',
+            'telegram_bot_token'     => isset($c['telegram_bot_token']) && $c['telegram_bot_token'] !== '' ? '••••••••' : '',
+            'telegram_chat_id'       => $c['telegram_chat_id'] ?? '',
         ]);
         break;
 
@@ -431,6 +621,8 @@ switch ($action) {
             'editor_movies_enabled' => isset($d['editor_movies_enabled']) ? (bool)$d['editor_movies_enabled'] : (bool)($current['editor_movies_enabled'] ?? true),
             'editor_series_enabled' => isset($d['editor_series_enabled']) ? (bool)$d['editor_series_enabled'] : (bool)($current['editor_series_enabled'] ?? true),
             'tmdb_api_key'          => trim($d['tmdb_api_key'] ?? '') !== '' ? trim($d['tmdb_api_key']) : ($current['tmdb_api_key'] ?? ''),
+            'telegram_bot_token'    => trim($d['telegram_bot_token'] ?? '') !== '' ? trim($d['telegram_bot_token']) : ($current['telegram_bot_token'] ?? ''),
+            'telegram_chat_id'      => trim($d['telegram_chat_id'] ?? $current['telegram_chat_id'] ?? ''),
         ];
         if (!empty($d['password']) && $d['password'] !== '••••••••') {
             $new['password'] = $d['password'];
@@ -442,6 +634,11 @@ switch ($action) {
             echo json_encode(['error' => 'Server IP, Username und Passwort sind Pflichtfelder']);
             break;
         }
+
+        // Prüfen ob der Server gewechselt wurde
+        $oldServerId = SERVER_ID;
+        $newServerId = substr(md5($new['server_ip'] . ':' . $new['port'] . ':' . $new['username']), 0, 8);
+        $serverChanged = $oldServerId !== $newServerId && is_configured();
 
         if (!empty($d['test_connection'])) {
             $params = http_build_query(['username' => $new['username'], 'password' => $new['password'], 'action' => 'get_vod_categories']);
@@ -456,10 +653,235 @@ switch ($action) {
         }
 
         if (save_config($new)) {
-            echo json_encode(['ok' => true]);
+            $response = ['ok' => true];
+            if ($serverChanged) {
+                $response['server_changed'] = true;
+                $response['new_server_id']  = $newServerId;
+                $response['info'] = 'Server gewechselt — neue Datenbasis für Downloads, Queue und Cache wird verwendet.';
+            }
+            // Server automatisch in servers.json speichern/aktualisieren
+            $servers = file_exists(SERVERS_FILE)
+                ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+                : [];
+            $found = false;
+            foreach ($servers as &$s) {
+                if ($s['id'] === $newServerId) {
+                    $s['server_ip'] = $new['server_ip'];
+                    $s['port']      = $new['port'];
+                    $s['username']  = $new['username'];
+                    $s['password']  = $new['password'];
+                    $found = true; break;
+                }
+            }
+            unset($s);
+            if (!$found) {
+                $servers[] = [
+                    'id'        => $newServerId,
+                    'name'      => $new['server_ip'] . ':' . $new['port'],
+                    'server_ip' => $new['server_ip'],
+                    'port'      => $new['port'],
+                    'username'  => $new['username'],
+                    'password'  => $new['password'],
+                    'saved_at'  => date('Y-m-d H:i:s'),
+                ];
+            }
+            file_put_contents(SERVERS_FILE, json_encode(array_values($servers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            echo json_encode($response);
         } else {
             echo json_encode(['error' => 'Konnte config.json nicht schreiben – Berechtigungen prüfen']);
         }
+        break;
+
+    // ── Server-Verwaltung ──────────────────────────────────────────────────────
+    // ── Einladungslinks ───────────────────────────────────────────────────────
+    case 'create_invite':
+        require_permission('users');
+        $d       = json_decode(file_get_contents('php://input'), true) ?? [];
+        $role    = in_array($d['role'] ?? '', ['viewer','editor','admin']) ? $d['role'] : 'viewer';
+        $hours   = max(1, min(168, (int)($d['expires_hours'] ?? 24))); // 1h–7d, default 24h
+        $note    = trim($d['note'] ?? '');
+        $token   = bin2hex(random_bytes(24)); // 48-Zeichen Token
+        $invites = file_exists(INVITES_FILE)
+            ? (json_decode(file_get_contents(INVITES_FILE), true) ?? [])
+            : [];
+        $invites[$token] = [
+            'token'      => $token,
+            'role'       => $role,
+            'note'       => $note,
+            'created_by' => $current_user['username'],
+            'created_at' => date('Y-m-d H:i:s'),
+            'expires_at' => date('Y-m-d H:i:s', time() + $hours * 3600),
+            'used'       => false,
+            'used_by'    => null,
+        ];
+        file_put_contents(INVITES_FILE, json_encode($invites, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        log_activity($current_user['id'], $current_user['username'], 'create_invite', ['role' => $role, 'expires_hours' => $hours]);
+        echo json_encode(['ok' => true, 'token' => $token]);
+        break;
+
+    case 'list_invites':
+        require_permission('users');
+        $invites = file_exists(INVITES_FILE)
+            ? (json_decode(file_get_contents(INVITES_FILE), true) ?? [])
+            : [];
+        // Abgelaufene markieren
+        $now = date('Y-m-d H:i:s');
+        foreach ($invites as &$inv) {
+            $inv['expired'] = $inv['expires_at'] < $now;
+        }
+        unset($inv);
+        echo json_encode(array_values($invites));
+        break;
+
+    case 'delete_invite':
+        require_permission('users');
+        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
+        $token = $d['token'] ?? '';
+        $invites = file_exists(INVITES_FILE)
+            ? (json_decode(file_get_contents(INVITES_FILE), true) ?? [])
+            : [];
+        if (!isset($invites[$token])) { echo json_encode(['error' => 'Nicht gefunden']); break; }
+        unset($invites[$token]);
+        file_put_contents(INVITES_FILE, json_encode($invites, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'list_servers':
+        require_permission('settings');
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        // Aktiven Server markieren
+        foreach ($servers as &$s) {
+            $s['active'] = ($s['id'] === SERVER_ID);
+        }
+        unset($s);
+        echo json_encode(array_values($servers));
+        break;
+
+    case 'save_server':
+        require_permission('settings');
+        $d       = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid     = trim($d['server_id'] ?? '');
+        $name    = trim($d['name']      ?? '');
+        if ($sid === '' || $name === '') {
+            echo json_encode(['error' => 'server_id und name sind Pflichtfelder']); break;
+        }
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        // Existierenden Eintrag updaten oder neu anlegen
+        $found = false;
+        foreach ($servers as &$s) {
+            if ($s['id'] === $sid) { $s['name'] = $name; $found = true; break; }
+        }
+        unset($s);
+        if (!$found) {
+            $servers[] = [
+                'id'         => $sid,
+                'name'       => $name,
+                'server_ip'  => $d['server_ip']  ?? '',
+                'port'       => $d['port']        ?? '80',
+                'username'   => $d['username']    ?? '',
+                'saved_at'   => date('Y-m-d H:i:s'),
+            ];
+        }
+        file_put_contents(SERVERS_FILE, json_encode(array_values($servers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'delete_server':
+        require_permission('settings');
+        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid = trim($d['server_id'] ?? '');
+        if ($sid === '') { echo json_encode(['error' => 'server_id fehlt']); break; }
+        if ($sid === SERVER_ID) { echo json_encode(['error' => 'Aktiver Server kann nicht gelöscht werden']); break; }
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        $servers = array_values(array_filter($servers, fn($s) => $s['id'] !== $sid));
+        file_put_contents(SERVERS_FILE, json_encode($servers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true]);
+        break;
+
+    case 'switch_server':
+        require_permission('settings');
+        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sid = trim($d['server_id'] ?? '');
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        $target = null;
+        foreach ($servers as $s) {
+            if ($s['id'] === $sid) { $target = $s; break; }
+        }
+        if (!$target) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
+        // Config mit den gespeicherten Zugangsdaten des Ziel-Servers laden
+        $current = load_config();
+        $new = array_merge($current, [
+            'server_ip' => $target['server_ip'],
+            'port'      => $target['port'],
+            'username'  => $target['username'],
+            'password'  => $target['password'] ?? $current['password'],
+        ]);
+        if (save_config($new)) {
+            echo json_encode(['ok' => true, 'server_id' => $sid, 'name' => $target['name']]);
+        } else {
+            echo json_encode(['error' => 'Konnte config.json nicht schreiben']);
+        }
+        break;
+
+    case 'webhook_test':
+        require_permission('settings');
+        require_once __DIR__ . '/notify.php';
+        $d = json_decode(file_get_contents('php://input'), true) ?? [];
+        // Temporär mit den gesendeten Werten testen (noch nicht gespeichert)
+        $testUrl  = trim($d['webhook_url']  ?? WEBHOOK_URL);
+        $testType = trim($d['webhook_type'] ?? WEBHOOK_TYPE);
+        if ($testUrl === '') { echo json_encode(['error' => 'Webhook-URL fehlt']); break; }
+
+        // Payload bauen und direkt senden (ohne Constants zu überschreiben)
+        $message = "🔔 *Xtream Vault Test*\nWebhook-Verbindung erfolgreich!";
+        if ($testType === 'telegram') {
+            $payload = json_encode(['text' => $message, 'parse_mode' => 'Markdown']);
+        } elseif ($testType === 'discord') {
+            $payload = json_encode(['embeds' => [['description' => 'Xtream Vault Test — Verbindung erfolgreich!', 'color' => 0x64d2ff, 'footer' => ['text' => 'Xtream Vault']]]]);
+        } else {
+            $payload = json_encode(['event' => 'test', 'message' => 'Xtream Vault Webhook Test']);
+        }
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\nUser-Agent: XtreamVault/1.0\r\n", 'content' => $payload, 'timeout' => 8, 'ignore_errors' => true]]);
+        $result = @file_get_contents($testUrl, false, $ctx);
+        $code = 0;
+        if (isset($http_response_header)) {
+            preg_match('/HTTP\/\S+\s+(\d+)/', $http_response_header[0] ?? '', $m);
+            $code = (int)($m[1] ?? 0);
+        }
+        if ($result === false || ($code >= 400)) {
+            echo json_encode(['error' => 'Webhook nicht erreichbar (HTTP ' . $code . ')']);
+        } else {
+            echo json_encode(['ok' => true, 'http_code' => $code]);
+        }
+        break;
+
+    case 'telegram_test':
+        require_permission('settings');
+        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
+        $token = trim($d['bot_token'] ?? TELEGRAM_BOT_TOKEN);
+        $chatId = trim($d['chat_id'] ?? TELEGRAM_CHAT_ID);
+        if ($token === '' || $chatId === '') {
+            echo json_encode(['error' => 'Bot Token und Chat ID sind Pflichtfelder']); break;
+        }
+        // Temporär mit den übergebenen Werten testen
+        $url  = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+        $body = json_encode(['chat_id' => $chatId, 'text' => "✅ <b>Xtream Vault</b>\n\nTest-Nachricht — Benachrichtigungen funktionieren!", 'parse_mode' => 'HTML']);
+        $ctx  = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $body, 'timeout' => 8]]);
+        $raw  = @file_get_contents($url, false, $ctx);
+        if ($raw === false) { echo json_encode(['error' => 'Telegram nicht erreichbar']); break; }
+        $resp = json_decode($raw, true);
+        if (!($resp['ok'] ?? false)) {
+            echo json_encode(['error' => $resp['description'] ?? 'Fehler']); break;
+        }
+        echo json_encode(['ok' => true]);
         break;
 
     case 'rclone_test':
@@ -731,6 +1153,32 @@ switch ($action) {
         if ($sid === '') { echo json_encode(['error'=>'Missing stream_id']); break; }
         $queue = load_queue();
         foreach ($queue as $qi) if ((string)$qi['stream_id'] === $sid) { echo json_encode(['ok'=>true,'already'=>true]); break 2; }
+
+        // Bereits heruntergeladen?
+        $db    = load_db();
+        $dbKey = $type === 'episode' ? 'episodes' : 'movies';
+        if (in_array($sid, $db[$dbKey] ?? [])) {
+            echo json_encode(['ok' => true, 'already' => true, 'reason' => 'downloaded']);
+            break;
+        }
+
+        // rclone-Cache prüfen: Dateiname schon auf Remote?
+        if (RCLONE_ENABLED) {
+            $rcloneCacheFile = DATA_DIR . '/rclone_cache.json';
+            if (file_exists($rcloneCacheFile)) {
+                $rcloneFiles = json_decode(file_get_contents($rcloneCacheFile), true) ?? [];
+                $destInfo    = build_dest_path(array_merge($d, ['stream_id' => $sid, 'type' => $type]));
+                if (in_array($destInfo['filename'], $rcloneFiles)) {
+                    echo json_encode([
+                        'ok'       => true,
+                        'already'  => true,
+                        'reason'   => 'on_remote',
+                        'filename' => $destInfo['filename'],
+                    ]);
+                    break;
+                }
+            }
+        }
 
         // stream_url immer serverseitig berechnen – Client-Angabe wird ignoriert
         $server_stream_url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
@@ -1202,6 +1650,46 @@ switch ($action) {
         echo json_encode(['ok' => true]);
         break;
 
+    case 'rclone_cache_refresh':
+        require_permission('settings');
+        if (!RCLONE_ENABLED) { echo json_encode(['error' => 'rclone nicht aktiviert']); break; }
+        $cacheFile = DATA_DIR . '/rclone_cache.json';
+        // Cache löschen → nächster cron.php-Lauf baut ihn neu auf
+        // Oder hier direkt neu aufbauen via rclone lsf
+        $cmd = escapeshellcmd(RCLONE_BIN) . ' lsf -R ' . escapeshellarg(RCLONE_REMOTE . ':' . RCLONE_PATH) . ' 2>&1';
+        $out = []; $ret = 0;
+        exec($cmd, $out, $ret);
+        if ($ret !== 0) {
+            echo json_encode(['error' => 'rclone lsf fehlgeschlagen: ' . implode(' ', array_slice($out, 0, 3))]); break;
+        }
+        $files = [];
+        foreach ($out as $line) {
+            $line = trim($line);
+            if ($line === '' || substr($line, -1) === '/') continue;
+            $files[] = basename($line);
+        }
+        $files = array_values(array_unique(array_filter(
+            $files,
+            fn($f) => preg_match('/\.(mp4|mkv|avi|mov|mp3|flac|srt|sub)$/i', $f)
+        )));
+        file_put_contents($cacheFile, json_encode($files, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        echo json_encode(['ok' => true, 'count' => count($files), 'cached_at' => date('Y-m-d H:i:s')]);
+        break;
+
+    case 'rclone_cache_status':
+        require_permission('settings');
+        $cacheFile = DATA_DIR . '/rclone_cache.json';
+        if (!file_exists($cacheFile)) {
+            echo json_encode(['exists' => false]); break;
+        }
+        $files = json_decode(file_get_contents($cacheFile), true) ?? [];
+        echo json_encode([
+            'exists'     => true,
+            'count'      => count($files),
+            'cached_at'  => date('Y-m-d H:i:s', filemtime($cacheFile)),
+        ]);
+        break;
+
     case 'rebuild_library_cache':
         require_permission('settings');
         // Altes hängendes Lock-File entfernen falls vorhanden
@@ -1261,16 +1749,68 @@ switch ($action) {
         break;
 
 
+    case 'stats_data':
+        require_permission('settings');
+        $history = file_exists(DOWNLOAD_HISTORY_FILE)
+            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
+            : [];
+
+        // ── GB pro Monat ──────────────────────────────────────────────────────
+        $byMonth = [];
+        foreach ($history as $h) {
+            if (empty($h['done_at'])) continue;
+            $month = substr($h['done_at'], 0, 7); // "YYYY-MM"
+            if (!isset($byMonth[$month])) $byMonth[$month] = ['count' => 0, 'bytes' => 0];
+            $byMonth[$month]['count']++;
+            $byMonth[$month]['bytes'] += (int)($h['bytes'] ?? 0);
+        }
+        // Lücken füllen: letzte 12 Monate immer anzeigen
+        $months = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $m = date('Y-m', strtotime("-{$i} months"));
+            $months[$m] = $byMonth[$m] ?? ['count' => 0, 'bytes' => 0];
+        }
+        // Ältere Monate davor einfügen falls vorhanden
+        ksort($byMonth);
+        foreach ($byMonth as $m => $v) {
+            if (!isset($months[$m])) $months[$m] = $v;
+        }
+        ksort($months);
+
+        // ── Top User ──────────────────────────────────────────────────────────
+        $userCounts = [];
+        foreach ($history as $h) {
+            $u = $h['added_by'] ?? 'unknown';
+            if (!isset($userCounts[$u])) $userCounts[$u] = ['count' => 0, 'bytes' => 0];
+            $userCounts[$u]['count']++;
+            $userCounts[$u]['bytes'] += (int)($h['bytes'] ?? 0);
+        }
+        arsort($userCounts);
+        $topUsers = array_slice($userCounts, 0, 10, true);
+
+        // ── Gesamt ────────────────────────────────────────────────────────────
+        $totalBytes = array_sum(array_column($history, 'bytes'));
+        $totalCount = count($history);
+
+        echo json_encode([
+            'by_month'    => $months,
+            'top_users'   => $topUsers,
+            'total_bytes' => $totalBytes,
+            'total_count' => $totalCount,
+        ]);
+        break;
+
     case 'stats':
         $db    = load_db();
         $queued = can('queue_view')
             ? count(array_filter(load_queue(), fn($q) => $q['status'] === 'pending'))
             : null;
         echo json_encode([
-            'movies'      => count($db['movies']),
-            'episodes'    => count($db['episodes']),
-            'queued'      => $queued,
-            'configured'  => is_configured(),
+            'movies'           => count($db['movies']),
+            'episodes'         => count($db['episodes']),
+            'queued'           => $queued,
+            'downloaded_ids'   => array_map('strval', array_merge($db['movies'] ?? [], $db['episodes'] ?? [])),
+            'configured'       => is_configured(),
             'can' => [
                 'queue_view'   => can('queue_view'),
                 'queue_add'    => can('queue_add'),

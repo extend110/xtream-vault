@@ -10,17 +10,23 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 2. [Installation](#installation)
 3. [Ersteinrichtung](#ersteinrichtung)
 4. [Konfiguration](#konfiguration)
-5. [rclone — Cloud-Speicher](#rclone--cloud-speicher)
-6. [Ordnerstruktur der Downloads](#ordnerstruktur-der-downloads)
-7. [Rollen & Berechtigungen](#rollen--berechtigungen)
-8. [Download-Queue](#download-queue)
-9. [Mediathek & Suche](#mediathek--suche)
-10. [Favoriten](#favoriten)
-11. [Datensicherung](#datensicherung)
-12. [Health-Check](#health-check)
-13. [Externe API](#externe-api)
-14. [Sicherheit](#sicherheit)
-15. [Dateistruktur](#dateistruktur)
+5. [Server-Verwaltung](#server-verwaltung)
+6. [rclone — Cloud-Speicher](#rclone--cloud-speicher)
+7. [Ordnerstruktur der Downloads](#ordnerstruktur-der-downloads)
+8. [Rollen & Berechtigungen](#rollen--berechtigungen)
+9. [Download-Queue](#download-queue)
+10. [Mediathek & Suche](#mediathek--suche)
+11. [Neue Releases](#neue-releases)
+12. [Favoriten](#favoriten)
+13. [TMDB-Integration](#tmdb-integration)
+14. [Statistiken](#statistiken)
+15. [Telegram-Benachrichtigungen](#telegram-benachrichtigungen)
+16. [Benutzerverwaltung](#benutzerverwaltung)
+17. [Datensicherung](#datensicherung)
+18. [Health-Check](#health-check)
+19. [Externe API](#externe-api)
+20. [Sicherheit](#sicherheit)
+21. [Dateistruktur](#dateistruktur)
 
 ---
 
@@ -32,6 +38,7 @@ Ein PHP-Frontend zum Browsen, Verwalten und automatischen Herunterladen von VODs
 | Webserver | Apache mit `mod_rewrite` und `mod_headers` |
 | php.ini | `allow_url_fopen = On` |
 | Optional: rclone | Für Cloud-Speicher-Integration |
+| Optional: ffmpeg | Für Stream-Analyse im TMDB-Modal (`ffprobe`) |
 
 PHP-Erweiterungen installieren:
 ```bash
@@ -48,7 +55,7 @@ sudo apt install php-curl php-zip php-mbstring php-json
 sudo bash install.sh
 ```
 
-Das Skript installiert alle Abhängigkeiten, richtet Apache ein, setzt Berechtigungen und konfiguriert Cronjobs automatisch.
+Das Skript installiert alle Abhängigkeiten, richtet Apache ein, setzt Berechtigungen und konfiguriert Cronjobs automatisch. Optional: ffmpeg und rclone mitinstallieren.
 
 ### Manuelle Installation
 
@@ -158,9 +165,18 @@ Alle Einstellungen sind über **Einstellungen** im Frontend erreichbar.
 
 Admins können Movies und Serien für editor/viewer-Accounts separat ausblenden.
 
-### API-Keys
+---
 
-Externe Systeme können über API-Keys auf die Benutzerverwaltungs-API zugreifen. Verwaltung unter **Einstellungen → API-Keys**. Der vollständige Key kann nach Passwort-Bestätigung einmalig eingesehen werden.
+## Server-Verwaltung
+
+Xtream Vault unterstützt mehrere Xtream-Server. Jeder Server bekommt eine eindeutige ID (Hash aus IP + Port + Username). Downloads, Queue, Cache und Verlauf sind **pro Server getrennt** — ein Serverwechsel verliert keine Daten.
+
+Unter **Einstellungen → Gespeicherte Server**:
+- **↗ Wechseln** — lädt Zugangsdaten des gewählten Servers und startet neu
+- **✏️ Umbenennen** — gibt dem Server einen sprechenden Namen
+- **✕ Löschen** — entfernt ihn aus der Liste (Daten bleiben erhalten)
+
+Beim Speichern neuer Zugangsdaten wird der Server automatisch gespeichert.
 
 ---
 
@@ -208,9 +224,9 @@ sudo -u www-data rclone lsd mega:
 5. Mit **Verbindung testen** prüfen
 6. **Speichern**
 
-### Fortschrittsanzeige
+### Remote-Cache
 
-Im rclone-Modus zeigt die Progress-Card echten Fortschritt mit Bytes, Geschwindigkeit und ETA.
+Beim ersten Download-Run wird automatisch `data/rclone_cache.json` mit allen Dateinamen auf dem Remote angelegt. Damit werden bereits vorhandene Dateien vor dem Download-Start erkannt und übersprungen. Der Cache kann unter **Einstellungen → rclone → 🗂 Remote-Cache aktualisieren** manuell neu aufgebaut werden.
 
 ---
 
@@ -236,22 +252,13 @@ TV Shows/
     Dark/
       Staffel 1/
         Dark.S01E01.mkv
-      Staffel 2/
-        Dark.S02E01.mkv
 ```
 
-**Länderkürzel** werden automatisch aus dem Serientitel oder der Kategorie extrahiert (`DE`, `US`, `DACH`, `MULTI` etc.). Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
+**Länderkürzel** werden automatisch aus dem Serientitel oder der Kategorie extrahiert. Titel ohne erkanntes Kürzel landen direkt in der Kategorie.
 
 **Dateinamen:**
 - Filme: `Titel.Jahr.ext`
-- Episoden: `Serienname.SxxExx.ext` — Serienname kommt immer aus dem Xtream-Serientitel, SxxExx wird aus dem Stream-Titel extrahiert
-- Doppelpunkte werden durch `-` ersetzt, Umlaute bleiben erhalten
-
-**Beispiele Episoden** (Serientitel: `DE Dark`, Stream-Titel variiert):
-```
-dark.s02e04.german.720p  →  TV Shows/DE/Dark/Staffel 2/Dark.S02E04.mkv
-Dark - S01E01 - Folge 1  →  TV Shows/DE/Dark/Staffel 1/Dark.S01E01.mkv
-```
+- Episoden: `Serienname.SxxExx.ext` — Serienname kommt aus dem Xtream-Serientitel
 
 ---
 
@@ -270,7 +277,6 @@ Dark - S01E01 - Folge 1  →  TV Shows/DE/Dark/Staffel 1/Dark.S01E01.mkv
 | Cron-Log | ✅ | ❌ | ❌ |
 | Einstellungen | ✅ | ❌ | ❌ |
 | Benutzerverwaltung | ✅ | ❌ | ❌ |
-| API-Dokumentation | ✅ | ❌ | ❌ |
 
 *\* Kann vom Admin pro Inhaltstyp deaktiviert werden*
 
@@ -286,7 +292,7 @@ const QUEUE_ADD_HOURLY_LIMIT = [
 ];
 ```
 
-Admins können in der **Benutzerverwaltung** für jeden User ein individuelles Limit setzen, das das Rollen-Limit überschreibt. Leer = Rollen-Standard, `0` = kein Zugriff, `5` = 5/h.
+Admins können in der **Benutzerverwaltung** für jeden User ein individuelles Limit setzen. Leer = Rollen-Standard, `0` = kein Zugriff, `5` = 5/h.
 
 ---
 
@@ -298,15 +304,15 @@ Admins können in der **Benutzerverwaltung** für jeden User ein individuelles L
 
 ### Manuell starten
 
-Downloads können über **▶ Starten** im Dashboard oder in der Queue-Ansicht manuell angestoßen werden, ohne den nächsten Cron-Lauf abzuwarten. Der Worker prüft intern ob bereits eine Instanz läuft und verhindert Doppelstarts.
+Downloads können über **▶ Starten** im Dashboard oder in der Queue-Ansicht manuell angestoßen werden. Der Worker verhindert parallele Instanzen über eine `data/cron.lock`-Datei.
 
 ### Speicherplatz-Prüfung (lokaler Modus)
 
-Vor jedem Download wird die Dateigröße per HEAD-Request ermittelt und mit dem freien Speicherplatz verglichen (Dateigröße + 512 MB Puffer). Bei zu wenig Platz wird der Run abgebrochen.
+Vor jedem Download wird die Dateigröße per HEAD-Request ermittelt und mit dem freien Speicherplatz verglichen (Dateigröße + 512 MB Puffer).
 
 ### Download abbrechen
 
-Laufende Downloads können über **✕ Abbrechen** in der Progress-Card gestoppt werden (nur Admins). Das Item wird zurück auf `pending` gesetzt.
+Laufende Downloads können über **✕ Abbrechen** in der Progress-Card gestoppt werden (nur Admins).
 
 ### Fehlerbehandlung
 
@@ -314,7 +320,14 @@ Fehlgeschlagene Downloads werden als `error` markiert. Admins können sie über 
 
 ### Download zurücksetzen
 
-Bereits heruntergeladene VODs können über **↺ Reset** zurückgesetzt werden (Filmkarten, Queue-Done-Items, Episoden-Modal, Dashboard). Das Item wird aus der Heruntergeladen-Liste entfernt und kann neu zur Queue hinzugefügt werden — nützlich wenn Dateien manuell gelöscht wurden.
+Bereits heruntergeladene VODs können über **↺ Reset** zurückgesetzt und neu zur Queue hinzugefügt werden.
+
+### Doppelten-Prüfung beim Queue-Add
+
+Beim Hinzufügen zur Queue wird in dieser Reihenfolge geprüft:
+1. Bereits in der Queue vorhanden
+2. Bereits in `downloaded.json` (heruntergeladen)
+3. Dateiname bereits im rclone-Remote-Cache (nur rclone-Modus)
 
 ---
 
@@ -322,15 +335,15 @@ Bereits heruntergeladene VODs können über **↺ Reset** zurückgesetzt werden 
 
 ### Medien-Cache
 
-Der Cache (`library_cache.json` für Filme, `series_cache.json` für Serien) wird täglich um 4 Uhr automatisch aufgebaut und kann manuell über **Einstellungen → Medien-Cache** aktualisiert werden.
+Der Cache (`library_cache_*.json` für Filme, `series_cache_*.json` für Serien) wird täglich um 4 Uhr automatisch aufgebaut. Er ist pro Server getrennt.
 
 ### Suche
 
-Die Suche läuft primär gegen den lokalen Cache — schnell, kein Xtream-Server-Traffic. Bei veraltetem oder leerem Cache fällt sie automatisch auf den Xtream-Server zurück. Ergebnisse werden innerhalb einer Sitzung gecacht.
+Primär gegen den lokalen Cache — bei veraltetem oder leerem Cache Fallback auf den Xtream-Server. Ergebnisse werden in der Sitzung gecacht.
 
-- **Debouncing:** Anfrage erst 350ms nach dem letzten Tastendruck
-- **Suchverlauf:** Die letzten 10 Suchanfragen und zuletzt angesehene Kategorien werden pro User im Browser gespeichert
-- **Quellenhinweis:** Bei Cache-Ergebnissen erscheint ein Hinweis mit „Aktualisieren"-Link
+- **Debouncing:** 350ms nach dem letzten Tastendruck
+- **Suchverlauf:** Die letzten 10 Suchanfragen und Kategorien pro User im Browser
+- **Quellenhinweis:** Bei Cache-Ergebnissen erscheint ein „Aktualisieren"-Link
 
 ### Sortierung & Paginierung
 
@@ -338,11 +351,95 @@ Filme und Serien können nach Standard, A→Z oder Z→A sortiert werden. Ab 50 
 
 ---
 
+## Neue Releases
+
+Die View **🆕 Neu** zeigt alle Titel die seit dem letzten Cache-Run neu hinzugekommen sind. `cache_builder.php` vergleicht beim Run die aktuellen IDs mit den beim letzten Run bekannten und speichert neue Einträge in `data/new_releases.json`.
+
+Beim ersten Run werden alle IDs als bekannt markiert — kein False-Positive mit tausenden „neuen" Titeln.
+
+---
+
 ## Favoriten
 
-Jeder Benutzer kann Filme und Serien mit dem ♥-Button als Favoriten markieren. Erreichbar unter **Favoriten** in der Navigation, filterbar nach Typ (Alle / Filme / Serien) und durchsuchbar. VODs können direkt aus den Favoriten zur Queue hinzugefügt werden.
+Jeder Benutzer kann Filme und Serien mit ♥ als Favoriten markieren. Erreichbar unter **Favoriten** in der Navigation, filterbar nach Typ und durchsuchbar. Favoriten werden pro User in `data/users.json` gespeichert.
 
-Favoriten werden pro User in `data/users.json` gespeichert.
+---
+
+## TMDB-Integration
+
+Beim Klick auf eine Film- oder Serienkarte öffnet sich ein Modal mit Daten von The Movie Database:
+
+- Backdrop-Bild, Poster, Titel
+- Beschreibung (auf Deutsch)
+- Sternbewertung + Anzahl Bewertungen
+- Genres, Erscheinungsjahr, Laufzeit
+- **Stream-Info** via `ffprobe` (nur Filme): Auflösung, Codec, Bitrate, HDR, Audio, Dauer
+
+### Setup
+
+1. API-Key unter [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) erstellen (v3 auth)
+2. **Einstellungen → 🎬 TMDB Integration** → Key eintragen → Speichern
+
+### ffprobe installieren
+
+```bash
+sudo apt install ffmpeg
+```
+
+---
+
+## Statistiken
+
+Unter **📊 Statistiken** (nur Admins):
+
+- **Gesamtdownloads** und **Gesamtvolumen** als KPI-Cards
+- **Datenvolumen pro Monat** — Balkendiagramm mit Anzahl-Linie (Chart.js)
+- **Top-User-Rangliste** — Downloads und Volumen pro User mit Fortschrittsbalken
+
+Die Dateigröße wird seit diesem Update in `download_history.json` gespeichert. Ältere Einträge ohne Dateigröße werden bei der Anzahl berücksichtigt, beim Volumen als 0 gewertet.
+
+---
+
+## Telegram-Benachrichtigungen
+
+Nach jedem abgeschlossenen Download wird eine Telegram-Nachricht gesendet.
+
+### Setup
+
+1. Bot erstellen: [@BotFather](https://t.me/BotFather) → `/newbot`
+2. Chat-ID ermitteln: [@userinfobot](https://t.me/userinfobot) oder `https://api.telegram.org/bot<TOKEN>/getUpdates`
+3. **Einstellungen → 📨 Telegram** → Token + Chat-ID eintragen → Speichern
+4. **📨 Testnachricht senden** zur Überprüfung
+
+### Nachrichtenformat
+
+```
+✅ Download abgeschlossen
+🎬 Film: Inception.2010
+📦 1.842 MB
+```
+
+---
+
+## Benutzerverwaltung
+
+Unter **👥 Benutzer** (nur Admins):
+
+- **Benutzer anlegen** und bearbeiten (Rolle, Passwort)
+- **🔑 Passwort zurücksetzen** durch Admin
+- **Sperren / Entsperren** von Accounts
+- **Queue-Limit** individuell pro User setzen
+- **Download-Verlauf** pro User einsehen (Klick auf Username)
+- **Aktivitätslog** für alle Aktionen
+
+### Einladungslinks
+
+Admins können unter **🔗 Einladung erstellen** einmalige Registrierungslinks generieren:
+
+- Rolle und Gültigkeitsdauer (6h bis 7 Tage) wählbar
+- Optionale Notiz
+- Link unter `https://deine-domain.de/invite.php?token=...`
+- Wird nach einmaliger Nutzung als verwendet markiert
 
 ---
 
@@ -357,49 +454,40 @@ Gesichert werden alle Dateien in `data/` als ZIP-Archiv. Backups landen in `data
 php /var/www/html/xtream/backup.php
 ```
 
-**Wiederherstellen:** Einstellungen → Datensicherung → **↩ Restore** — stellt alle JSON-Dateien aus dem Archiv wieder her und validiert jede Datei vor dem Schreiben.
-
-**Backup-Log:** `data/backup.log`
+**Wiederherstellen:** Einstellungen → Datensicherung → **↩ Restore**
 
 ---
 
 ## Health-Check
 
-Gibt den aktuellen Status der Anwendung zurück — kein Login erforderlich.
-
 ```
 GET /api.php?action=health
 ```
 
-**Antwort (HTTP 200 wenn OK, 503 bei Wartung oder nicht konfiguriert):**
+Kein Login erforderlich. HTTP 200 wenn OK, 503 bei Wartung oder nicht konfiguriert.
+
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-03-19 10:00:00",
   "configured": true,
   "maintenance": false,
   "queue": { "pending": 2, "downloading": 1, "errors": 0 },
   "cron": { "running": true, "pid": 12345 },
-  "disk": { "free_bytes": 107374182400, "total_bytes": 536870912000, "free_pct": 20.0 },
-  "last_backup": "2026-03-19 03:00:00"
+  "disk": { "free_bytes": 107374182400, "free_pct": 20.0 },
+  "last_backup": "2026-03-23 03:00:00"
 }
 ```
-
-Mögliche `status`-Werte: `ok`, `unconfigured`, `maintenance`
 
 ---
 
 ## Externe API
 
-Externe Systeme können über API-Keys auf die Benutzerverwaltung zugreifen. Die vollständige Dokumentation ist unter **📖 API-Dokumentation** in der Navigation verfügbar (nur Admins).
+Externe Systeme können über API-Keys auf die Benutzerverwaltung zugreifen. Vollständige Dokumentation unter **📖 API-Dokumentation** (nur Admins).
 
 **Authentifizierung:**
 ```
 X-API-Key: xv_xxxxxxxxxxxx
 ```
-oder als Query-Parameter: `?api_key=xv_xxxxxxxxxxxx`
-
-### Verfügbare Endpoints
 
 | Endpoint | Methode | Beschreibung |
 |---|---|---|
@@ -414,11 +502,11 @@ oder als Query-Parameter: `?api_key=xv_xxxxxxxxxxxx`
 ## Sicherheit
 
 - **`data/`-Verzeichnis** ist per `.htaccess` vollständig vor HTTP-Zugriff geschützt
+- **Interne PHP-Dateien** (`config.php`, `auth.php`, `cron.php`, `cache_builder.php`, `backup.php`) sind per `.htaccess` gesperrt
 - **Stream-URLs** werden nur serverseitig aufgebaut und nie an den Client übertragen
 - **Gesperrte Benutzer** können sich nicht einloggen; der Wartungsmodus erlaubt nur Admin-Logins
 - **Aktivitätslog** protokolliert alle relevanten Aktionen
-- **Rate-Limiting** für editor-Accounts: konfigurierbares stündliches Queue-Limit
-- **API-Keys** können jederzeit widerrufen oder gelöscht werden; vollständiger Key nur nach Passwort-Bestätigung einsehbar
+- **API-Keys** können jederzeit widerrufen werden; vollständiger Key nur nach Passwort-Bestätigung einsehbar
 - **HTTPS** wird empfohlen (Let's Encrypt / Certbot)
 
 ---
@@ -432,28 +520,34 @@ xtream-frontend/
 ├── auth.php               — Authentifizierung, Rollen, Rate-Limiting
 ├── config.php             — Zentrale Konfiguration & Hilfsfunktionen
 ├── login.php              — Login & Ersteinrichtungs-Wizard
-├── cache_builder.php      — Hintergrundprozess für Medien-Cache (Filme + Serien)
+├── invite.php             — Öffentliche Einladungs-Registrierungsseite
+├── cache_builder.php      — Hintergrundprozess für Medien-Cache
 ├── cron.php               — Download-Worker (Cronjob)
 ├── backup.php             — Backup-Script (täglich 3 Uhr, max 7 Backups)
 ├── maintenance.php        — Wartungsseite
 ├── install.sh             — Automatisches Installationsskript
+├── style.css              — Stylesheet
 ├── .htaccess              — Sicherheitsregeln
 └── data/                  — Datendateien (automatisch erstellt)
-    ├── config.json            — Server- & App-Konfiguration
-    ├── users.json             — Benutzerdatenbank inkl. Favoriten & Limits
-    ├── queue.json             — Download-Queue
-    ├── downloaded.json        — IDs heruntergeladener VODs
-    ├── downloaded_index.json  — Metadaten heruntergeladener VODs
-    ├── download_history.json  — Permanenter Download-Verlauf (max. 200)
-    ├── library_cache.json     — Film-Metadaten-Cache
-    ├── series_cache.json      — Serien-Metadaten-Cache
-    ├── activity.json          — Aktivitätslog
-    ├── rate_limits.json       — Rate-Limit-Tracking
-    ├── api_keys.json          — API-Keys
-    ├── progress.json          — Aktueller Download-Fortschritt
-    ├── cron.lock              — Download-Worker Lock-Datei (temporär)
-    ├── cron.log               — Download-Log
-    ├── backup.log             — Backup-Log
-    └── backups/               — Backup-Archiv (automatisch erstellt)
+    ├── config.json                    — Server- & App-Konfiguration
+    ├── users.json                     — Benutzerdatenbank inkl. Favoriten
+    ├── servers.json                   — Gespeicherte Xtream-Server
+    ├── invites.json                   — Einladungslinks
+    ├── queue_<server-id>.json         — Download-Queue (pro Server)
+    ├── downloaded_<server-id>.json    — IDs heruntergeladener VODs (pro Server)
+    ├── downloaded_index_<server-id>.json — Metadaten heruntergeladener VODs
+    ├── download_history_<server-id>.json — Permanenter Download-Verlauf
+    ├── library_cache_<server-id>.json — Film-Metadaten-Cache (pro Server)
+    ├── series_cache_<server-id>.json  — Serien-Metadaten-Cache (pro Server)
+    ├── new_releases.json              — Neue Titel seit letztem Cache-Run
+    ├── rclone_cache.json              — Bekannte Dateien auf dem Remote
+    ├── activity.json                  — Aktivitätslog
+    ├── rate_limits.json               — Rate-Limit-Tracking
+    ├── api_keys.json                  — API-Keys
+    ├── progress.json                  — Aktueller Download-Fortschritt
+    ├── cron.lock                      — Download-Worker Lock-Datei
+    ├── cron.log                       — Download-Log
+    ├── backup.log                     — Backup-Log
+    └── backups/                       — Backup-Archiv
         └── backup_YYYY-MM-DD_HH-II-SS.zip
 ```
