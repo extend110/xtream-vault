@@ -101,6 +101,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_queue_view): ?>
     <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> in Queue</span>
     <?php endif; ?>
+    <?php if ($can_settings): ?>
+    <span id="vpn-badge" title="VPN-Status — klicken für Einstellungen" onclick="showView('settings')"
+      style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:600;
+             padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
+             border:1px solid transparent;transition:background .3s,color .3s,border-color .3s"></span>
+    <?php endif; ?>
     <button id="theme-toggle" onclick="showView('profile')" title="Theme wechseln" style="background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:4px 8px;color:var(--muted);transition:color .2s" aria-label="Theme wechseln">🎨</button>
     <?php if ($role === 'editor'): ?>
     <span id="limit-indicator" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
@@ -390,11 +396,30 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
       </div>
 
-      <!-- GB pro Monat Chart -->
+      <!-- Charts nebeneinander (2 Spalten auf Desktop) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- GB pro Monat -->
+        <div class="settings-card">
+          <h3>📦 Datenvolumen pro Monat</h3>
+          <div style="position:relative;height:220px">
+            <canvas id="stats-chart-gb"></canvas>
+          </div>
+        </div>
+
+        <!-- Downloads pro Monat -->
+        <div class="settings-card">
+          <h3>📥 Downloads pro Monat</h3>
+          <div style="position:relative;height:220px">
+            <canvas id="stats-chart-count"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Kategorien -->
       <div class="settings-card" style="margin-bottom:16px">
-        <h3>📦 Datenvolumen pro Monat</h3>
-        <div style="position:relative;height:260px">
-          <canvas id="stats-chart-gb"></canvas>
+        <h3>🏷️ Top Kategorien</h3>
+        <div style="position:relative;height:320px">
+          <canvas id="stats-chart-cats"></canvas>
         </div>
       </div>
 
@@ -657,6 +682,24 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <label>TMDB API-Key (v3 auth)</label>
             <input type="password" id="cfg-tmdb-api-key" placeholder="Leer lassen um TMDB zu deaktivieren" autocomplete="off">
           </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>🔄 Updates</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            Aktualisiert die Installation via <code style="color:var(--accent2)">git pull</code> vom
+            <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--accent2)">GitHub-Repository</a>.
+            Vor dem Update wird automatisch ein Backup von <code>data/</code> erstellt.
+          </div>
+          <div id="update-status" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.8">
+            <div style="color:var(--muted)">– noch nicht geprüft –</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn-secondary" onclick="checkUpdate(this)">🔍 Auf Updates prüfen</button>
+            <button class="btn-primary"   id="btn-run-update" onclick="runUpdate(this)" style="display:none">⬆️ Update installieren</button>
+            <div class="settings-msg" id="update-msg" style="margin:0"></div>
+          </div>
+          <div id="update-log" style="display:none;margin-top:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);white-space:pre-wrap;max-height:160px;overflow-y:auto"></div>
         </div>
 
         <div class="settings-card">
@@ -1103,6 +1146,7 @@ let queueRefreshInterval;
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
   initTheme();
   startBadgePolling();
+  <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
   api('get_new_releases').then(d => {
     const total = (d.movies?.length ?? 0) + (d.series?.length ?? 0);
@@ -2399,18 +2443,129 @@ function collectConfig() {
   };
 }
 
+// ── Updates ───────────────────────────────────────────────────
+async function checkUpdate(btn) {
+  const statusEl = document.getElementById('update-status');
+  const msgEl    = document.getElementById('update-msg');
+  const updateBtn= document.getElementById('btn-run-update');
+  if (btn) btn.disabled = true;
+  statusEl.innerHTML = `<div style="color:var(--muted)">⏳ Prüfe GitHub…</div>`;
+  msgEl.textContent = '';
+  updateBtn.style.display = 'none';
+
+  const d = await api('check_update');
+  if (btn) btn.disabled = false;
+
+  if (d.error) {
+    statusEl.innerHTML = `<div style="color:var(--red)">❌ ${esc(d.error)}</div>`;
+    return;
+  }
+
+  if (!d.git_available) {
+    statusEl.innerHTML = `<div style="color:var(--red)">⚠️ git nicht installiert — <code>apt install git</code></div>`;
+    return;
+  }
+
+  const dateStr = d.remote_date ? ` · ${d.remote_date}` : '';
+  if (d.up_to_date) {
+    statusEl.innerHTML = `
+      <div style="color:var(--green)">✅ Aktuell</div>
+      <div style="color:var(--muted);margin-top:4px">Lokaler Commit: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
+      <div style="color:var(--muted)">Remote Commit: <span style="color:var(--text)">${esc(d.remote_commit)}</span>${dateStr}</div>`;
+  } else {
+    statusEl.innerHTML = `
+      <div style="color:var(--orange)">🆕 Update verfügbar</div>
+      <div style="color:var(--muted);margin-top:4px">Lokaler Commit: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
+      <div style="color:var(--muted)">Remote Commit: <span style="color:var(--accent2)">${esc(d.remote_commit)}</span>${dateStr}</div>
+      ${d.remote_message ? `<div style="color:var(--muted);margin-top:4px">💬 ${esc(d.remote_message)}</div>` : ''}`;
+    updateBtn.style.display = '';
+  }
+}
+
+async function runUpdate(btn) {
+  const msgEl  = document.getElementById('update-msg');
+  const logEl  = document.getElementById('update-log');
+  const status = document.getElementById('update-status');
+
+  if (!confirm('Update installieren?\n\nEin Backup von data/ wird automatisch erstellt.\nDie Seite wird danach neu geladen.')) return;
+
+  btn.disabled = true;
+  msgEl.textContent = '⏳ Update läuft…'; msgEl.className = 'settings-msg info';
+  logEl.style.display = 'none';
+
+  const d = await apiPost('run_update', {});
+  btn.disabled = false;
+
+  if (d.error) {
+    msgEl.textContent = '❌ ' + d.error; msgEl.className = 'settings-msg err';
+    if (d.log) { logEl.textContent = d.log; logEl.style.display = ''; }
+    return;
+  }
+
+  msgEl.textContent = `✅ Update abgeschlossen — Commit ${d.commit}`; msgEl.className = 'settings-msg ok';
+  if (d.log) { logEl.textContent = d.log; logEl.style.display = ''; }
+  if (d.backup) {
+    status.innerHTML += `<div style="color:var(--muted);margin-top:4px">💾 Backup: <span style="color:var(--text)">${esc(d.backup)}</span></div>`;
+  }
+  btn.style.display = 'none';
+  // Seite nach 3s neu laden damit neue PHP-Dateien wirksam werden
+  setTimeout(() => location.reload(), 3000);
+}
+
 // ── VPN ───────────────────────────────────────────────────────
+let _vpnPollInterval = null;
+
+function updateVpnBadge(status) {
+  const badge = document.getElementById('vpn-badge');
+  if (!badge) return;
+  if (!status) { badge.style.display = 'none'; return; }
+  badge.style.display = '';
+  if (!status.wg_installed) {
+    badge.textContent = '⚠️ VPN';
+    badge.style.background   = 'rgba(255,71,87,.15)';
+    badge.style.color        = 'var(--red)';
+    badge.style.borderColor  = 'rgba(255,71,87,.3)';
+    badge.title = 'WireGuard nicht installiert';
+    return;
+  }
+  if (status.up) {
+    badge.textContent = '🔒 VPN';
+    badge.style.background  = 'rgba(46,213,115,.15)';
+    badge.style.color       = 'var(--green)';
+    badge.style.borderColor = 'rgba(46,213,115,.3)';
+    badge.title = `VPN aktiv (${status.interface})${status.public_ip ? ' · ' + status.public_ip : ''}`;
+  } else {
+    badge.textContent = '🔓 VPN';
+    badge.style.background  = 'rgba(255,159,67,.12)';
+    badge.style.color       = 'var(--orange)';
+    badge.style.borderColor = 'rgba(255,159,67,.25)';
+    badge.title = `VPN inaktiv (${status.interface})`;
+  }
+}
+
+async function pollVpnStatus() {
+  // Nur abfragen wenn VPN aktiviert ist
+  const d = await api('vpn_status').catch(() => null);
+  if (d && !d.error) updateVpnBadge(d);
+}
+
+function startVpnPolling() {
+  pollVpnStatus();
+  if (!_vpnPollInterval) _vpnPollInterval = setInterval(pollVpnStatus, 30000);
+}
+
 async function checkVpnStatus() {
   const msg = document.getElementById('vpn-status-msg');
   msg.textContent = '⏳ Prüfe…'; msg.className = 'settings-msg info';
   const d = await api('vpn_status');
   if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  updateVpnBadge(d);
   if (!d.wg_installed) {
     msg.textContent = '⚠️ WireGuard nicht installiert — sudo apt install wireguard';
     msg.className = 'settings-msg err'; return;
   }
-  const upText  = d.up ? '🟢 Aktiv' : '🔴 Inaktiv';
-  const ipText  = d.public_ip ? ` · IP: ${d.public_ip}` : '';
+  const upText = d.up ? '🟢 Aktiv' : '🔴 Inaktiv';
+  const ipText = d.public_ip ? ` · IP: ${d.public_ip}` : '';
   msg.textContent = `${upText} (${d.interface})${ipText}`;
   msg.className = d.up ? 'settings-msg ok' : 'settings-msg err';
 }
@@ -2420,6 +2575,7 @@ async function vpnConnect() {
   const d = await apiPost('vpn_connect', {});
   if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
   msg.textContent = '🟢 Verbunden'; msg.className = 'settings-msg ok';
+  pollVpnStatus();
 }
 async function vpnDisconnect() {
   const msg = document.getElementById('vpn-status-msg');
@@ -2427,6 +2583,7 @@ async function vpnDisconnect() {
   const d = await apiPost('vpn_disconnect', {});
   if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
   msg.textContent = '🔴 Getrennt'; msg.className = 'settings-msg ok';
+  pollVpnStatus();
 }
 
 async function testTelegram() {
@@ -2999,7 +3156,9 @@ async function loadServerInfo() {
 
 // ── Statistiken ───────────────────────────────────────────────
 <?php if ($can_settings): ?>
-let _statsChart = null;
+let _statsChart     = null;
+let _statsChartCnt  = null;
+let _statsChartCats = null;
 
 async function loadStatsView() {
   const d = await api('stats_data');
@@ -3009,7 +3168,6 @@ async function loadStatsView() {
   document.getElementById('stats-total-count').textContent = (d.total_count ?? 0).toLocaleString();
   document.getElementById('stats-total-gb').textContent    = fmtBytes(d.total_bytes ?? 0);
 
-  // GB/Monat Chart
   const months  = Object.keys(d.by_month ?? {});
   const gbVals  = months.map(m => +((d.by_month[m].bytes / 1073741824).toFixed(2)));
   const cntVals = months.map(m => d.by_month[m].count);
@@ -3018,10 +3176,14 @@ async function loadStatsView() {
     return new Date(y, mo - 1).toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
   });
 
-  const ctx = document.getElementById('stats-chart-gb')?.getContext('2d');
-  if (ctx) {
+  const monoFont = { family: 'DM Mono', size: 10 };
+  const gridColor = 'rgba(255,255,255,.05)';
+
+  // ── GB pro Monat ──────────────────────────────────────────────
+  const ctxGb = document.getElementById('stats-chart-gb')?.getContext('2d');
+  if (ctxGb) {
     if (_statsChart) _statsChart.destroy();
-    _statsChart = new Chart(ctx, {
+    _statsChart = new Chart(ctxGb, {
       type: 'bar',
       data: {
         labels,
@@ -3030,40 +3192,103 @@ async function loadStatsView() {
           data: gbVals,
           backgroundColor: 'rgba(100,210,255,.25)',
           borderColor:     'rgba(100,210,255,.8)',
-          borderWidth: 1,
-          borderRadius: 4,
-          yAxisID: 'y',
-        }, {
-          label: 'Downloads',
-          data: cntVals,
-          type: 'line',
-          borderColor:     'rgba(255,159,67,.8)',
-          backgroundColor: 'rgba(255,159,67,.1)',
-          borderWidth: 2,
-          pointRadius: 3,
-          tension: 0.3,
-          yAxisID: 'y2',
-          fill: false,
+          borderWidth: 1, borderRadius: 4,
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(2)} GB` } }
+        },
+        scales: {
+          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
+          y: { ticks: { color: 'rgba(100,210,255,.8)', font: monoFont, callback: v => v + ' GB' }, grid: { color: gridColor } },
+        }
+      }
+    });
+  }
+
+  // ── Downloads pro Monat ───────────────────────────────────────
+  const ctxCnt = document.getElementById('stats-chart-count')?.getContext('2d');
+  if (ctxCnt) {
+    if (_statsChartCnt) _statsChartCnt.destroy();
+    _statsChartCnt = new Chart(ctxCnt, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Downloads',
+          data: cntVals,
+          backgroundColor: 'rgba(255,159,67,.25)',
+          borderColor:     'rgba(255,159,67,.8)',
+          borderWidth: 1, borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${c.parsed.y} Downloads` } }
+        },
+        scales: {
+          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
+          y: { ticks: { color: 'rgba(255,159,67,.8)', font: monoFont, stepSize: 1 }, grid: { color: gridColor } },
+        }
+      }
+    });
+  }
+
+  // ── Top Kategorien ────────────────────────────────────────────
+  const ctxCats = document.getElementById('stats-chart-cats')?.getContext('2d');
+  if (ctxCats && d.top_categories) {
+    const catEntries = Object.entries(d.top_categories);
+    const catLabels  = catEntries.map(([k]) => k);
+    const catCounts  = catEntries.map(([, v]) => v.count);
+    const catBytes   = catEntries.map(([, v]) => +((v.bytes / 1073741824).toFixed(2)));
+
+    if (_statsChartCats) _statsChartCats.destroy();
+    _statsChartCats = new Chart(ctxCats, {
+      type: 'bar',
+      data: {
+        labels: catLabels,
+        datasets: [{
+          label: 'Downloads',
+          data: catCounts,
+          backgroundColor: catCounts.map((_, i) =>
+            `hsla(${200 + i * 12}, 70%, 60%, 0.3)`),
+          borderColor: catCounts.map((_, i) =>
+            `hsla(${200 + i * 12}, 70%, 60%, 0.9)`),
+          borderWidth: 1, borderRadius: 4,
+          yAxisID: 'y',
+        }, {
+          label: 'GB',
+          data: catBytes,
+          type: 'line',
+          borderColor:     'rgba(232,255,71,.7)',
+          backgroundColor: 'rgba(232,255,71,.1)',
+          borderWidth: 2, pointRadius: 3, tension: 0.3,
+          yAxisID: 'y2', fill: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { labels: { color: 'var(--text)', font: { family: 'DM Mono', size: 11 } } },
           tooltip: {
             callbacks: {
-              label: ctx => ctx.dataset.label === 'GB'
-                ? `${ctx.parsed.y.toFixed(2)} GB`
-                : `${ctx.parsed.y} Downloads`
+              label: c => c.dataset.label === 'GB'
+                ? `${c.parsed.x.toFixed(2)} GB`
+                : `${c.parsed.x} Downloads`
             }
           }
         },
         scales: {
-          x:  { ticks: { color: 'var(--muted)', font: { family: 'DM Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
-          y:  { position: 'left',  ticks: { color: 'rgba(100,210,255,.8)', font: { family: 'DM Mono', size: 10 }, callback: v => v + ' GB' }, grid: { color: 'rgba(255,255,255,.05)' } },
-          y2: { position: 'right', ticks: { color: 'rgba(255,159,67,.8)', font: { family: 'DM Mono', size: 10 } }, grid: { drawOnChartArea: false } },
+          y:  { ticks: { color: 'var(--text)', font: { family: 'DM Mono', size: 10 } }, grid: { color: gridColor } },
+          x:  { position: 'bottom', ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
+          y2: { position: 'right',  ticks: { color: 'rgba(232,255,71,.8)', font: monoFont, callback: v => v + ' GB' }, grid: { drawOnChartArea: false } },
         }
       }
     });

@@ -809,3 +809,10 @@ body::before {
 #ue-new-releases { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 #ue-new-releases::-webkit-scrollbar { height: 4px; }
 #ue-new-releases::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ── Stats Charts Grid ── */
+@media (max-width: 700px) {
+  #view-stats > div[style*="grid-template-columns:1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}

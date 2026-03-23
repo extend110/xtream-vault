@@ -1,0 +1,7 @@
+# Xtream Vault — git ignore
+
+# Datendateien (serverseitig, nie commiten)
+data/
+
+# Automatisch generiert
+version.json

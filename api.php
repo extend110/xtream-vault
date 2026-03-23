@@ -904,6 +904,101 @@ switch ($action) {
         break;
 
     // ── VPN ───────────────────────────────────────────────────────────────────
+    // ── Updates ───────────────────────────────────────────────────────────────
+    case 'check_update':
+        require_permission('settings');
+        $versionFile = __DIR__ . '/version.json';
+        $local = file_exists($versionFile)
+            ? (json_decode(file_get_contents($versionFile), true) ?? [])
+            : [];
+        $localCommit = $local['commit'] ?? 'unknown';
+
+        // Aktuellen Commit lokal via git ermitteln (zuverlässiger als version.json)
+        exec('git -C ' . escapeshellarg(__DIR__) . ' rev-parse HEAD 2>/dev/null', $gitOut, $gitRet);
+        if ($gitRet === 0 && !empty($gitOut[0])) {
+            $localCommit = trim($gitOut[0]);
+        }
+
+        // GitHub API: neuester Commit auf main
+        $apiUrl = 'https://api.github.com/repos/extend110/xtream-vault/commits/main';
+        $ctx    = stream_context_create(['http' => [
+            'method'  => 'GET',
+            'header'  => "User-Agent: XtreamVault/1.0\r\nAccept: application/vnd.github.v3+json\r\n",
+            'timeout' => 8,
+        ]]);
+        $raw = @file_get_contents($apiUrl, false, $ctx);
+        if ($raw === false) {
+            echo json_encode(['error' => 'GitHub nicht erreichbar']); break;
+        }
+        $remote     = json_decode($raw, true);
+        $remoteHash = $remote['sha'] ?? '';
+        $remoteMsg  = $remote['commit']['message'] ?? '';
+        $remoteDate = $remote['commit']['author']['date'] ?? '';
+        $remoteShort = substr($remoteHash, 0, 7);
+        $localShort  = substr($localCommit, 0, 7);
+
+        echo json_encode([
+            'local_commit'   => $localShort,
+            'remote_commit'  => $remoteShort,
+            'up_to_date'     => $localCommit !== 'unknown' && str_starts_with($remoteHash, $localShort),
+            'remote_message' => trim(explode("\n", $remoteMsg)[0]),
+            'remote_date'    => $remoteDate ? date('d.m.Y H:i', strtotime($remoteDate)) : '',
+            'git_available'  => $gitRet === 0,
+        ]);
+        break;
+
+    case 'run_update':
+        require_permission('settings');
+        $dir = __DIR__;
+
+        // git verfügbar?
+        exec('which git 2>/dev/null', $gitWhich, $gitRet);
+        if ($gitRet !== 0 || empty($gitWhich)) {
+            echo json_encode(['error' => 'git nicht installiert — bitte "apt install git" ausführen']); break;
+        }
+
+        // git repo initialisiert?
+        exec('git -C ' . escapeshellarg($dir) . ' rev-parse --is-inside-work-tree 2>/dev/null', $out, $ret);
+        if ($ret !== 0) {
+            echo json_encode(['error' => 'Kein git-Repository. Bitte manuell via git clone installieren.']); break;
+        }
+
+        // Sicherung von data/ vor dem Update
+        $backupDir  = $dir . '/data/backups';
+        $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.zip';
+        @mkdir($backupDir, 0775, true);
+        exec('zip -r ' . escapeshellarg($backupFile) . ' ' . escapeshellarg($dir . '/data') . ' 2>&1', $zipOut, $zipRet);
+        if ($zipRet !== 0) {
+            echo json_encode(['error' => 'Backup fehlgeschlagen: ' . implode(' ', $zipOut)]); break;
+        }
+
+        // git pull
+        exec('git -C ' . escapeshellarg($dir) . ' pull origin main 2>&1', $pullOut, $pullRet);
+        $pullLog = implode("\n", $pullOut);
+        if ($pullRet !== 0) {
+            echo json_encode(['error' => 'git pull fehlgeschlagen: ' . $pullLog]); break;
+        }
+
+        // Berechtigungen wiederherstellen
+        exec('chown -R www-data:www-data ' . escapeshellarg($dir) . '/data 2>/dev/null');
+
+        // version.json aktualisieren
+        exec('git -C ' . escapeshellarg($dir) . ' rev-parse HEAD 2>/dev/null', $hashOut);
+        $newHash = trim($hashOut[0] ?? 'unknown');
+        file_put_contents($dir . '/version.json', json_encode([
+            'commit'     => $newHash,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ], JSON_PRETTY_PRINT));
+
+        log_activity($current_user['id'], $current_user['username'], 'run_update', ['commit' => substr($newHash, 0, 7)]);
+        echo json_encode([
+            'ok'         => true,
+            'commit'     => substr($newHash, 0, 7),
+            'log'        => $pullLog,
+            'backup'     => basename($backupFile),
+        ]);
+        break;
+
     case 'vpn_status':
         require_permission('settings');
         $wgInstalled = vpn_wg_installed();
@@ -1866,15 +1961,28 @@ switch ($action) {
         arsort($userCounts);
         $topUsers = array_slice($userCounts, 0, 10, true);
 
+        // ── Top Kategorien ────────────────────────────────────────────────────
+        $catCounts = [];
+        foreach ($history as $h) {
+            $cat = trim($h['category'] ?? 'Unbekannt');
+            if ($cat === '') $cat = 'Unbekannt';
+            if (!isset($catCounts[$cat])) $catCounts[$cat] = ['count' => 0, 'bytes' => 0];
+            $catCounts[$cat]['count']++;
+            $catCounts[$cat]['bytes'] += (int)($h['bytes'] ?? 0);
+        }
+        arsort($catCounts);
+        $topCategories = array_slice($catCounts, 0, 15, true);
+
         // ── Gesamt ────────────────────────────────────────────────────────────
         $totalBytes = array_sum(array_column($history, 'bytes'));
         $totalCount = count($history);
 
         echo json_encode([
-            'by_month'    => $months,
-            'top_users'   => $topUsers,
-            'total_bytes' => $totalBytes,
-            'total_count' => $totalCount,
+            'by_month'       => $months,
+            'top_users'      => $topUsers,
+            'top_categories' => $topCategories,
+            'total_bytes'    => $totalBytes,
+            'total_count'    => $totalCount,
         ]);
         break;
 
