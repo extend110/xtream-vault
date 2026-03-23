@@ -1051,16 +1051,33 @@ switch ($action) {
     case 'vpn_status':
         require_permission('settings');
         $wgInstalled = vpn_wg_installed();
-        $up    = $wgInstalled ? vpn_is_up() : false;
+        $up          = $wgInstalled ? vpn_is_up() : false;
+
+        // Öffentliche IP
         $pubIp = '';
         $raw   = @file_get_contents('https://api.ipify.org?format=text',
             false, stream_context_create(['http' => ['timeout' => 5]]));
         if ($raw) $pubIp = trim($raw);
+
+        // Verbunden seit: letzter Handshake aus "wg show"
+        $connectedSince = null;
+        if ($up) {
+            exec('sudo /usr/bin/wg show ' . escapeshellarg(VPN_INTERFACE) . ' 2>/dev/null', $wgOut);
+            foreach ($wgOut as $line) {
+                if (preg_match('/latest handshake:\s*(.+)/i', trim($line), $m)) {
+                    $ts = strtotime(trim($m[1]));
+                    if ($ts && $ts > 0) $connectedSince = $ts;
+                    break;
+                }
+            }
+        }
+
         echo json_encode([
-            'interface'    => VPN_INTERFACE,
-            'up'           => $up,
-            'public_ip'    => $pubIp,
-            'wg_installed' => $wgInstalled,
+            'interface'      => VPN_INTERFACE,
+            'up'             => $up,
+            'public_ip'      => $pubIp,
+            'wg_installed'   => $wgInstalled,
+            'connected_since'=> $connectedSince,
         ]);
         break;
 

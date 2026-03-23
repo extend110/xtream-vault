@@ -343,7 +343,7 @@ sudo chmod 600 /etc/wireguard/wg0.conf
 ```bash
 sudo tee /etc/sudoers.d/xtream-vpn << 'EOF'
 www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick up *, /usr/bin/wg-quick down *
-www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *
+www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *, /usr/bin/wg show *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip rule show, /usr/sbin/ip rule add *, /usr/sbin/ip rule del *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip -6 rule show, /usr/sbin/ip -6 rule add *, /usr/sbin/ip -6 rule del *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip route add *, /usr/sbin/ip route del *

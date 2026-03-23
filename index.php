@@ -107,10 +107,27 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
              padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
              border:1px solid transparent;transition:background .3s,color .3s,border-color .3s"></span>
     <?php endif; ?>
-    <button id="theme-toggle" onclick="showView('profile')" title="Theme wechseln" style="background:transparent;border:none;cursor:pointer;font-size:1.1rem;padding:4px 8px;color:var(--muted);transition:color .2s" aria-label="Theme wechseln">🎨</button>
+    <!-- Desktop: direkte Buttons -->
+    <button id="theme-toggle" class="topbar-icon-btn topbar-desktop-only" onclick="showView('profile')" title="Theme wechseln" aria-label="Theme wechseln">🎨</button>
     <?php if ($role === 'editor'): ?>
-    <span id="limit-indicator" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
+    <span id="limit-indicator" class="topbar-desktop-only" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
     <?php endif; ?>
+    <!-- Mobile: ⋯ Overflow-Menü -->
+    <div class="topbar-overflow" id="topbar-overflow">
+      <button class="topbar-icon-btn" onclick="toggleTopbarMenu()" aria-label="Menü">⋯</button>
+      <div class="topbar-menu" id="topbar-menu">
+        <button onclick="showView('profile');closeTopbarMenu()">🎨 Theme wechseln</button>
+        <?php if ($can_settings): ?>
+        <button onclick="showView('settings');closeTopbarMenu()">⚙️ Einstellungen</button>
+        <?php endif; ?>
+        <?php if ($can_queue_view): ?>
+        <button onclick="showView('queue');closeTopbarMenu()">📋 Queue</button>
+        <?php endif; ?>
+        <?php if ($role === 'editor'): ?>
+        <div id="limit-indicator-mobile" style="display:none;padding:8px 16px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></div>
+        <?php endif; ?>
+      </div>
+    </div>
     <!-- User Chip -->
     <div class="user-chip" id="user-chip" onclick="toggleUserDropdown()">
       <div class="user-chip-avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div>
@@ -721,6 +738,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <button class="btn-secondary" onclick="vpnConnect()">▶ Verbinden</button>
             <button class="btn-secondary" onclick="vpnDisconnect()">■ Trennen</button>
             <div class="settings-msg" id="vpn-status-msg" style="margin:0"></div>
+          </div>
+          <!-- VPN Live-Statistiken (nur sichtbar wenn aktiv) -->
+          <div id="vpn-stats-card" style="display:none;margin-top:14px;background:var(--bg3);border:1px solid rgba(46,213,115,.2);border-radius:8px;padding:14px 16px">
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">🔒 VPN aktiv</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap">
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Öffentliche IP</div><div id="vpn-stat-ip" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Verbunden seit</div><div id="vpn-stat-since" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Interface</div><div id="vpn-stat-iface" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+            </div>
           </div>
         </div>
 
@@ -2508,33 +2534,73 @@ async function runUpdate(btn) {
 }
 
 // ── VPN ───────────────────────────────────────────────────────
-let _vpnPollInterval = null;
+let _vpnPollInterval  = null;
+let _vpnDurationTimer = null;
+let _vpnConnectedSince = null;
+
+function fmtDurationVpn(ts) {
+  if (!ts) return '–';
+  const secs = Math.floor(Date.now() / 1000) - ts;
+  if (secs < 60)   return secs + 's';
+  if (secs < 3600) return Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return h + 'h ' + m + 'm';
+}
 
 function updateVpnBadge(status) {
   const badge = document.getElementById('vpn-badge');
+  const statsCard = document.getElementById('vpn-stats-card');
+
   if (!badge) return;
-  if (!status) { badge.style.display = 'none'; return; }
+  if (!status) { badge.style.display = 'none'; if (statsCard) statsCard.style.display = 'none'; return; }
   badge.style.display = '';
+
   if (!status.wg_installed) {
     badge.textContent = '⚠️ VPN';
     badge.style.background   = 'rgba(255,71,87,.15)';
     badge.style.color        = 'var(--red)';
     badge.style.borderColor  = 'rgba(255,71,87,.3)';
     badge.title = 'WireGuard nicht installiert';
+    if (statsCard) statsCard.style.display = 'none';
     return;
   }
+
   if (status.up) {
     badge.textContent = '🔒 VPN';
     badge.style.background  = 'rgba(46,213,115,.15)';
     badge.style.color       = 'var(--green)';
     badge.style.borderColor = 'rgba(46,213,115,.3)';
     badge.title = `VPN aktiv (${status.interface})${status.public_ip ? ' · ' + status.public_ip : ''}`;
+
+    // Stats-Card befüllen und anzeigen
+    if (statsCard) {
+      statsCard.style.display = '';
+      const ipEl    = document.getElementById('vpn-stat-ip');
+      const ifaceEl = document.getElementById('vpn-stat-iface');
+      const sinceEl = document.getElementById('vpn-stat-since');
+      if (ipEl)    ipEl.textContent    = status.public_ip || '–';
+      if (ifaceEl) ifaceEl.textContent = status.interface || '–';
+
+      // Dauer-Timer starten
+      _vpnConnectedSince = status.connected_since || null;
+      if (_vpnDurationTimer) clearInterval(_vpnDurationTimer);
+      if (sinceEl && _vpnConnectedSince) {
+        const updateDur = () => sinceEl.textContent = fmtDurationVpn(_vpnConnectedSince);
+        updateDur();
+        _vpnDurationTimer = setInterval(updateDur, 1000);
+      } else if (sinceEl) {
+        sinceEl.textContent = '–';
+      }
+    }
   } else {
     badge.textContent = '🔓 VPN';
     badge.style.background  = 'rgba(255,159,67,.12)';
     badge.style.color       = 'var(--orange)';
     badge.style.borderColor = 'rgba(255,159,67,.25)';
     badge.title = `VPN inaktiv (${status.interface})`;
+    if (statsCard) statsCard.style.display = 'none';
+    if (_vpnDurationTimer) { clearInterval(_vpnDurationTimer); _vpnDurationTimer = null; }
   }
 }
 
@@ -3582,6 +3648,23 @@ async function loadUserDashboard() {
 async function doLogout() {
   await api('logout');
   window.location.href = 'login.php';
+}
+
+function toggleTopbarMenu() {
+  const menu = document.getElementById('topbar-menu');
+  if (!menu) return;
+  const open = menu.classList.toggle('open');
+  if (open) {
+    // Schließen wenn außerhalb geklickt
+    setTimeout(() => document.addEventListener('click', closeTopbarMenuOutside), 0);
+  }
+}
+function closeTopbarMenu() {
+  document.getElementById('topbar-menu')?.classList.remove('open');
+  document.removeEventListener('click', closeTopbarMenuOutside);
+}
+function closeTopbarMenuOutside(e) {
+  if (!document.getElementById('topbar-overflow')?.contains(e.target)) closeTopbarMenu();
 }
 
 function toggleUserDropdown() {

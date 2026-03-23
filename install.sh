@@ -180,7 +180,7 @@ if [ ! -f "$SUDOERS_FILE" ]; then
     cat > "$SUDOERS_FILE" <<'EOL'
 # Xtream Vault: www-data darf VPN-Befehle ohne Passwort ausführen
 www-data ALL=(root) NOPASSWD: /usr/bin/wg-quick up *, /usr/bin/wg-quick down *
-www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *
+www-data ALL=(root) NOPASSWD: /usr/bin/wg showconf *, /usr/bin/wg show *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip rule show, /usr/sbin/ip rule add *, /usr/sbin/ip rule del *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip -6 rule show, /usr/sbin/ip -6 rule add *, /usr/sbin/ip -6 rule del *
 www-data ALL=(root) NOPASSWD: /usr/sbin/ip route add *, /usr/sbin/ip route del *
