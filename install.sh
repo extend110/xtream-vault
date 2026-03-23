@@ -64,8 +64,8 @@ apt-get install -y -qq \
     curl \
     cron \
     ffmpeg \
-    git \
     wireguard \
+    unzip \
     zip
 log "Pakete installiert"
 
@@ -161,34 +161,14 @@ crontab -u www-data "$CRON_TMP"
 rm -f "$CRON_TMP"
 log "Cronjobs eingerichtet (alle 30 Min Downloads, 4 Uhr Cache, 3 Uhr Backup)"
 
-# ── git einrichten ────────────────────────────────────────────
-section "git einrichten"
-git config --global --add safe.directory "$PROJECT_PATH" 2>/dev/null || true
-
-if [ ! -d "$PROJECT_PATH/.git" ]; then
-    cd "$PROJECT_PATH"
-    git init -q
-    git remote add origin https://github.com/extend110/xtream-vault.git 2>/dev/null || true
-    git fetch origin main -q 2>/dev/null || true
-    git checkout -q main 2>/dev/null || true
-    log "git-Repository initialisiert"
-else
-    log "git-Repository bereits vorhanden"
-fi
-
-# Webserver-Dateien aus git-Updates ausschließen
-echo "install.sh" >> "$PROJECT_PATH/.git/info/exclude" 2>/dev/null || true
-echo "README.md"  >> "$PROJECT_PATH/.git/info/exclude" 2>/dev/null || true
-
-# version.json mit aktuellem Commit befüllen
-CURRENT_COMMIT=$(git -C "$PROJECT_PATH" rev-parse HEAD 2>/dev/null || echo "unknown")
+# ── version.json anlegen ──────────────────────────────────────
 cat > "$PROJECT_PATH/version.json" <<EOL
 {
-  "commit": "$CURRENT_COMMIT",
+  "commit": "unknown",
   "updated_at": "$(date '+%Y-%m-%d %H:%M:%S')"
 }
 EOL
-log "version.json aktualisiert (Commit: ${CURRENT_COMMIT:0:7})"
+log "version.json angelegt"
 
 # ── WireGuard sudoers einrichten ──────────────────────────────
 section "WireGuard sudoers einrichten"

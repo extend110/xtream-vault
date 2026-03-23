@@ -1,6 +1,6 @@
 # Xtream Vault — git ignore
 
-# Datendateien (serverseitig, nie commiten)
+# Datendateien (serverseitig, nie committen)
 data/
 
 # Automatisch generiert

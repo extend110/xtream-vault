@@ -908,16 +908,10 @@ switch ($action) {
     case 'check_update':
         require_permission('settings');
         $versionFile = __DIR__ . '/version.json';
-        $local = file_exists($versionFile)
+        $local       = file_exists($versionFile)
             ? (json_decode(file_get_contents($versionFile), true) ?? [])
             : [];
         $localCommit = $local['commit'] ?? 'unknown';
-
-        // Aktuellen Commit lokal via git ermitteln (zuverlässiger als version.json)
-        exec('git -C ' . escapeshellarg(__DIR__) . ' rev-parse HEAD 2>/dev/null', $gitOut, $gitRet);
-        if ($gitRet === 0 && !empty($gitOut[0])) {
-            $localCommit = trim($gitOut[0]);
-        }
 
         // GitHub API: neuester Commit auf main
         $apiUrl = 'https://api.github.com/repos/extend110/xtream-vault/commits/main';
@@ -930,46 +924,35 @@ switch ($action) {
         if ($raw === false) {
             echo json_encode(['error' => 'GitHub nicht erreichbar']); break;
         }
-        $remote     = json_decode($raw, true);
-        $remoteHash = $remote['sha'] ?? '';
-        $remoteMsg  = $remote['commit']['message'] ?? '';
-        $remoteDate = $remote['commit']['author']['date'] ?? '';
+        $remote      = json_decode($raw, true);
+        $remoteHash  = $remote['sha'] ?? '';
+        $remoteMsg   = $remote['commit']['message'] ?? '';
+        $remoteDate  = $remote['commit']['author']['date'] ?? '';
         $remoteShort = substr($remoteHash, 0, 7);
         $localShort  = substr($localCommit, 0, 7);
+        $upToDate    = $localCommit !== 'unknown' && str_starts_with($remoteHash, $localShort);
 
         echo json_encode([
-            'local_commit'   => $localShort,
+            'local_commit'   => $localShort ?: 'unbekannt',
             'remote_commit'  => $remoteShort,
-            'up_to_date'     => $localCommit !== 'unknown' && str_starts_with($remoteHash, $localShort),
+            'up_to_date'     => $upToDate,
             'remote_message' => trim(explode("\n", $remoteMsg)[0]),
             'remote_date'    => $remoteDate ? date('d.m.Y H:i', strtotime($remoteDate)) : '',
-            'git_available'  => $gitRet === 0,
+            'git_available'  => true, // nicht mehr relevant, Feld bleibt für Kompatibilität
         ]);
         break;
 
     case 'run_update':
         require_permission('settings');
-        $dir = __DIR__;
+        $dir    = __DIR__;
+        $tmpDir = sys_get_temp_dir() . '/xtream_update_' . time();
 
-        // git verfügbar?
-        exec('which git 2>/dev/null', $gitWhich, $gitRet);
-        if ($gitRet !== 0 || empty($gitWhich)) {
-            echo json_encode(['error' => 'git nicht installiert — bitte "apt install git" ausführen']); break;
-        }
-
-        // git repo initialisiert?
-        exec('git -C ' . escapeshellarg($dir) . ' rev-parse --is-inside-work-tree 2>/dev/null', $out, $ret);
-        if ($ret !== 0) {
-            echo json_encode(['error' => 'Kein git-Repository. Bitte manuell via git clone installieren.']); break;
-        }
-
-        // Sicherung von data/ vor dem Update
-        $backupDir  = $dir . '/data/backups';
+        // ── Backup von data/ ──────────────────────────────────────────────────
+        $backupDir = $dir . '/data/backups';
         @mkdir($backupDir, 0775, true);
 
-        // zip bevorzugen, tar als Fallback
-        exec('which zip 2>/dev/null', $zipWhich, $zipCheck);
-        if ($zipCheck === 0) {
+        exec('which zip 2>/dev/null', $zw, $zc);
+        if ($zc === 0) {
             $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.zip';
             exec('zip -r ' . escapeshellarg($backupFile) . ' ' . escapeshellarg($dir . '/data') . ' 2>&1', $bkpOut, $bkpRet);
         } else {
@@ -980,19 +963,77 @@ switch ($action) {
             echo json_encode(['error' => 'Backup fehlgeschlagen: ' . implode(' ', $bkpOut)]); break;
         }
 
-        // git pull
-        exec('git -C ' . escapeshellarg($dir) . ' pull origin main 2>&1', $pullOut, $pullRet);
-        $pullLog = implode("\n", $pullOut);
-        if ($pullRet !== 0) {
-            echo json_encode(['error' => 'git pull fehlgeschlagen: ' . $pullLog]); break;
+        // ── ZIP von GitHub herunterladen ──────────────────────────────────────
+        $zipUrl  = 'https://github.com/extend110/xtream-vault/archive/refs/heads/main.zip';
+        $zipFile = $tmpDir . '.zip';
+        $ctx     = stream_context_create(['http' => [
+            'method'          => 'GET',
+            'header'          => "User-Agent: XtreamVault/1.0\r\n",
+            'timeout'         => 60,
+            'follow_location' => true,
+        ]]);
+        $zipData = @file_get_contents($zipUrl, false, $ctx);
+        if ($zipData === false || strlen($zipData) < 1000) {
+            echo json_encode(['error' => 'ZIP-Download fehlgeschlagen — GitHub nicht erreichbar']); break;
+        }
+        file_put_contents($zipFile, $zipData);
+
+        // ── ZIP entpacken ─────────────────────────────────────────────────────
+        @mkdir($tmpDir, 0755, true);
+        exec('unzip -q ' . escapeshellarg($zipFile) . ' -d ' . escapeshellarg($tmpDir) . ' 2>&1', $unzipOut, $unzipRet);
+        @unlink($zipFile);
+        if ($unzipRet !== 0) {
+            exec('rm -rf ' . escapeshellarg($tmpDir));
+            echo json_encode(['error' => 'Entpacken fehlgeschlagen: ' . implode(' ', $unzipOut)]); break;
         }
 
-        // Berechtigungen wiederherstellen
-        exec('chown -R www-data:www-data ' . escapeshellarg($dir) . '/data 2>/dev/null');
+        // GitHub entpackt in einen Unterordner "xtream-vault-main/"
+        $extractedDir = $tmpDir . '/xtream-vault-main';
+        if (!is_dir($extractedDir)) {
+            // Fallback: ersten Unterordner nehmen
+            $dirs = glob($tmpDir . '/*/');
+            $extractedDir = $dirs[0] ?? '';
+        }
+        if (!is_dir($extractedDir)) {
+            exec('rm -rf ' . escapeshellarg($tmpDir));
+            echo json_encode(['error' => 'Entpackter Ordner nicht gefunden']); break;
+        }
 
-        // version.json aktualisieren
-        exec('git -C ' . escapeshellarg($dir) . ' rev-parse HEAD 2>/dev/null', $hashOut);
-        $newHash = trim($hashOut[0] ?? 'unknown');
+        // ── Dateien kopieren (data/ und version.json auslassen) ───────────────
+        $skipList = ['data', 'version.json'];
+        $copied   = 0;
+        $log      = [];
+        foreach (scandir($extractedDir) as $file) {
+            if ($file === '.' || $file === '..') continue;
+            if (in_array($file, $skipList)) continue;
+            $src  = $extractedDir . '/' . $file;
+            $dest = $dir . '/' . $file;
+            if (is_dir($src)) {
+                exec('cp -r ' . escapeshellarg($src) . ' ' . escapeshellarg($dest) . ' 2>&1');
+            } else {
+                copy($src, $dest);
+            }
+            $log[] = $file;
+            $copied++;
+        }
+
+        // Berechtigungen setzen
+        exec('chmod -R 755 ' . escapeshellarg($dir));
+        exec('chmod -R 775 ' . escapeshellarg($dir . '/data'));
+        exec('chown -R www-data:www-data ' . escapeshellarg($dir));
+
+        // Temporäre Dateien aufräumen
+        exec('rm -rf ' . escapeshellarg($tmpDir));
+
+        // ── version.json mit Remote-Commit aktualisieren ──────────────────────
+        $apiUrl  = 'https://api.github.com/repos/extend110/xtream-vault/commits/main';
+        $apiCtx  = stream_context_create(['http' => ['method' => 'GET', 'header' => "User-Agent: XtreamVault/1.0\r\n", 'timeout' => 8]]);
+        $apiRaw  = @file_get_contents($apiUrl, false, $apiCtx);
+        $newHash = 'unknown';
+        if ($apiRaw) {
+            $apiData = json_decode($apiRaw, true);
+            $newHash = $apiData['sha'] ?? 'unknown';
+        }
         file_put_contents($dir . '/version.json', json_encode([
             'commit'     => $newHash,
             'updated_at' => date('Y-m-d H:i:s'),
@@ -1000,10 +1041,10 @@ switch ($action) {
 
         log_activity($current_user['id'], $current_user['username'], 'run_update', ['commit' => substr($newHash, 0, 7)]);
         echo json_encode([
-            'ok'         => true,
-            'commit'     => substr($newHash, 0, 7),
-            'log'        => $pullLog,
-            'backup'     => basename($backupFile),
+            'ok'     => true,
+            'commit' => substr($newHash, 0, 7),
+            'log'    => implode("\n", $log),
+            'backup' => basename($backupFile),
         ]);
         break;
 

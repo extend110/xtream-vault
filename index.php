@@ -2461,11 +2461,6 @@ async function checkUpdate(btn) {
     return;
   }
 
-  if (!d.git_available) {
-    statusEl.innerHTML = `<div style="color:var(--red)">⚠️ git nicht installiert — <code>apt install git</code></div>`;
-    return;
-  }
-
   const dateStr = d.remote_date ? ` · ${d.remote_date}` : '';
   if (d.up_to_date) {
     statusEl.innerHTML = `
