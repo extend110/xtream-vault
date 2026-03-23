@@ -1000,7 +1000,7 @@ switch ($action) {
         }
 
         // ── Dateien kopieren (data/ und version.json auslassen) ───────────────
-        $skipList = ['data', 'version.json'];
+        $skipList = ['data', 'version.json', 'install.sh', 'README.md', '.gitignore'];
         $copied   = 0;
         $log      = [];
         foreach (scandir($extractedDir) as $file) {
