@@ -245,7 +245,7 @@ echo -e "${GREEN}${BOLD}✓ Installation abgeschlossen!${RESET}"
 echo ""
 echo -e "${CYAN}${BOLD}🌐 Zugriff:${RESET}"
 if [ "$DOMAIN" = "_" ]; then
-    echo -e "   → ${BOLD}http://$SERVER_IP/xtream${RESET}"
+    echo -e "   → ${BOLD}http://$SERVER_IP${RESET}"
 else
     echo -e "   → ${BOLD}http://$DOMAIN${RESET}"
 fi
