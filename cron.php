@@ -806,7 +806,9 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 clear_progress();
 clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
 
-// ── VPN: nach Downloads trennen (nur wenn wir ihn gestartet haben) ────────────
+// ── VPN: nach Downloads trennen ───────────────────────────────────────────────
+// Nur trennen wenn cron ihn selbst gestartet hat.
+// War VPN bereits vorher aktiv, bleibt er nach den Downloads aktiv.
 if (VPN_ENABLED && $vpnStartedByUs) {
     if (!vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits getrennt (extern)");
