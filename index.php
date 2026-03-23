@@ -687,9 +687,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3>🔄 Updates</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Aktualisiert die Installation via <code style="color:var(--accent2)">git pull</code> vom
-            <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--accent2)">GitHub-Repository</a>.
-            Vor dem Update wird automatisch ein Backup von <code>data/</code> erstellt.
+            Lädt die neueste Version als ZIP von
+            <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--accent2)">GitHub</a>
+            herunter und installiert sie. Vor dem Update wird automatisch ein Backup von <code>data/</code> erstellt.
           </div>
           <div id="update-status" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.8">
             <div style="color:var(--muted)">– noch nicht geprüft –</div>
