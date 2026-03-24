@@ -132,7 +132,35 @@ switch ($action) {
         if (!in_array('settings', ROLE_PERMISSIONS[$current_user['role'] ?? 'viewer'] ?? [])) {
             $history = array_values(array_filter($history, fn($h) => ($h['added_by'] ?? '') === $current_user['username']));
         }
-        echo json_encode(['items' => array_slice($history, 0, 20)]);
+        $items = array_slice($history, 0, 20);
+        // Cover aus downloaded_index als Fallback wenn leer
+        if (file_exists(DOWNLOADED_INDEX_FILE)) {
+            $index = json_decode(file_get_contents(DOWNLOADED_INDEX_FILE), true) ?? [];
+            foreach ($items as &$h) {
+                if (empty($h['cover'])) {
+                    // Suche nach Titel im Index
+                    foreach ($index as $entry) {
+                        if (($entry['title'] ?? '') === ($h['title'] ?? '') && !empty($entry['cover'])) {
+                            $h['cover'] = $entry['cover'];
+                            break;
+                        }
+                    }
+                }
+            }
+            unset($h);
+        }
+        echo json_encode(['items' => $items]);
+        break;
+
+    case 'dismiss_all_new_releases':
+        require_permission('browse');
+        $nr = file_exists(NEW_RELEASES_FILE)
+            ? (json_decode(file_get_contents(NEW_RELEASES_FILE), true) ?? [])
+            : [];
+        $nr['movies'] = [];
+        $nr['series'] = [];
+        file_put_contents(NEW_RELEASES_FILE, json_encode($nr, JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true]);
         break;
 
     case 'dismiss_new_release':

@@ -393,9 +393,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px" id="new-releases-meta">–</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="filter-btn active" id="nr-tab-all"    onclick="switchNrTab('all',this)">Alle</button>
-          <button class="filter-btn"        id="nr-tab-movies" onclick="switchNrTab('movie',this)">🎬 Filme</button>
-          <button class="filter-btn"        id="nr-tab-series" onclick="switchNrTab('series',this)">📺 Serien</button>
+          <button class="btn-sm" onclick="dismissAllNewReleases(this)" style="margin-left:4px">✓ Alle gesehen</button>
         </div>
       </div>
       <div class="grid" id="new-releases-grid"></div>
@@ -1175,7 +1173,7 @@ let queueRefreshInterval;
   <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
   api('get_new_releases').then(d => {
-    const total = (d.movies?.length ?? 0) + (d.series?.length ?? 0);
+    const total = d.movies?.length ?? 0;
     const badge = document.getElementById('new-releases-badge');
     if (badge && total > 0) { badge.textContent = total; badge.style.display = ''; }
   });
@@ -1414,7 +1412,7 @@ function movieCard(m) {
     ? canQueueRemove
       ? `<button class="btn-q done" onclick="resetDownload('${m.stream_id}','movie',null)" title="Zurücksetzen">↺ Reset</button>`
       : `<button class="btn-q done" disabled>✓ Done</button>`
-    : m.queued && (canQueueRemove || canQueueRemoveOwn)
+    : m.queued && canQueueRemove
       ? `<button class="btn-q remove" onclick="removeFromQueue('${m.stream_id}',this.closest('.card'))">✕ Remove</button>`
       : m.queued
         ? `<button class="btn-q done" disabled>⏳ Queued</button>`
@@ -1517,7 +1515,7 @@ async function openSeriesModal(id, title, cover) {
         ? canQueueRemove
           ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}')" title="Zurücksetzen">↺</button>`
           : `<button class="ep-btn done" disabled>✓</button>`
-        : ep.queued && (canQueueRemove || canQueueRemoveOwn)
+        : ep.queued && canQueueRemove
           ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
           : ep.queued
             ? `<button class="ep-btn done" disabled>⏳</button>`
@@ -1597,9 +1595,16 @@ async function addMovieToQueue(m, card) {
     }
     const btn = card.querySelector('.btn-q');
     if (btn) {
-      btn.textContent = '✕ Remove';
-      btn.className = 'btn-q remove';
-      btn.onclick = () => removeFromQueue(m.stream_id, card);
+      if (canQueueRemove) {
+        btn.textContent = '✕ Remove';
+        btn.className = 'btn-q remove';
+        btn.onclick = () => removeFromQueue(m.stream_id, card);
+      } else {
+        btn.textContent = '⏳ Queued';
+        btn.className = 'btn-q done';
+        btn.disabled = true;
+        btn.onclick = null;
+      }
     }
   }
   // Update in allMovies
@@ -1912,8 +1917,8 @@ async function loadNewReleases() {
   _nrData = await api('get_new_releases');
   const meta = document.getElementById('new-releases-meta');
   if (_nrData.generated_at) {
-    const total = (_nrData.movies?.length ?? 0) + (_nrData.series?.length ?? 0);
-    if (meta) meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
+    const total = _nrData.movies?.length ?? 0;
+    if (meta) meta.textContent = `${total} neue Filme seit ${_nrData.generated_at}`;
     const badge = document.getElementById('new-releases-badge');
     if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
   } else {
@@ -1925,34 +1930,15 @@ async function loadNewReleases() {
 function renderNewReleases() {
   const grid = document.getElementById('new-releases-grid');
   if (!grid || !_nrData) return;
-  let movies = _nrData.movies ?? [];
-  let series = _nrData.series ?? [];
-  let items  = [];
-  if (_nrTab === 'all')    items = [...movies, ...series];
-  if (_nrTab === 'movie')  items = movies;
-  if (_nrTab === 'series') items = series;
-  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Titel'); return; }
+  const items = _nrData.movies ?? [];
+  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Filme'); return; }
 
   grid.innerHTML = items.map(item => {
-    const isSeries = item.type === 'series';
-    const itemId   = String(isSeries ? (item.series_id ?? item.id) : (item.stream_id ?? item.id));
+    const itemId     = String(item.stream_id ?? item.id);
     const dismissBtn = `<button class="btn-icon" title="Entfernen"
-      onclick="dismissNewRelease('${itemId}','${isSeries?'series':'movie'}',this)"
+      onclick="dismissNewRelease('${itemId}','movie',this)"
       style="position:absolute;top:4px;left:4px;z-index:10;background:rgba(0,0,0,.7);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.65rem;padding:0;border:none;cursor:pointer;color:#fff">✕</button>`;
-
-    if (isSeries) {
-      const card = seriesCard({
-        series_id:   item.series_id,
-        clean_title: item.clean_title ?? item.title ?? '',
-        cover:       item.cover ?? '',
-        category:    item.category ?? '',
-        genre:       item.genre ?? '',
-      });
-      // Inject dismiss button into card-thumb
-      return card.replace('<div class="card-thumb">', `<div class="card-thumb">${dismissBtn}`);
-    }
-    // Movie
-    const sid = String(item.stream_id ?? item.id);
+    const sid  = String(item.stream_id ?? item.id);
     const card = movieCard({
       stream_id:           sid,
       clean_title:         item.clean_title ?? item.title ?? '',
@@ -1973,14 +1959,12 @@ async function dismissNewRelease(id, type, btn) {
   if (card) card.style.opacity = '.4';
   const d = await apiPost('dismiss_new_release', {id, type});
   if (d.error) { showToast('❌ ' + d.error, 'error'); if (card) card.style.opacity = ''; return; }
-  // Remove from local data and re-render
   if (_nrData) {
     if (type === 'series') {
       _nrData.series = (_nrData.series ?? []).filter(s => String(s.series_id ?? s.id) !== id);
     } else {
       _nrData.movies = (_nrData.movies ?? []).filter(m => String(m.stream_id ?? m.id) !== id);
     }
-    // Update badge
     const total = (_nrData.movies?.length ?? 0) + (_nrData.series?.length ?? 0);
     const badge = document.getElementById('new-releases-badge');
     if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
@@ -1988,6 +1972,21 @@ async function dismissNewRelease(id, type, btn) {
     if (meta && _nrData.generated_at) meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
   }
   if (card) card.remove();
+}
+
+async function dismissAllNewReleases(btn) {
+  if (!confirm('Alle neuen Releases als gesehen markieren?')) return;
+  btn.disabled = true;
+  const d = await apiPost('dismiss_all_new_releases', {});
+  btn.disabled = false;
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  if (_nrData) { _nrData.movies = []; _nrData.series = []; }
+  const badge = document.getElementById('new-releases-badge');
+  if (badge) { badge.textContent = '0'; badge.style.display = 'none'; }
+  const meta = document.getElementById('new-releases-meta');
+  if (meta) meta.textContent = '0 neue Filme';
+  renderNewReleases();
+  showToast('✓ Alle als gesehen markiert', 'success');
 }
 
 async function removeQueueItem(sid, el) {
@@ -3591,8 +3590,18 @@ function esc(s)        { return String(s).replace(/'/g,"&#39;").replace(/"/g,'&q
 function htmlJson(o)   { return JSON.stringify(o).replace(/"/g,'&quot;'); }
 function lazyLoadImages() {
   document.querySelectorAll('[data-src]').forEach(img => {
-    img.src = img.dataset.src; img.removeAttribute('data-src');
-    img.onload = () => img.classList.add('loaded');
+    img.onload  = () => img.classList.add('loaded');
+    img.onerror = () => img.classList.add('loaded'); // bei Fehler trotzdem einblenden
+    img.src = img.dataset.src;
+    img.removeAttribute('data-src');
+    // Bild bereits im Cache — onload feuert nicht mehr
+    if (img.complete) img.classList.add('loaded');
+  });
+  // Bilder mit direktem src (kein data-src) die noch nicht loaded sind
+  document.querySelectorAll('.card-thumb img:not([data-src]):not(.loaded)').forEach(img => {
+    if (img.complete) { img.classList.add('loaded'); return; }
+    img.onload  = () => img.classList.add('loaded');
+    img.onerror = () => img.classList.add('loaded');
   });
 }
 let toastTimer;
@@ -3649,7 +3658,7 @@ async function loadUserDashboard() {
         <div class="card downloaded">
           <div class="card-thumb">
             <div class="card-thumb-placeholder">${item.type==='episode'?'📺':'🎬'}</div>
-            ${item.cover ? `<img src="${esc(item.cover)}" alt="" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">` : ''}
+            ${item.cover ? `<img src="${esc(item.cover)}" alt="" class="loaded" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0">` : ''}
             <span class="card-badge badge-done">✓</span>
           </div>
           <div class="card-body">

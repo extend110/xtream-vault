@@ -52,7 +52,7 @@ if ($invite && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Passwort muss mindestens 6 Zeichen haben.';
     } elseif ($password !== $password2) {
         $error = 'Passwörter stimmen nicht überein.';
-    } elseif (find_user_by_username($username)) {
+    } elseif (find_user($username)) {
         $error = 'Dieser Benutzername ist bereits vergeben.';
     } else {
         // Benutzer anlegen

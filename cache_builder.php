@@ -136,46 +136,39 @@ $prev            = file_exists($newReleasesFile)
 // Heruntergeladene IDs laden
 $db_nr       = load_db_local_early();
 $dlMovieIds  = array_flip(array_map('strval', $db_nr['movies']   ?? []));
-$dlSeriesIds = array_flip(array_map('strval', $db_nr['episodes'] ?? []));
 
 // Beim allerersten Run ODER wenn all_ids fehlt (altes Format):
 // alle IDs als bekannt markieren (kein False-Positive)
-$hasAllIds         = isset($prev['all_ids']) && is_array($prev['all_ids']) && count($prev['all_ids']) > 0;
-$isFirstRun        = empty($prev) || !$hasAllIds;
-$previousMovieIds  = $isFirstRun ? array_flip(array_keys($movieCache))  : array_flip($prev['all_ids']        ?? []);
-$previousSeriesIds = $isFirstRun ? array_flip(array_keys($seriesCache)) : array_flip($prev['all_series_ids'] ?? []);
+$hasAllIds        = isset($prev['all_ids']) && is_array($prev['all_ids']) && count($prev['all_ids']) > 0;
+$isFirstRun       = empty($prev) || !$hasAllIds;
+// IDs immer als Strings vergleichen
+$previousMovieIds = $isFirstRun
+    ? array_flip(array_map('strval', array_keys($movieCache)))
+    : array_flip(array_map('strval', $prev['all_ids'] ?? []));
 
-// Bestehende akkumulierte Listen laden (manuell entfernte sind nicht drin)
-$accMovies  = [];
+// Bestehende akkumulierte Filmliste laden (manuell entfernte sind nicht drin)
+$accMovies = [];
 foreach ($prev['movies'] ?? [] as $m) {
     $id = (string)($m['stream_id'] ?? $m['id'] ?? '');
     if ($id !== '' && !isset($dlMovieIds[$id])) $accMovies[$id] = $m;
 }
-$accSeries = [];
-foreach ($prev['series'] ?? [] as $s) {
-    $id = (string)($s['series_id'] ?? $s['id'] ?? '');
-    if ($id !== '' && !isset($dlSeriesIds[$id])) $accSeries[$id] = $s;
-}
 
-// Neue Einträge hinzufügen
+// Neue Filme hinzufügen
 if (!$isFirstRun) {
     foreach ($movieCache as $id => $m) {
-        if (!isset($previousMovieIds[$id]) && !isset($dlMovieIds[$id])) $accMovies[$id] = $m;
-    }
-    foreach ($seriesCache as $id => $s) {
-        if (!isset($previousSeriesIds[$id]) && !isset($dlSeriesIds[$id])) $accSeries[$id] = $s;
+        $sid = (string)$id;
+        if (!isset($previousMovieIds[$sid]) && !isset($dlMovieIds[$sid])) $accMovies[$sid] = $m;
     }
 }
 
 $newReleasesData = [
-    'generated_at'      => date('Y-m-d H:i:s'),
-    'all_ids'           => array_keys($movieCache),
-    'all_series_ids'    => array_keys($seriesCache),
-    'movies'            => array_values($accMovies),
-    'series'            => array_values($accSeries),
+    'generated_at' => date('Y-m-d H:i:s'),
+    'all_ids'      => array_map('strval', array_keys($movieCache)),
+    'movies'       => array_values($accMovies),
+    'series'       => [], // Nur Filme werden als neue Releases verfolgt
 ];
 file_put_contents($newReleasesFile, json_encode($newReleasesData, JSON_UNESCAPED_UNICODE));
-blog(sprintf('Neue Releases: %d Filme, %d Serien → %s', count($accMovies), count($accSeries), $newReleasesFile));
+blog(sprintf('Neue Releases: %d Filme → %s', count($accMovies), $newReleasesFile));
 
 // ── Schritt 3: Downloaded-Index aufbauen ──────────────────────────────────────
 blog('=== Baue Downloaded-Index auf ===');

@@ -524,6 +524,15 @@ $processed = 0;
 $errors    = 0;
 $position  = 0;
 
+// ── rclone-Cache vor dem Run neu aufbauen ─────────────────────────────────────
+if (RCLONE_ENABLED && $totalPending > 0) {
+    clog("INFO: Baue rclone-Cache neu auf…");
+    $rcloneCacheFile = DATA_DIR . '/rclone_cache.json';
+    $rcloneFileCache = list_rclone_files(RCLONE_REMOTE, RCLONE_PATH);
+    file_put_contents($rcloneCacheFile, json_encode($rcloneFileCache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    clog("INFO: rclone-Cache aktualisiert — " . count($rcloneFileCache) . " Dateien bekannt");
+}
+
 foreach ($queue as &$item) {
     if ($item['status'] !== 'pending') continue;
     $position++;
@@ -570,18 +579,6 @@ foreach ($queue as &$item) {
 
     // rclone-Cache: prüfen ob Datei bereits auf dem Remote vorhanden ist
     if (RCLONE_ENABLED) {
-        $rcloneCacheFile = DATA_DIR . '/rclone_cache.json';
-        if (!isset($rcloneFileCache)) {
-            if (file_exists($rcloneCacheFile)) {
-                $rcloneFileCache = json_decode(file_get_contents($rcloneCacheFile), true) ?? [];
-                clog("INFO: rclone-Cache geladen — " . count($rcloneFileCache) . " Dateien bekannt");
-            } else {
-                clog("INFO: rclone-Cache nicht gefunden, lade Dateiliste vom Remote…");
-                $rcloneFileCache = list_rclone_files(RCLONE_REMOTE, RCLONE_PATH);
-                file_put_contents($rcloneCacheFile, json_encode($rcloneFileCache, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
-                clog("INFO: rclone-Cache erstellt — " . count($rcloneFileCache) . " Dateien gefunden");
-            }
-        }
         $destFilename = basename($relPath);
         if (in_array($destFilename, $rcloneFileCache)) {
             clog("SKIP (already on remote): $destDisplay");
