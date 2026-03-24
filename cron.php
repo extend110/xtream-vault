@@ -546,6 +546,17 @@ foreach ($queue as &$item) {
     $cat        = !empty($item['category']) ? $item['category'] : 'Uncategorized';
     $season     = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
 
+    // Vor dem Download: prüfen ob Item noch in der Queue (könnte manuell entfernt worden sein)
+    $liveQueue = load_queue();
+    $liveItem  = null;
+    foreach ($liveQueue as $q) {
+        if ((string)$q['stream_id'] === (string)$sid) { $liveItem = $q; break; }
+    }
+    if ($liveItem === null) {
+        clog("SKIP (removed from queue): $title");
+        continue;
+    }
+
     // Zielpfad berechnen (gemeinsame Logik mit api.php via config.php)
     $destInfo  = build_dest_path($item);
     $relPath   = $destInfo['rel_path'];
@@ -565,13 +576,15 @@ foreach ($queue as &$item) {
     $dbKey = $type === 'movie' ? 'movies' : 'episodes';
     if (in_array((string)$sid, $db[$dbKey])) {
         clog("SKIP (already downloaded): $title");
-        $item['status'] = 'done';
+        $item['status']  = 'done';
+        $item['done_at'] = $item['done_at'] ?? date('Y-m-d H:i:s');
         save_queue_item_status($sid, $item);
         continue;
     }
     if ($destFile && file_exists($destFile)) {
         clog("SKIP (file exists): $destFile");
-        $item['status'] = 'done';
+        $item['status']  = 'done';
+        $item['done_at'] = $item['done_at'] ?? date('Y-m-d H:i:s');
         if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
         save_queue_item_status($sid, $item);
         continue;
@@ -582,7 +595,8 @@ foreach ($queue as &$item) {
         $destFilename = basename($relPath);
         if (in_array($destFilename, $rcloneFileCache)) {
             clog("SKIP (already on remote): $destDisplay");
-            $item['status'] = 'done';
+            $item['status']  = 'done';
+            $item['done_at'] = $item['done_at'] ?? date('Y-m-d H:i:s');
             if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
             save_queue_item_status($sid, $item);
             continue;
@@ -672,7 +686,8 @@ foreach ($queue as &$item) {
         $errors++;
         break; // Cron-Loop beenden — kein VPN, keine weiteren Downloads
     } elseif ($ok) {
-        $item['status'] = 'done';
+        $item['status']  = 'done';
+        $item['done_at'] = date('Y-m-d H:i:s');
         if (!in_array((string)$sid, $db[$dbKey])) { $db[$dbKey][] = (string)$sid; save_db($db); }
 
         // Metadaten sofort in downloaded_index.json schreiben
@@ -719,7 +734,7 @@ foreach ($queue as &$item) {
             if ($raw !== false) $history = json_decode($raw, true) ?? [];
         }
         array_unshift($history, $historyEntry);          // neueste zuerst
-        if (count($history) > 200) $history = array_slice($history, 0, 200); // max 200
+        if (count($history) > 2000) $history = array_slice($history, 0, 2000); // max 2000
         @file_put_contents(DOWNLOAD_HISTORY_FILE, json_encode($history, JSON_UNESCAPED_UNICODE));
         unset($history);
 
@@ -802,6 +817,20 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 
 clear_progress();
 clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
+
+// ── Automatische Bereinigung: done-Einträge älter als 7 Tage entfernen ────────
+$queue = load_queue();
+$cutoff = date('Y-m-d H:i:s', strtotime('-7 days'));
+$before = count($queue);
+$queue  = array_values(array_filter($queue, function($item) use ($cutoff) {
+    if (($item['status'] ?? '') !== 'done') return true;
+    return ($item['done_at'] ?? $item['added_at'] ?? '9999') > $cutoff;
+}));
+$removed = $before - count($queue);
+if ($removed > 0) {
+    save_queue($queue);
+    clog("CLEANUP: $removed alte done-Einträge entfernt");
+}
 
 // ── VPN: nach Downloads trennen ───────────────────────────────────────────────
 // Nur trennen wenn cron ihn selbst gestartet hat.

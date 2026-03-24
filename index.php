@@ -101,6 +101,21 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_queue_view): ?>
     <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> in Queue</span>
     <?php endif; ?>
+    <?php if ($can_queue_view): ?>
+    <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log" style="display:none;align-items:center;gap:8px;
+         background:var(--bg3);border:1px solid var(--border);border-radius:20px;
+         padding:3px 12px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.65rem;
+         max-width:220px;overflow:hidden;transition:border-color .2s">
+      <span style="color:var(--accent2);flex-shrink:0">⬇</span>
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <div id="topbar-dl-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)"></div>
+        <div style="height:2px;background:var(--bg2);border-radius:1px;margin-top:2px;overflow:hidden">
+          <div id="topbar-dl-bar" style="height:100%;width:0%;background:var(--accent2);border-radius:1px;transition:width .5s"></div>
+        </div>
+      </div>
+      <span id="topbar-dl-pct" style="color:var(--accent2);flex-shrink:0">0%</span>
+    </div>
+    <?php endif; ?>
     <?php if ($can_settings): ?>
     <span id="vpn-badge" title="VPN-Status — klicken für Einstellungen" onclick="showView('settings')"
       style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:600;
@@ -280,6 +295,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-movies" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <div style="flex:1"></div>
+        <button class="view-mode-btn" id="view-mode-btn-movies" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
           <select id="sort-movies" class="sort-select" onchange="setSortOrder(this.value,'movies')">
@@ -295,6 +311,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-series" style="display:none">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
         <div style="flex:1"></div>
+        <button class="view-mode-btn" id="view-mode-btn-series" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
           <select id="sort-series" class="sort-select" onchange="setSortOrder(this.value,'series')">
@@ -370,7 +387,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span id="fav-count">–</span> gespeichert
           </div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="view-mode-btn" id="view-mode-btn-favourites" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
           <button class="filter-btn active" id="fav-tab-all"    onclick="switchFavTab('all',this)">Alle</button>
           <button class="filter-btn"        id="fav-tab-movies" onclick="switchFavTab('movie',this)">🎬 Filme</button>
           <button class="filter-btn"        id="fav-tab-series" onclick="switchFavTab('series',this)">📺 Serien</button>
@@ -402,45 +420,45 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <!-- Statistiken (admin only) -->
     <?php if ($can_settings): ?>
     <div id="view-stats" style="display:none">
-      <div style="margin-bottom:20px">
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">Gesamtstatistik</div>
-        <div style="display:flex;gap:16px;flex-wrap:wrap">
-          <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" id="stats-total-count">–</div></div>
-          <div class="dkpi"><div class="dkpi-l">Datenvolumen gesamt</div><div class="dkpi-n" id="stats-total-gb">–</div></div>
-        </div>
+
+      <!-- KPI Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
+        <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" id="stats-total-count">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">🎬 Filme</div><div class="dkpi-n" id="stats-total-movies">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">📺 Episoden</div><div class="dkpi-n" id="stats-total-episodes">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Datenvolumen gesamt</div><div class="dkpi-n" id="stats-total-gb">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Dieser Monat</div><div class="dkpi-n" id="stats-this-month">–</div></div>
+        <div class="dkpi"><div class="dkpi-l">Diesen Monat (GB)</div><div class="dkpi-n" id="stats-this-month-gb">–</div></div>
       </div>
 
-      <!-- Charts nebeneinander (2 Spalten auf Desktop) -->
+      <!-- Charts: 2 Spalten -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
-        <!-- GB pro Monat -->
         <div class="settings-card">
           <h3>📦 Datenvolumen pro Monat</h3>
-          <div style="position:relative;height:220px">
-            <canvas id="stats-chart-gb"></canvas>
-          </div>
+          <div style="position:relative;height:200px"><canvas id="stats-chart-gb"></canvas></div>
         </div>
-
-        <!-- Downloads pro Monat -->
         <div class="settings-card">
           <h3>📥 Downloads pro Monat</h3>
-          <div style="position:relative;height:220px">
-            <canvas id="stats-chart-count"></canvas>
-          </div>
+          <div style="position:relative;height:200px"><canvas id="stats-chart-count"></canvas></div>
         </div>
       </div>
 
-      <!-- Top Kategorien -->
-      <div class="settings-card" style="margin-bottom:16px">
-        <h3>🏷️ Top Kategorien</h3>
-        <div style="position:relative;height:320px">
-          <canvas id="stats-chart-cats"></canvas>
+      <!-- Wochentag-Verteilung + Top User nebeneinander -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="settings-card">
+          <h3>📅 Downloads nach Wochentag</h3>
+          <div style="position:relative;height:200px"><canvas id="stats-chart-weekday"></canvas></div>
+        </div>
+        <div class="settings-card">
+          <h3>👤 Top User</h3>
+          <div id="stats-top-users" style="font-size:.82rem"></div>
         </div>
       </div>
 
-      <!-- Top User -->
+      <!-- Top Kategorien als Tabelle -->
       <div class="settings-card">
-        <h3>👤 Top User</h3>
-        <div id="stats-top-users"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
+        <h3>🏷️ Top Kategorien</h3>
+        <div id="stats-top-cats" style="font-size:.82rem"></div>
       </div>
     </div>
     <?php endif; ?>
@@ -718,6 +736,18 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
+          <h3>🪲 PHP-Fehlerlog</h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px">
+            Zeigt die letzten PHP-Fehler aus dem Serverlog — gefiltert auf Einträge die das Projekt betreffen.
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+            <button class="btn-secondary" onclick="loadPhpErrorLog(this)">🔍 Log laden</button>
+            <span id="php-log-path" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></span>
+          </div>
+          <div id="php-error-log" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);white-space:pre-wrap;max-height:300px;overflow-y:auto;line-height:1.6"></div>
+        </div>
+
+        <div class="settings-card">
           <h3>🔒 VPN (WireGuard)</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             Downloads über WireGuard-VPN leiten. VPN wird vor dem ersten Download gestartet und danach automatisch getrennt.<br>
@@ -732,9 +762,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <input type="text" id="cfg-vpn-interface" placeholder="wg0" style="max-width:160px">
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn-secondary" onclick="checkVpnStatus()">🔍 Status prüfen</button>
-            <button class="btn-secondary" onclick="vpnConnect()">▶ Verbinden</button>
-            <button class="btn-secondary" onclick="vpnDisconnect()">■ Trennen</button>
+            <button class="btn-secondary" id="vpn-toggle-btn" onclick="vpnToggle(this)">⏳ Lade…</button>
             <div class="settings-msg" id="vpn-status-msg" style="margin:0"></div>
           </div>
           <!-- VPN Live-Statistiken (nur sichtbar wenn aktiv) -->
@@ -1171,6 +1199,7 @@ let queueRefreshInterval;
   initTheme();
   startBadgePolling();
   <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
+  <?php if ($can_queue_view): ?>startProgressPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
   api('get_new_releases').then(d => {
     const total = d.movies?.length ?? 0;
@@ -1217,6 +1246,34 @@ function renderThemePicker() {
       <div class="theme-swatch-label" style="background:${t.bg2};color:${t.accent}">${t.label}</div>
     </div>`).join('');
 }
+
+// ── View Mode (Karten / Liste) ────────────────────────────────
+const VIEW_MODE_KEY = 'xv_view_mode_<?= $user['id'] ?>';
+let _viewMode = localStorage.getItem(VIEW_MODE_KEY) || 'grid';
+
+function applyViewMode(mode) {
+  _viewMode = mode;
+  localStorage.setItem(VIEW_MODE_KEY, mode);
+  const isListMode = mode === 'list';
+  // Alle betroffenen Grids aktualisieren
+  ['movie-grid', 'series-grid', 'fav-grid'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('list-mode', isListMode);
+  });
+  // Toggle-Buttons aktualisieren
+  document.querySelectorAll('.view-mode-btn').forEach(btn => {
+    btn.textContent  = isListMode ? '⊞' : '☰';
+    btn.title        = isListMode ? 'Kartenansicht' : 'Listenansicht';
+    btn.classList.toggle('active', isListMode);
+  });
+}
+
+function toggleViewMode() {
+  applyViewMode(_viewMode === 'grid' ? 'list' : 'grid');
+}
+
+// View-Mode beim Start anwenden
+applyViewMode(_viewMode);
 
 // ── Search History ────────────────────────────────────────────
 const SEARCH_HISTORY_KEY = 'xv_search_history_<?= $user['id'] ?>';
@@ -1487,12 +1544,12 @@ function seriesCard(s) {
     onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
     <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div></div>
-    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}')">📋 Episodes</button></div>
+    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}')">📋 Episodes</button></div>
   </div>`;
 }
 
 // ── Series Modal ──────────────────────────────────────────────
-async function openSeriesModal(id, title, cover) {
+async function openSeriesModal(id, title, cover, category) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-meta').textContent  = 'Loading…';
   document.getElementById('modal-img').src           = cover || '';
@@ -1508,19 +1565,19 @@ async function openSeriesModal(id, title, cover) {
     const eps = episodes[season];
     const seasonNum = parseInt(season, 10) || 1;
     html += `<div class="season-header">Season ${season}
-      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}')">⏳ All queuen</span>
+      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}','${esc(category||'')}')">⏳ All queuen</span>
     </div>`;
     for (const ep of eps) {
       const epBtn = ep.downloaded
         ? canQueueRemove
-          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}')" title="Zurücksetzen">↺</button>`
+          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}')" title="Zurücksetzen">↺</button>`
           : `<button class="ep-btn done" disabled>✓</button>`
         : ep.queued && canQueueRemove
           ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
           : ep.queued
             ? `<button class="ep-btn done" disabled>⏳</button>`
             : canQueueAdd
-              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}',this)">+ Q</button>`
+              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}',this)">+ Q</button>`
               : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
@@ -1535,7 +1592,7 @@ async function openSeriesModal(id, title, cover) {
 }
 function closeModal() { document.getElementById('series-modal').classList.remove('open'); }
 
-async function queueEpisode(ep, season, seriesTitle, btn) {
+async function queueEpisode(ep, season, seriesTitle, category, btn) {
   await queueItem({
     stream_id:           ep.id,
     type:                'episode',
@@ -1553,7 +1610,7 @@ async function removeEpFromQueue(id, btn) {
   if (btn) { btn.textContent = '+ Q'; btn.className = 'ep-btn add'; btn.onclick = null; }
   updateQueueBadge(); loadStats();
 }
-async function queueAllSeason(eps, season, seriesTitle) {
+async function queueAllSeason(eps, season, seriesTitle, category) {
   let count = 0;
   for (const ep of eps) {
     if (!ep.downloaded && !ep.queued) {
@@ -1561,7 +1618,8 @@ async function queueAllSeason(eps, season, seriesTitle) {
         stream_id: ep.id, type: 'episode',
         title: ep.clean_title || ep.title,
         container_extension: ep.container_extension ?? 'mp4',
-        cover: '', dest_subfolder: 'TV Shows', category: seriesTitle,
+        cover: '', dest_subfolder: 'TV Shows',
+        category: seriesTitle,
         season: season,
       });
       if (!result) break;
@@ -1643,6 +1701,8 @@ async function queueItem(item) {
       showToast(`☁️ Bereits auf Remote vorhanden: ${d.filename}`, 'info');
     } else if (d.reason === 'downloaded') {
       showToast('✓ Bereits heruntergeladen', 'info');
+    } else if (d.reason === 'duplicate_title') {
+      showToast(`⚠️ Titel bereits in Queue: ${d.title}`, 'info');
     } else {
       showToast('Bereits in der Queue', 'info');
     }
@@ -1682,19 +1742,32 @@ async function loadLimitStatus() {
 }
 
 // ── Queue View ────────────────────────────────────────────────
+let _queueRefreshController = null;
+
 async function refreshQueue() {
   const list = document.getElementById('queue-list');
   if (!list) return;
 
+  // Laufenden Request abbrechen
+  if (_queueRefreshController) _queueRefreshController.abort();
+  _queueRefreshController = new AbortController();
+
   const items = await api('get_queue');
 
-  // Global Set für Queue-IDs aktualisieren (für Favoriten und andere Views)
+  // Global Set für Queue-IDs aktualisieren
   _queuedIds = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
 
   if (!items.length) {
-    list.innerHTML = `<div class="state-box"><div class="icon">📭</div><p>Queue ist leer</p></div>`;
+    // Nur Leer-Meldung zeigen wenn aktuell keine Queue-Items im DOM sind
+    // (verhindert kurzes Aufblitzen wenn vorher Items da waren)
+    if (!list.querySelector('.queue-item')) {
+      list.innerHTML = `<div class="state-box"><div class="icon">📭</div><p>Queue ist leer</p></div>`;
+    }
     return;
   }
+
+  // Leer-Meldung entfernen falls vorhanden
+  list.querySelector('.state-box')?.remove();
 
   // Diff-Update: nur neue/geänderte Items rendern, bestehende erhalten
   const existingIds = new Set([...list.querySelectorAll('.queue-item')].map(el => el.id));
@@ -1880,7 +1953,7 @@ function renderFavourites() {
         actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
       }
     } else if (f.type === 'series') {
-      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}')">📋 Episodes</button>`;
+      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}')">📋 Episodes</button>`;
     }
 
     return `
@@ -2012,12 +2085,11 @@ async function setPriority(sid, priority) {
   refreshQueue();
 }
 
-async function resetEpisode(sid, ep, season, seriesTitle) {
+async function resetEpisode(sid, ep, season, seriesTitle, category) {
   if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
   const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast('↺ Zurückgesetzt', 'success');
-  // Button in Modal auf + Q umschalten
   const btn = document.getElementById('epbtn-' + sid);
   const epRow = document.getElementById('ep-' + sid);
   if (epRow) {
@@ -2025,7 +2097,7 @@ async function resetEpisode(sid, ep, season, seriesTitle) {
     newBtn.className = 'ep-btn add';
     newBtn.id = 'epbtn-' + sid;
     newBtn.textContent = '+ Q';
-    newBtn.onclick = () => queueEpisode(ep, season, seriesTitle, newBtn);
+    newBtn.onclick = () => queueEpisode(ep, season, seriesTitle, seriesTitle, newBtn);
     epRow.querySelector('button')?.replaceWith(newBtn);
   }
   updateQueueBadge();
@@ -2218,6 +2290,13 @@ function showView(v) {
     el.classList.toggle('active', el.dataset.view === v)
   );
   currentView = v;
+  // Sofort aktualisieren beim View-Wechsel
+  pollProgress();
+  <?php if ($can_queue_view): ?>if (v === 'queue') refreshQueue();<?php endif; ?>
+  <?php if ($can_settings && VPN_ENABLED): ?>pollVpnStatus(false);<?php endif; ?>
+  // Topbar-Download-Indicator: ausblenden in Dashboard/Queue, sonst vom pollProgress gesteuert
+  const topbarDl = document.getElementById('topbar-dl');
+  if (topbarDl && (v === 'dashboard' || v === 'queue')) topbarDl.style.display = 'none';
   const sb = document.getElementById('search-bar');
   const fb = document.getElementById('filter-bar');
   sb.style.display = v === 'search'  ? '' : 'none';
@@ -2225,8 +2304,8 @@ function showView(v) {
   if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
-  if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; startLogPolling(); stopProgressPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers();<?php endif; ?> }
+  if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; startLogPolling(); }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
@@ -2239,7 +2318,6 @@ function showView(v) {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
     // queueRefreshInterval bleibt leer, refreshQueue läuft über startProgressPolling
   }
-  if (v !== 'queue' && v !== 'dashboard') stopProgressPolling();
   if (v !== 'log') stopLogPolling();
   <?php if ($can_settings): ?>if (v !== 'dashboard') stopDashboardPolling();<?php endif; ?>
   // Clear multi-select when leaving search
@@ -2487,6 +2565,38 @@ function collectConfig() {
 }
 
 // ── Updates ───────────────────────────────────────────────────
+async function loadPhpErrorLog(btn) {
+  const logEl  = document.getElementById('php-error-log');
+  const pathEl = document.getElementById('php-log-path');
+  if (btn) btn.disabled = true;
+  if (pathEl) pathEl.textContent = '⏳ Lade…';
+  if (logEl)  { logEl.style.display = ''; logEl.textContent = '⏳ Lade…'; }
+
+  const d = await api('php_error_log');
+  if (btn) btn.disabled = false;
+
+  if (d.error) {
+    if (pathEl) pathEl.textContent = '⚠️ ' + d.error;
+    if (logEl)  logEl.textContent = d.error;
+    return;
+  }
+  if (pathEl) pathEl.textContent = d.path ?? '';
+  if (!d.lines?.length) {
+    if (logEl) logEl.textContent = '✓ Keine Fehler gefunden';
+    return;
+  }
+  if (logEl) {
+    logEl.innerHTML = d.lines.map(line => {
+      const l = line.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+      if (l.includes('PHP Fatal')   || l.includes('PHP Parse'))  return `<span style="color:var(--red)">${l}</span>`;
+      if (l.includes('PHP Warning') || l.includes('PHP Deprecated')) return `<span style="color:var(--orange)">${l}</span>`;
+      if (l.includes('PHP Notice')) return `<span style="color:var(--muted)">${l}</span>`;
+      return l;
+    }).join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
 async function checkUpdate(btn) {
   const statusEl = document.getElementById('update-status');
   const msgEl    = document.getElementById('update-msg');
@@ -2552,8 +2662,26 @@ async function runUpdate(btn) {
 
 // ── VPN ───────────────────────────────────────────────────────
 let _vpnPollInterval  = null;
+let _vpnSlowInterval  = null;
 let _vpnDurationTimer = null;
 let _vpnConnectedSince = null;
+
+async function pollVpnStatus(includeIp = false) {
+  const d = await api('vpn_status', includeIp ? {} : {include_ip: '0'}).catch(() => null);
+  if (!d || d.error) return;
+  if (!includeIp && _vpnLastStatus?.public_ip) d.public_ip = _vpnLastStatus.public_ip;
+  _vpnLastStatus = d;
+  updateVpnBadge(d);
+  _vpnUpdateToggleBtn(d.up);
+}
+
+let _vpnLastStatus = null;
+
+function startVpnPolling() {
+  pollVpnStatus(true); // Erster Aufruf mit IP
+  if (!_vpnPollInterval) _vpnPollInterval = setInterval(() => pollVpnStatus(false), 5000);
+  if (!_vpnSlowInterval) _vpnSlowInterval = setInterval(() => pollVpnStatus(true), 30000);
+}
 
 function fmtDurationVpn(ts) {
   if (!ts) return '–';
@@ -2621,48 +2749,60 @@ function updateVpnBadge(status) {
   }
 }
 
-async function pollVpnStatus() {
-  // Nur abfragen wenn VPN aktiviert ist
-  const d = await api('vpn_status').catch(() => null);
-  if (d && !d.error) updateVpnBadge(d);
-}
-
-function startVpnPolling() {
-  pollVpnStatus();
-  if (!_vpnPollInterval) _vpnPollInterval = setInterval(pollVpnStatus, 30000);
+function _vpnUpdateToggleBtn(up) {
+  const btn = document.getElementById('vpn-toggle-btn');
+  if (!btn) return;
+  if (up) {
+    btn.textContent = '■ Trennen';
+    btn.style.borderColor = 'rgba(255,71,87,.4)';
+    btn.style.color = 'var(--red)';
+  } else {
+    btn.textContent = '▶ Verbinden';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  }
 }
 
 async function checkVpnStatus() {
   const msg = document.getElementById('vpn-status-msg');
-  msg.textContent = '⏳ Prüfe…'; msg.className = 'settings-msg info';
+  const btn = document.getElementById('vpn-toggle-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Prüfe…'; }
+  msg.textContent = ''; msg.className = 'settings-msg';
   const d = await api('vpn_status');
-  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  if (btn) btn.disabled = false;
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; _vpnUpdateToggleBtn(false); return; }
   updateVpnBadge(d);
   if (!d.wg_installed) {
     msg.textContent = '⚠️ WireGuard nicht installiert — sudo apt install wireguard';
-    msg.className = 'settings-msg err'; return;
+    msg.className = 'settings-msg err'; _vpnUpdateToggleBtn(false); return;
   }
-  const upText = d.up ? '🟢 Aktiv' : '🔴 Inaktiv';
   const ipText = d.public_ip ? ` · IP: ${d.public_ip}` : '';
-  msg.textContent = `${upText} (${d.interface})${ipText}`;
+  msg.textContent = `${d.up ? '🟢 Aktiv' : '🔴 Inaktiv'} (${d.interface})${ipText}`;
   msg.className = d.up ? 'settings-msg ok' : 'settings-msg err';
+  _vpnUpdateToggleBtn(d.up);
 }
-async function vpnConnect() {
+
+async function vpnToggle(btn) {
+  const isConnected = btn.textContent.includes('Trennen');
   const msg = document.getElementById('vpn-status-msg');
-  msg.textContent = '⏳ Verbinde…'; msg.className = 'settings-msg info';
-  const d = await apiPost('vpn_connect', {});
-  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
-  msg.textContent = '🟢 Verbunden'; msg.className = 'settings-msg ok';
+  btn.disabled = true;
+  btn.textContent = isConnected ? '⏳ Trenne…' : '⏳ Verbinde…';
+  msg.textContent = ''; msg.className = 'settings-msg info';
+  const d = await apiPost(isConnected ? 'vpn_disconnect' : 'vpn_connect', {});
+  btn.disabled = false;
+  if (d.error) {
+    msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err';
+    _vpnUpdateToggleBtn(isConnected); // zurücksetzen
+    return;
+  }
+  msg.textContent = isConnected ? '🔴 Getrennt' : '🟢 Verbunden';
+  msg.className = isConnected ? 'settings-msg err' : 'settings-msg ok';
+  _vpnUpdateToggleBtn(!isConnected);
   pollVpnStatus();
 }
-async function vpnDisconnect() {
-  const msg = document.getElementById('vpn-status-msg');
-  msg.textContent = '⏳ Trenne…'; msg.className = 'settings-msg info';
-  const d = await apiPost('vpn_disconnect', {});
-  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
-  msg.textContent = '🔴 Getrennt'; msg.className = 'settings-msg ok';
-  pollVpnStatus();
-}
+
+async function vpnConnect() { /* legacy — nicht mehr verwendet */ }
+async function vpnDisconnect() { /* legacy — nicht mehr verwendet */ }
 
 async function testTelegram() {
   const msgEl = document.getElementById('telegram-test-msg');
@@ -2837,7 +2977,7 @@ async function openTmdbModal(title, type, year, queueData) {
     const sid = String(queueData.stream_id ?? queueData.series_id ?? '');
     let actionHtml = '';
     if (type === 'series') {
-      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}')">📋 Episodes</button>`;
+      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}','${esc(queueData.category||'')}')">📋 Episodes</button>`;
     } else if (_downloadedIds.has(sid) && canQueueRemove) {
       actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();resetDownload('${sid}','movie',null)">↺ Reset</button>`;
     } else if (_downloadedIds.has(sid)) {
@@ -3237,14 +3377,22 @@ async function loadServerInfo() {
 let _statsChart     = null;
 let _statsChartCnt  = null;
 let _statsChartCats = null;
+let _statsChartWd   = null;
 
 async function loadStatsView() {
   const d = await api('stats_data');
   if (d.error) return;
 
-  // Gesamt-KPIs
-  document.getElementById('stats-total-count').textContent = (d.total_count ?? 0).toLocaleString();
-  document.getElementById('stats-total-gb').textContent    = fmtBytes(d.total_bytes ?? 0);
+  const monoFont = { family: 'DM Mono', size: 10 };
+  const gridColor = 'rgba(255,255,255,.05)';
+
+  // ── KPI Cards ─────────────────────────────────────────────────
+  document.getElementById('stats-total-count').textContent    = (d.total_count    ?? 0).toLocaleString();
+  document.getElementById('stats-total-movies').textContent   = (d.total_movies   ?? 0).toLocaleString();
+  document.getElementById('stats-total-episodes').textContent = (d.total_episodes ?? 0).toLocaleString();
+  document.getElementById('stats-total-gb').textContent       = fmtBytes(d.total_bytes ?? 0);
+  document.getElementById('stats-this-month').textContent     = (d.this_month?.count ?? 0).toLocaleString() + ' DL';
+  document.getElementById('stats-this-month-gb').textContent  = fmtBytes(d.this_month?.bytes ?? 0);
 
   const months  = Object.keys(d.by_month ?? {});
   const gbVals  = months.map(m => +((d.by_month[m].bytes / 1073741824).toFixed(2)));
@@ -3253,9 +3401,10 @@ async function loadStatsView() {
     const [y, mo] = m.split('-');
     return new Date(y, mo - 1).toLocaleDateString('de-DE', {month: 'short', year: '2-digit'});
   });
-
-  const monoFont = { family: 'DM Mono', size: 10 };
-  const gridColor = 'rgba(255,255,255,.05)';
+  // Aktuellen Monat hervorheben
+  const currentMonthIdx = months.indexOf(new Date().toISOString().slice(0,7));
+  const mkColors = (base, highlight) => months.map((_, i) =>
+    i === currentMonthIdx ? highlight : base);
 
   // ── GB pro Monat ──────────────────────────────────────────────
   const ctxGb = document.getElementById('stats-chart-gb')?.getContext('2d');
@@ -3263,25 +3412,17 @@ async function loadStatsView() {
     if (_statsChart) _statsChart.destroy();
     _statsChart = new Chart(ctxGb, {
       type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'GB',
-          data: gbVals,
-          backgroundColor: 'rgba(100,210,255,.25)',
-          borderColor:     'rgba(100,210,255,.8)',
-          borderWidth: 1, borderRadius: 4,
-        }]
-      },
+      data: { labels, datasets: [{
+        label: 'GB', data: gbVals, borderWidth: 1, borderRadius: 4,
+        backgroundColor: mkColors('rgba(100,210,255,.2)', 'rgba(100,210,255,.5)'),
+        borderColor:     mkColors('rgba(100,210,255,.6)', 'rgba(100,210,255,1)'),
+      }]},
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(2)} GB` } }
-        },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y.toFixed(2)} GB` }}},
         scales: {
-          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
-          y: { ticks: { color: 'rgba(100,210,255,.8)', font: monoFont, callback: v => v + ' GB' }, grid: { color: gridColor } },
+          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor }},
+          y: { ticks: { color: 'rgba(100,210,255,.8)', font: monoFont, callback: v => v + ' GB' }, grid: { color: gridColor }},
         }
       }
     });
@@ -3293,111 +3434,101 @@ async function loadStatsView() {
     if (_statsChartCnt) _statsChartCnt.destroy();
     _statsChartCnt = new Chart(ctxCnt, {
       type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Downloads',
-          data: cntVals,
-          backgroundColor: 'rgba(255,159,67,.25)',
-          borderColor:     'rgba(255,159,67,.8)',
-          borderWidth: 1, borderRadius: 4,
-        }]
-      },
+      data: { labels, datasets: [{
+        label: 'Downloads', data: cntVals, borderWidth: 1, borderRadius: 4,
+        backgroundColor: mkColors('rgba(255,159,67,.2)', 'rgba(255,159,67,.5)'),
+        borderColor:     mkColors('rgba(255,159,67,.6)', 'rgba(255,159,67,1)'),
+      }]},
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: c => `${c.parsed.y} Downloads` } }
-        },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y} Downloads` }}},
         scales: {
-          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
-          y: { ticks: { color: 'rgba(255,159,67,.8)', font: monoFont, stepSize: 1 }, grid: { color: gridColor } },
+          x: { ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor }},
+          y: { ticks: { color: 'rgba(255,159,67,.8)', font: monoFont, stepSize: 1 }, grid: { color: gridColor }},
         }
       }
     });
   }
 
-  // ── Top Kategorien ────────────────────────────────────────────
-  const ctxCats = document.getElementById('stats-chart-cats')?.getContext('2d');
-  if (ctxCats && d.top_categories) {
-    const catEntries = Object.entries(d.top_categories);
-    const catLabels  = catEntries.map(([k]) => k);
-    const catCounts  = catEntries.map(([, v]) => v.count);
-    const catBytes   = catEntries.map(([, v]) => +((v.bytes / 1073741824).toFixed(2)));
-
-    if (_statsChartCats) _statsChartCats.destroy();
-    _statsChartCats = new Chart(ctxCats, {
+  // ── Wochentag-Verteilung ──────────────────────────────────────
+  const ctxWd = document.getElementById('stats-chart-weekday')?.getContext('2d');
+  if (ctxWd && d.by_weekday) {
+    const wdLabels = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const wdCounts = d.by_weekday.map(w => w.count);
+    const maxWd = Math.max(...wdCounts, 1);
+    if (_statsChartWd) _statsChartWd.destroy();
+    _statsChartWd = new Chart(ctxWd, {
       type: 'bar',
-      data: {
-        labels: catLabels,
-        datasets: [{
-          label: 'Downloads',
-          data: catCounts,
-          backgroundColor: catCounts.map((_, i) =>
-            `hsla(${200 + i * 12}, 70%, 60%, 0.3)`),
-          borderColor: catCounts.map((_, i) =>
-            `hsla(${200 + i * 12}, 70%, 60%, 0.9)`),
-          borderWidth: 1, borderRadius: 4,
-          yAxisID: 'y',
-        }, {
-          label: 'GB',
-          data: catBytes,
-          type: 'line',
-          borderColor:     'rgba(232,255,71,.7)',
-          backgroundColor: 'rgba(232,255,71,.1)',
-          borderWidth: 2, pointRadius: 3, tension: 0.3,
-          yAxisID: 'y2', fill: false,
-        }]
-      },
+      data: { labels: wdLabels, datasets: [{
+        label: 'Downloads', data: wdCounts, borderWidth: 1, borderRadius: 6,
+        backgroundColor: wdCounts.map(v => `rgba(155,100,255,${0.15 + 0.55 * v / maxWd})`),
+        borderColor:     wdCounts.map(v => `rgba(155,100,255,${0.4 + 0.6 * v / maxWd})`),
+      }]},
       options: {
-        indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { labels: { color: 'var(--text)', font: { family: 'DM Mono', size: 11 } } },
-          tooltip: {
-            callbacks: {
-              label: c => c.dataset.label === 'GB'
-                ? `${c.parsed.x.toFixed(2)} GB`
-                : `${c.parsed.x} Downloads`
-            }
-          }
-        },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.y} Downloads` }}},
         scales: {
-          y:  { ticks: { color: 'var(--text)', font: { family: 'DM Mono', size: 10 } }, grid: { color: gridColor } },
-          x:  { position: 'bottom', ticks: { color: 'var(--muted)', font: monoFont }, grid: { color: gridColor } },
-          y2: { position: 'right',  ticks: { color: 'rgba(232,255,71,.8)', font: monoFont, callback: v => v + ' GB' }, grid: { drawOnChartArea: false } },
+          x: { ticks: { color: 'var(--text)', font: monoFont }, grid: { color: gridColor }},
+          y: { ticks: { color: 'rgba(155,100,255,.8)', font: monoFont, stepSize: 1 }, grid: { color: gridColor }},
         }
       }
     });
   }
 
-  // Top User Tabelle
+  // ── Top User ──────────────────────────────────────────────────
   const topEl = document.getElementById('stats-top-users');
   if (topEl && d.top_users) {
     const entries = Object.entries(d.top_users);
     if (!entries.length) {
-      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten vorhanden</div>`;
+      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten</div>`;
     } else {
       const maxCount = entries[0]?.[1]?.count ?? 1;
       topEl.innerHTML = entries.map(([user, data], i) => {
-        const pct = Math.round((data.count / maxCount) * 100);
+        const pct   = Math.round((data.count / maxCount) * 100);
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i+1}`;
-        return `
-        <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:.95rem;width:28px;text-align:center;flex-shrink:0">${medal}</span>
+        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="width:26px;text-align:center;flex-shrink:0;font-size:.9rem">${medal}</span>
           <div style="flex:1;min-width:0">
-            <div style="font-weight:500;font-size:.85rem">${esc(user)}</div>
-            <div style="height:4px;background:var(--bg3);border-radius:2px;margin-top:5px;overflow:hidden">
-              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px;transition:width .4s"></div>
+            <div style="font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(user)}</div>
+            <div style="height:3px;background:var(--bg3);border-radius:2px;margin-top:4px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:2px"></div>
             </div>
           </div>
-          <div style="text-align:right;flex-shrink:0">
-            <div style="font-family:'DM Mono',monospace;font-size:.8rem">${data.count.toLocaleString()} Downloads</div>
-            ${data.bytes ? `<div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">${fmtBytes(data.bytes)}</div>` : ''}
+          <div style="text-align:right;flex-shrink:0;font-family:'DM Mono',monospace">
+            <div style="font-size:.78rem">${data.count} DL</div>
+            ${data.bytes ? `<div style="font-size:.65rem;color:var(--muted)">${fmtBytes(data.bytes)}</div>` : ''}
           </div>
         </div>`;
       }).join('');
+    }
+  }
+
+  // ── Top Kategorien als Tabelle ────────────────────────────────
+  const catsEl = document.getElementById('stats-top-cats');
+  if (catsEl && d.top_categories) {
+    const entries = Object.entries(d.top_categories);
+    if (!entries.length) {
+      catsEl.innerHTML = `<div style="color:var(--muted)">Noch keine Daten</div>`;
+    } else {
+      const maxCnt = entries[0]?.[1]?.count ?? 1;
+      catsEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-family:'DM Mono',monospace;font-size:.72rem">
+          <div style="color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)">Kategorie</div>
+          <div style="color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">Downloads</div>
+          <div style="color:var(--muted);padding:6px 0 6px 8px;border-bottom:1px solid var(--border);text-align:right">Volumen</div>
+          ${entries.map(([cat, data]) => {
+            const pct = Math.round((data.count / maxCnt) * 100);
+            return `
+            <div style="padding:7px 0;border-bottom:1px solid var(--border);overflow:hidden">
+              <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(cat)}</div>
+              <div style="height:2px;background:var(--bg3);border-radius:1px;margin-top:3px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:var(--accent2);border-radius:1px"></div>
+              </div>
+            </div>
+            <div style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--text)">${data.count}</div>
+            <div style="padding:7px 0 7px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--muted)">${fmtBytes(data.bytes)}</div>`;
+          }).join('')}
+        </div>`;
     }
   }
 }
@@ -3425,6 +3556,22 @@ async function pollProgress() {
   const p = await api('get_progress');
   applyProgress(p, 'pc-', 'progress-card');        // Queue-view card
   applyProgress(p, 'dash-pc-', 'dash-progress-card'); // Dashboard card
+  applyTopbarDl(p);
+}
+
+function applyTopbarDl(p) {
+  const el    = document.getElementById('topbar-dl');
+  if (!el) return;
+  const inDashOrQueue = currentView === 'dashboard' || currentView === 'queue';
+  if (!p.active || inDashOrQueue) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  const titleEl = document.getElementById('topbar-dl-title');
+  const barEl   = document.getElementById('topbar-dl-bar');
+  const pctEl   = document.getElementById('topbar-dl-pct');
+  const pct     = p.percent ?? 0;
+  if (titleEl) titleEl.textContent = p.title ?? '–';
+  if (barEl)   barEl.style.width   = pct + '%';
+  if (pctEl)   pctEl.textContent   = pct + '%';
 }
 
 function applyProgress(p, prefix, cardId) {
@@ -3591,18 +3738,18 @@ function htmlJson(o)   { return JSON.stringify(o).replace(/"/g,'&quot;'); }
 function lazyLoadImages() {
   document.querySelectorAll('[data-src]').forEach(img => {
     img.onload  = () => img.classList.add('loaded');
-    img.onerror = () => img.classList.add('loaded'); // bei Fehler trotzdem einblenden
+    img.onerror = () => img.classList.add('loaded');
     img.src = img.dataset.src;
     img.removeAttribute('data-src');
-    // Bild bereits im Cache — onload feuert nicht mehr
     if (img.complete) img.classList.add('loaded');
   });
-  // Bilder mit direktem src (kein data-src) die noch nicht loaded sind
   document.querySelectorAll('.card-thumb img:not([data-src]):not(.loaded)').forEach(img => {
     if (img.complete) { img.classList.add('loaded'); return; }
     img.onload  = () => img.classList.add('loaded');
     img.onerror = () => img.classList.add('loaded');
   });
+  // View-Mode auf neu gerenderte Grids anwenden
+  if (typeof _viewMode !== 'undefined') applyViewMode(_viewMode);
 }
 let toastTimer;
 function showToast(msg, type = '') {

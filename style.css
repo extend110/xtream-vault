@@ -897,3 +897,49 @@ body::before {
   .topbar-desktop-only { display: none !important; }
   .topbar-overflow { display: block; }
 }
+
+/* ── Listenansicht ── */
+.grid.list-mode {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.grid.list-mode .card {
+  display: flex; flex-direction: row; align-items: center;
+  gap: 12px; padding: 8px 12px; border-radius: 6px;
+  background: var(--bg2); border: 1px solid var(--border);
+  width: 100%; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.grid.list-mode .card:hover { background: var(--bg3); border-color: var(--accent); }
+.grid.list-mode .card-thumb {
+  width: 44px; height: 62px; flex-shrink: 0; border-radius: 4px; overflow: hidden;
+  position: relative;
+}
+.grid.list-mode .card-thumb .card-thumb-placeholder { font-size: .9rem; }
+.grid.list-mode .card-thumb .card-badge {
+  display: none;
+}
+.grid.list-mode .card-body {
+  flex: 1; min-width: 0; padding: 0;
+}
+.grid.list-mode .card-title {
+  font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.grid.list-mode .card-meta { font-size: .72rem; }
+.grid.list-mode .card-actions { flex-shrink: 0; }
+.grid.list-mode .card-actions .btn-q { font-size: .7rem; padding: 4px 10px; }
+.grid.list-mode .btn-fav { display: none; }
+.grid.list-mode .select-check { display: none; }
+
+/* Status-Badge in Listenansicht als farbiger Punkt links */
+.grid.list-mode .card.downloaded { border-left: 3px solid var(--green); }
+.grid.list-mode .card.queued     { border-left: 3px solid var(--orange); }
+
+/* View-Mode Toggle Button */
+.view-mode-btn {
+  background: transparent; border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; color: var(--muted); font-size: .85rem;
+  padding: 5px 10px; transition: color .15s, border-color .15s; flex-shrink: 0;
+}
+.view-mode-btn:hover { color: var(--text); border-color: var(--accent); }
+.view-mode-btn.active { color: var(--accent); border-color: var(--accent); }

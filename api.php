@@ -1080,12 +1080,15 @@ switch ($action) {
         require_permission('settings');
         $wgInstalled = vpn_wg_installed();
         $up          = $wgInstalled ? vpn_is_up() : false;
+        $includeIp   = ($_GET['include_ip'] ?? '1') !== '0';
 
-        // Öffentliche IP
+        // Öffentliche IP — nur wenn gewünscht
         $pubIp = '';
-        $raw   = @file_get_contents('https://api.ipify.org?format=text',
-            false, stream_context_create(['http' => ['timeout' => 5]]));
-        if ($raw) $pubIp = trim($raw);
+        if ($includeIp) {
+            $raw = @file_get_contents('https://api.ipify.org?format=text',
+                false, stream_context_create(['http' => ['timeout' => 5]]));
+            if ($raw) $pubIp = trim($raw);
+        }
 
         // Verbunden seit: letzter Handshake aus "wg show"
         $connectedSince = null;
@@ -1127,9 +1130,13 @@ switch ($action) {
 
     case 'telegram_test':
         require_permission('settings');
-        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
-        $token = trim($d['bot_token'] ?? TELEGRAM_BOT_TOKEN);
-        $chatId = trim($d['chat_id'] ?? TELEGRAM_CHAT_ID);
+        $d         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $sentToken = trim($d['bot_token'] ?? '');
+        $sentChat  = trim($d['chat_id']  ?? '');
+        // Leerer oder maskierter Token → direkt aus config.json lesen
+        $cfgRaw    = file_exists(CONFIG_FILE) ? (json_decode(file_get_contents(CONFIG_FILE), true) ?? []) : [];
+        $token     = ($sentToken === '' || $sentToken === '••••••••') ? ($cfgRaw['telegram_bot_token'] ?? '') : $sentToken;
+        $chatId    = $sentChat !== '' ? $sentChat : ($cfgRaw['telegram_chat_id'] ?? '');
         if ($token === '' || $chatId === '') {
             echo json_encode(['error' => 'Bot Token und Chat ID sind Pflichtfelder']); break;
         }
@@ -1419,7 +1426,19 @@ switch ($action) {
         $ext  = $d['container_extension'] ?? 'mp4';
         if ($sid === '') { echo json_encode(['error'=>'Missing stream_id']); break; }
         $queue = load_queue();
-        foreach ($queue as $qi) if ((string)$qi['stream_id'] === $sid) { echo json_encode(['ok'=>true,'already'=>true]); break 2; }
+        foreach ($queue as $qi) {
+            if ((string)$qi['stream_id'] === $sid) {
+                echo json_encode(['ok' => true, 'already' => true, 'reason' => 'in_queue']); break 2;
+            }
+            // Gleicher Titel (anderer Stream-ID) — nur bei pending/downloading prüfen
+            if (in_array($qi['status'] ?? 'pending', ['pending', 'downloading'])) {
+                $qTitle = mb_strtolower(trim($qi['title'] ?? ''));
+                $dTitle = mb_strtolower(trim($d['title'] ?? ''));
+                if ($qTitle !== '' && $dTitle !== '' && $qTitle === $dTitle) {
+                    echo json_encode(['ok' => true, 'already' => true, 'reason' => 'duplicate_title', 'title' => $qi['title']]); break 2;
+                }
+            }
+        }
 
         // Bereits heruntergeladen?
         $db    = load_db();
@@ -1698,6 +1717,28 @@ switch ($action) {
         if (!file_exists(CRON_LOG)) { echo json_encode(['lines' => []]); break; }
         $lines = file(CRON_LOG, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         echo json_encode(['lines' => array_slice($lines, -150)]);
+        break;
+
+    case 'php_error_log':
+        require_permission('settings');
+        // PHP-Fehlerlog-Pfad aus ini ermitteln
+        $phpLogPath = ini_get('error_log');
+        if (!$phpLogPath || !file_exists($phpLogPath)) {
+            // Fallback: Apache-Fehlerlog
+            foreach (['/var/log/apache2/error.log', '/var/log/apache2/xtream_error.log', '/var/log/php_errors.log'] as $fallback) {
+                if (file_exists($fallback) && is_readable($fallback)) { $phpLogPath = $fallback; break; }
+            }
+        }
+        if (!$phpLogPath || !file_exists($phpLogPath)) {
+            echo json_encode(['lines' => [], 'path' => null, 'error' => 'Keine Fehlerlog-Datei gefunden']); break;
+        }
+        if (!is_readable($phpLogPath)) {
+            echo json_encode(['lines' => [], 'path' => $phpLogPath, 'error' => 'Keine Leseberechtigung']); break;
+        }
+        $lines = file($phpLogPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [];
+        // Nur Einträge die /xtream/ im Pfad enthalten (projektbezogen filtern)
+        $filtered = array_values(array_filter($lines, fn($l) => stripos($l, 'xtream') !== false || stripos($l, 'PHP') !== false));
+        echo json_encode(['lines' => array_slice($filtered, -100), 'path' => $phpLogPath]);
         break;
 
     case 'get_progress':
@@ -2022,22 +2063,33 @@ switch ($action) {
             ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
             : [];
 
-        // ── GB pro Monat ──────────────────────────────────────────────────────
+        // ── Echte Gesamtzahlen aus downloaded.json ────────────────────────────
+        $db           = load_db();
+        $totalMovies  = count($db['movies']   ?? []);
+        $totalEpisodes= count($db['episodes'] ?? []);
+        $totalCount   = $totalMovies + $totalEpisodes;
+
+        // ── GB/Downloads pro Monat (aus History) ──────────────────────────────
         $byMonth = [];
+        $byWeekday = array_fill(0, 7, ['count' => 0, 'bytes' => 0]); // 0=So, 1=Mo...
         foreach ($history as $h) {
-            if (empty($h['done_at'])) continue;
-            $month = substr($h['done_at'], 0, 7); // "YYYY-MM"
+            $dateStr = $h['done_at'] ?? $h['added_at'] ?? '';
+            if (empty($dateStr)) continue;
+            $month = substr($dateStr, 0, 7);
             if (!isset($byMonth[$month])) $byMonth[$month] = ['count' => 0, 'bytes' => 0];
             $byMonth[$month]['count']++;
             $byMonth[$month]['bytes'] += (int)($h['bytes'] ?? 0);
+            // Wochentag (0=So bis 6=Sa)
+            $wd = (int)date('w', strtotime($dateStr));
+            $byWeekday[$wd]['count']++;
+            $byWeekday[$wd]['bytes'] += (int)($h['bytes'] ?? 0);
         }
-        // Lücken füllen: letzte 12 Monate immer anzeigen
+        // Letzte 12 Monate immer anzeigen
         $months = [];
         for ($i = 11; $i >= 0; $i--) {
             $m = date('Y-m', strtotime("-{$i} months"));
             $months[$m] = $byMonth[$m] ?? ['count' => 0, 'bytes' => 0];
         }
-        // Ältere Monate davor einfügen falls vorhanden
         ksort($byMonth);
         foreach ($byMonth as $m => $v) {
             if (!isset($months[$m])) $months[$m] = $v;
@@ -2067,16 +2119,23 @@ switch ($action) {
         arsort($catCounts);
         $topCategories = array_slice($catCounts, 0, 15, true);
 
-        // ── Gesamt ────────────────────────────────────────────────────────────
+        // ── Gesamt-Bytes aus History ──────────────────────────────────────────
         $totalBytes = array_sum(array_column($history, 'bytes'));
-        $totalCount = count($history);
+
+        // ── Aktueller Monat ───────────────────────────────────────────────────
+        $currentMonth = date('Y-m');
+        $thisMonth = $byMonth[$currentMonth] ?? ['count' => 0, 'bytes' => 0];
 
         echo json_encode([
             'by_month'       => $months,
+            'by_weekday'     => $byWeekday,
             'top_users'      => $topUsers,
             'top_categories' => $topCategories,
             'total_bytes'    => $totalBytes,
             'total_count'    => $totalCount,
+            'total_movies'   => $totalMovies,
+            'total_episodes' => $totalEpisodes,
+            'this_month'     => $thisMonth,
         ]);
         break;
 
