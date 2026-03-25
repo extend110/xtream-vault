@@ -168,84 +168,104 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Admin Dashboard -->
       <div id="unconfigured-banner" class="unconfigured-banner" style="display:none" onclick="showView('settings')">
         <span class="ub-icon">⚠️</span>
-        <div><strong><?= t('cfg.not_configured') ?></div>
+        <div><strong><?= t('cfg.not_configured') ?></strong></div>
       </div>
 
-      <!-- Zeile 1: Verbindung + <?= t('stats.total') ?> -->
-      <div id="dash-stat-grid" class="dash-kpi-grid">
-        <div class="dkpi"><div class="dkpi-l">Server</div><div class="dkpi-v" id="dash-server">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Account</div><div class="dkpi-v" id="dash-user">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Destination</div><div class="dkpi-v" style="word-break:break-all;font-size:.8rem" id="dash-dest">–</div></div>
-        <div class="dkpi"><div class="dkpi-l"><?= t('stats.total') ?></div><div class="dkpi-n" style="color:var(--green)" id="dash-total-dl">–</div></div>
+      <!-- KPI-Zeile: Queue-Status + Speicher -->
+      <div class="dash-kpi-grid" id="dash-stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:14px">
+        <div class="dkpi">
+          <div class="dkpi-l"><?= t('status.pending') ?></div>
+          <div class="dkpi-n" style="color:var(--accent)" id="dqs-pending">–</div>
+        </div>
+        <div class="dkpi">
+          <div class="dkpi-l"><?= t('status.downloading') ?></div>
+          <div class="dkpi-n" style="color:var(--orange)" id="dqs-downloading">–</div>
+        </div>
+        <div class="dkpi">
+          <div class="dkpi-l"><?= t('status.done') ?></div>
+          <div class="dkpi-n" style="color:var(--green)" id="dqs-done">–</div>
+        </div>
+        <div class="dkpi">
+          <div class="dkpi-l"><?= t('status.error') ?></div>
+          <div class="dkpi-n" style="color:var(--red)" id="dqs-error">–</div>
+        </div>
+        <div class="dkpi" style="grid-column:span 2">
+          <div class="dkpi-l"><?= t('cfg.dest') ?></div>
+          <div id="dash-disk" style="margin-top:4px"><div style="color:var(--muted);font-size:.75rem"><?= t('status.loading') ?></div></div>
+        </div>
+        <div class="dkpi" style="grid-column:span 2">
+          <div class="dkpi-l">System</div>
+          <div id="dash-system" style="font-size:.78rem;line-height:1.75;margin-top:4px"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div>
+        </div>
       </div>
 
-      <!-- Zeile 2: Queue-Zahlen + Disk + System in einer Zeile -->
-      <div class="dash-disk-grid">
-        <div class="dkpi"><div class="dkpi-l">Ausstehend</div><div class="dkpi-n" style="color:var(--accent)" id="dqs-pending">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Lädt</div><div class="dkpi-n" style="color:var(--orange)" id="dqs-downloading">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Fertig</div><div class="dkpi-n" style="color:var(--green)" id="dqs-done">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Fehler</div><div class="dkpi-n" style="color:var(--red)" id="dqs-error">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Speicher</div><div id="dash-disk"><div style="color:var(--muted);font-size:.75rem"><?= t('status.loading') ?></div></div></div>
-        <div class="dkpi"><div class="dkpi-l">System</div><div id="dash-system" style="font-size:.78rem;line-height:1.75"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div></div>
-      </div>
-
-      <!-- Zeile 3: Xtream Server Info (6 kompakte Kacheln) -->
-      <div id="dash-server-info" class="dash-server-grid">
-        <div class="dkpi"><div class="dkpi-l">Status</div><div class="dkpi-v" id="si-status">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Läuft ab</div><div class="dkpi-v" id="si-exp">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Verbindungen</div><div class="dkpi-n" style="font-size:1.2rem" id="si-cons">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Trial</div><div class="dkpi-v" id="si-trial">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Formate</div><div class="dkpi-v" id="si-formats">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Serverzeit</div><div class="dkpi-v" style="font-family:'DM Mono',monospace;font-size:.72rem" id="si-time">–</div></div>
-      </div>
-
-      <!-- Schnellzugriff -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="btn-secondary" data-label="▶ Queue starten" onclick="startQueue(this)"><?= t('queue.start') ?></button>
-        <button class="btn-secondary" onclick="dashRebuildCache()"><?= t('cfg.cache_build') ?></button>
-        <button class="btn-secondary" onclick="dashClearDone()"><?= t('btn.delete') ?></button>
-        <button class="btn-secondary danger" onclick="dashClearAll()">Queue leeren</button>
-        <button class="btn-secondary" onclick="showView('settings')">Einstellungen</button>
-        <button class="btn-secondary" onclick="showView('log')">Cron Log</button>
-      </div>
-
-      <!-- Live Progress Card (nur sichtbar wenn aktiver Download) -->
-      <div class="progress-card" id="dash-progress-card" style="margin-bottom:12px">
+      <!-- Laufender Download -->
+      <div class="progress-card" id="dash-progress-card" style="margin-bottom:14px">
         <div class="pc-header">
           <div class="pc-dot"></div>
           <div class="pc-title" id="dash-pc-title">–</div>
-          <div class="pc-pos"   id="dash-pc-pos"></div>
+          <div class="pc-pos" id="dash-pc-pos"></div>
           <?php if ($can_queue_remove): ?>
           <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
           <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="dash-pc-bar"></div></div>
         <div class="pc-stats">
-          <div class="pc-stat"><span class="val" id="dash-pc-pct">0%</span><span class="lbl">Fortschritt</span></div>
-          <div class="pc-stat"><span class="val" id="dash-pc-done">–</span><span class="lbl">heruntergeladen</span></div>
-          <div class="pc-stat"><span class="val" id="dash-pc-total">–</span><span class="lbl">gesamt</span></div>
-          <div class="pc-stat"><span class="val" id="dash-pc-speed">–</span><span class="lbl">Geschwindigkeit</span></div>
-          <div class="pc-stat"><span class="val" id="dash-pc-eta">–</span><span class="lbl">verbleibend</span></div>
+          <div class="pc-stat"><span class="val" id="dash-pc-pct">0%</span><span class="lbl">%</span></div>
+          <div class="pc-stat"><span class="val" id="dash-pc-done">–</span><span class="lbl"><?= t('dash.downloaded') ?></span></div>
+          <div class="pc-stat"><span class="val" id="dash-pc-total">–</span><span class="lbl"><?= t('dash.total') ?></span></div>
+          <div class="pc-stat"><span class="val" id="dash-pc-speed">–</span><span class="lbl"><?= t('dash.speed') ?></span></div>
+          <div class="pc-stat"><span class="val" id="dash-pc-eta">–</span><span class="lbl"><?= t('dash.eta') ?></span></div>
         </div>
       </div>
 
-      <!-- Letzte Downloads + Queue nebeneinander -->
-      <div class="dash-bottom-grid" id="dash-bottom-grid">
-        <div>
-          <div class="dkpi-l" style="margin-bottom:8px">Letzte Downloads</div>
-          <div id="dash-recent" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden">
-            <div style="padding:24px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
+      <!-- Hauptbereich: 3 Spalten -->
+      <div id="dash-main-grid" style="display:grid;grid-template-columns:200px 1fr 1fr;gap:14px;align-items:start">
+
+        <!-- Spalte 1: Server + Schnellzugriff -->
+        <div style="display:flex;flex-direction:column;gap:10px">
+
+          <!-- Server-Status -->
+          <div class="settings-card" style="padding:12px">
+            <div class="dkpi-l" style="margin-bottom:8px">🌐 <?= t('cfg.servers') ?></div>
+            <div id="dash-servers" style="display:flex;flex-direction:column;gap:5px">
+              <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
+            </div>
+          </div>
+
+          <!-- Schnellzugriff -->
+          <div class="settings-card" style="padding:12px">
+            <div class="dkpi-l" style="margin-bottom:8px">⚡ Aktionen</div>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)">▶ <?= t('queue.start') ?></button>
+              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="dashRebuildCache()">🔄 <?= t('cfg.cache_build') ?></button>
+              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="dashClearDone()">🗑 Erledigte leeren</button>
+              <button class="btn-secondary danger" style="width:100%;text-align:left;font-size:.78rem" onclick="dashClearAll()">✕ <?= t('queue.clear') ?></button>
+              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="showView('settings')">⚙️ <?= t('nav.settings') ?></button>
+              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="showView('log')">🖥 <?= t('nav.log') ?></button>
+            </div>
           </div>
         </div>
-        <div>
+
+        <!-- Spalte 2: Queue-Vorschau -->
+        <div class="settings-card" style="padding:12px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <div class="dkpi-l">Queue</div>
+            <div class="dkpi-l">📋 <?= t('nav.queue') ?></div>
             <button class="btn-sm" onclick="showView('queue')"><?= t('dash.all') ?></button>
           </div>
           <div class="queue-list" id="dash-queue-list">
-            <div style="padding:32px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
+            <div style="padding:24px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
           </div>
         </div>
+
+        <!-- Spalte 3: Letzte Downloads -->
+        <div class="settings-card" style="padding:12px">
+          <div class="dkpi-l" style="margin-bottom:8px">📥 <?= t('dash.recent') ?></div>
+          <div id="dash-recent">
+            <div style="padding:24px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
+          </div>
+        </div>
+
       </div>
 
       <?php else: ?>
@@ -1001,6 +1021,27 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 </div>
 
 <!-- ── Series Modal ───────────────────────────────────────────── -->
+<div class="modal-overlay" id="edit-server-modal" onclick="if(event.target===this)closeEditServerModal()" style="display:none;z-index:1045">
+  <div class="modal-box" style="max-width:420px;width:100%">
+    <div class="modal-header">
+      <div class="modal-title">✏️ <?= t('cfg.servers') ?></div>
+      <button class="modal-close" onclick="closeEditServerModal()">✕</button>
+    </div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+      <div class="field"><label><?= t('cfg.server') ?> Name</label><input type="text" id="esrv-name" placeholder="Mein Server"></div>
+      <div class="field"><label><?= t('cfg.server_ip') ?></label><input type="text" id="esrv-ip" placeholder="line.example.com" autocomplete="off"></div>
+      <div class="field"><label><?= t('cfg.port') ?></label><input type="text" id="esrv-port" placeholder="80" style="max-width:120px"></div>
+      <div class="field"><label><?= t('cfg.username') ?></label><input type="text" id="esrv-username" autocomplete="off"></div>
+      <div class="field"><label><?= t('cfg.password') ?></label><input type="password" id="esrv-password" autocomplete="new-password"></div>
+      <div class="settings-msg" id="esrv-msg"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+        <button class="btn-secondary" onclick="closeEditServerModal()"><?= t('btn.cancel') ?></button>
+        <button class="btn-primary"   onclick="saveEditServer()"><?= t('btn.save') ?></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="series-modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-header">
@@ -1417,16 +1458,38 @@ startBadgePolling();
 
 // ── Categories ────────────────────────────────────────────────
 async function loadMovieCats() {
-  const cats = await api('get_movie_categories');
-  document.getElementById('cats-movies').innerHTML = cats.map(c =>
-    `<div class="cat-item" onclick="loadMovies('${c.category_id}','${esc(c.category_name)}',this)">${c.category_name}</div>`
-  ).join('');
+  const el = document.getElementById('cats-movies');
+  if (!el) return;
+  // Immer multi-server Endpoint verwenden — gibt bei einem Server denselben Inhalt zurück
+  const groups = await api('get_all_movie_categories');
+  if (!Array.isArray(groups)) return;
+  const multiServer = groups.length > 1;
+  el.innerHTML = groups.map(g => {
+    const header = multiServer
+      ? `<div class="cat-server-label">🌐 ${esc(g.server_name)}</div>`
+      : '';
+    const items = (g.categories ?? []).map(c =>
+      `<div class="cat-item" onclick="loadMovies('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
+    ).join('');
+    return header + items;
+  }).join('');
 }
+
 async function loadSeriesCats() {
-  const cats = await api('get_series_categories');
-  document.getElementById('cats-series').innerHTML = cats.map(c =>
-    `<div class="cat-item" onclick="loadSeriesCat('${c.category_id}','${esc(c.category_name)}',this)">${c.category_name}</div>`
-  ).join('');
+  const el = document.getElementById('cats-series');
+  if (!el) return;
+  const groups = await api('get_all_series_categories');
+  if (!Array.isArray(groups)) return;
+  const multiServer = groups.length > 1;
+  el.innerHTML = groups.map(g => {
+    const header = multiServer
+      ? `<div class="cat-server-label">🌐 ${esc(g.server_name)}</div>`
+      : '';
+    const items = (g.categories ?? []).map(c =>
+      `<div class="cat-item" onclick="loadSeriesCat('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
+    ).join('');
+    return header + items;
+  }).join('');
 }
 function toggleCats(type) {
   document.getElementById('cats-' + type).classList.toggle('open');
@@ -1441,14 +1504,16 @@ let _lastSeries = [];
 let _movieSort  = 'default';
 let _seriesSort = 'default';
 
-async function loadMovies(catId, catName, el) {
+async function loadMovies(catId, catName, el, serverId = '') {
   setActiveCat(el);
   showView('movies');
   document.getElementById('page-title').textContent = catName;
   document.getElementById('movie-grid').innerHTML = loadingHTML();
   addCatHistory('movies', catId, catName);
-  _lastMovies = await api('get_movies', {category_id: catId});
-  _lastMovies = _lastMovies.map(m => ({...m, category: m.category || catName}));
+  const params = {category_id: catId};
+  if (serverId) params.server_id = serverId;
+  _lastMovies = await api('get_movies', params);
+  _lastMovies = _lastMovies.map(m => ({...m, category: m.category || catName, _server_id: serverId || m._server_id || ''}));
   _moviePage = 1;
   renderMovies();
 }
@@ -1493,7 +1558,7 @@ function renderPagination(containerId, current, total, onPage) {
   el.innerHTML = html;
 }
 
-function movieCard(m) {
+function movieCard(m, showServer = false) {
   const thumb = m.stream_icon ? `<img data-src="${m.stream_icon}" alt="">` : '';
   const badge = m.downloaded
     ? `<span class="card-badge badge-done">✓ Done</span>`
@@ -1517,9 +1582,12 @@ function movieCard(m) {
     : '';
 
   const isFav = favourites.has('movie:' + m.stream_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this,'${esc(m._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
   const year = m.year ?? '';
+  const serverBadge = (showServer && m._server_name)
+    ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m._server_name)}">🌐 ${esc(m._server_name)}</div>`
+    : '';
 
   return `
   <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}"
@@ -1533,21 +1601,24 @@ function movieCard(m) {
     <div class="card-body">
       <div class="card-title">${m.clean_title}</div>
       <div class="card-meta">${(m.container_extension??'').toUpperCase()}</div>
+      ${serverBadge}
     </div>
     <div class="card-actions" onclick="event.stopPropagation()">${btn}</div>
   </div>`;
 }
 
 // ── Series ────────────────────────────────────────────────────
-async function loadSeriesCat(catId, catName, el) {
+async function loadSeriesCat(catId, catName, el, serverId = '') {
   setActiveCat(el);
   showView('series');
   document.getElementById('page-title').textContent = catName;
   const grid = document.getElementById('series-grid');
   grid.innerHTML = loadingHTML();
   addCatHistory('series', catId, catName);
-  _lastSeries = await api('get_series', {category_id: catId});
-  _lastSeries = _lastSeries.map(s => ({...s, category: s.category || catName}));
+  const params = {category_id: catId};
+  if (serverId) params.server_id = serverId;
+  _lastSeries = await api('get_series', params);
+  _lastSeries = _lastSeries.map(s => ({...s, category: s.category || catName, _server_id: serverId || s._server_id || ''}));
   _seriesPage = 1;
   renderSeriesGrid(_lastSeries);
 }
@@ -1566,18 +1637,21 @@ function renderSeriesGrid(list) {
   renderPagination('series-pagination', page, pages, p => { _seriesPage = p; renderSeriesGrid(_lastSeries); });
 }
 
-function seriesCard(s) {
+function seriesCard(s, showServer = false) {
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
   const isFav = favourites.has('series:' + s.series_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this,'${esc(s._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
   const queueData = {series_id: s.series_id, clean_title: s.clean_title, cover: s.cover || ''};
+  const serverBadge = (showServer && s._server_name)
+    ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s._server_name)}">🌐 ${esc(s._server_name)}</div>`
+    : '';
   return `
   <div class="card"
     data-tmdb-title="${esc(s.clean_title)}" data-tmdb-type="series" data-tmdb-year=""
     data-tmdb-queue="${esc(JSON.stringify(queueData))}"
     onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
-    <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div></div>
+    <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div>${serverBadge}</div>
     <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}')">📋 Episodes</button></div>
   </div>`;
 }
@@ -1675,6 +1749,7 @@ async function addMovieToQueue(m, card) {
     cover:               m.stream_icon ?? '',
     dest_subfolder:      'Movies',
     category:            m.category ?? m._category ?? '',
+    _server_id:          m._server_id ?? '',
   });
   // Karte per ID suchen falls nicht direkt übergeben (z.B. aus TMDB-Modal)
   if (!card) card = document.getElementById('card-m-' + m.stream_id);
@@ -1921,13 +1996,13 @@ function updateFavBadge() {
   badge.style.display = n > 0 ? '' : 'none';
 }
 
-async function toggleFav(type, sid, title, cover, category, ext, btn) {
+async function toggleFav(type, sid, title, cover, category, ext, btn, serverId = '') {
   const key = type + ':' + sid;
-  const d = await apiPost('favourite_toggle', {stream_id: sid, type, title, cover, category, ext});
+  const d = await apiPost('favourite_toggle', {stream_id: sid, type, title, cover, category, ext, server_id: serverId});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   if (d.action === 'added') {
     favourites.add(key);
-    favouriteData.push({stream_id: sid, type, title, cover, category, ext, added_at: new Date().toISOString().slice(0,10)});
+    favouriteData.push({stream_id: sid, type, title, cover, category, ext, server_id: serverId, added_at: new Date().toISOString().slice(0,10)});
     btn.classList.add('active');
     showToast('Zu Favoriten hinzugefügt', 'success');
   } else {
@@ -1987,7 +2062,7 @@ function renderFavourites() {
         const movieObj = JSON.stringify({
           stream_id: f.stream_id, type: 'movie', title: f.title,
           container_extension: ext, cover: f.cover, category: f.category,
-          clean_title: f.title,
+          clean_title: f.title, _server_id: f.server_id ?? '',
         }).replace(/"/g, '&quot;');
         actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
       }
@@ -2060,6 +2135,7 @@ function renderNewReleases() {
       downloaded:          _downloadedIds.has(sid),
       queued:              _queuedIds.has(sid),
       year:                item.year ?? '',
+      _server_id:          item._server_id ?? '',
     });
     return card.replace('<div class="card-thumb">', `<div class="card-thumb">${dismissBtn}`);
   }).join('');
@@ -2264,63 +2340,44 @@ async function doSearch(q) {
     if (movGrid) movGrid.innerHTML = loadingHTML();
     const hintEl = document.getElementById('search-cache-hint');
     if (hintEl) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; }
-    const cacheKey = 'movies:' + q;
+    const cacheKey = 'multi:' + q;
     let results, source;
     if (_searchCache.has(cacheKey)) {
       ({results, source} = _searchCache.get(cacheKey));
     } else {
-      const d = await api('search_movies', {q});
-      // Neues Format: {results, source} — Fallback auf altes Array-Format
+      const d = await api('search_all_servers', {q, type: 'movies'});
       results = d.results ?? d;
-      source  = d.source ?? 'xtream';
+      source  = d.source ?? 'multi';
       _searchCache.set(cacheKey, {results, source});
     }
     _lastMovies = results;
     if (movGrid) {
       const hint = document.getElementById('search-cache-hint');
-      if (hint) {
-        if (source === 'cache') {
-          hint.style.display = '';
-          hint.innerHTML = `📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">${t('btn.refresh')}</span>`;
-        } else {
-          hint.style.display = 'none';
-          hint.innerHTML = '';
-        }
-      }
+      if (hint) { hint.style.display = 'none'; hint.innerHTML = ''; }
       if (!results.length) {
         movGrid.innerHTML = emptyHTML('Keine Treffer');
       } else {
-        movGrid.innerHTML = results.map(movieCard).join('');
+        movGrid.innerHTML = results.map(m => movieCard(m, true)).join('');
         lazyLoadImages();
       }
     }
   } else {
     if (serGrid) serGrid.innerHTML = loadingHTML();
-    const cacheKey = 'series:' + q;
+    const cacheKey = 'multi-s:' + q;
     let results, source;
     if (_searchCache.has(cacheKey)) {
       ({results, source} = _searchCache.get(cacheKey));
     } else {
-      const d = await api('search_series', {q});
+      const d = await api('search_all_servers', {q, type: 'series'});
       results = d.results ?? d;
-      source  = d.source ?? 'xtream';
+      source  = d.source ?? 'multi';
       _searchCache.set(cacheKey, {results, source});
     }
     if (serGrid) {
-      const hint = document.getElementById('search-cache-hint');
-      if (hint) {
-        if (source === 'cache') {
-          hint.style.display = '';
-          hint.innerHTML = `📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">${t('btn.refresh')}</span>`;
-        } else {
-          hint.style.display = 'none';
-          hint.innerHTML = '';
-        }
-      }
       if (!results.length) {
         serGrid.innerHTML = emptyHTML('Keine Treffer');
       } else {
-        serGrid.innerHTML = results.map(seriesCard).join('');
+        serGrid.innerHTML = results.map(s => seriesCard(s, true)).join('');
         lazyLoadImages();
       }
     }
@@ -2472,8 +2529,7 @@ async function toggleMaintenance() {
   const current = document.getElementById('maintenance-status')?.textContent?.includes('AKTIV');
   if (!current && !confirm(t('maintenance.enable_confirm'))) return;
   const action = current ? 'maintenance_disable' : 'maintenance_enable';
-  const d = await fetch(`${API}?action=${action}`, {method:'POST'});
-  const r = await d.json();
+  const r = await apiPost(action, {});
   if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
   applyMaintenanceStatus(!current);
   showToast(current ? t('maintenance.disabled_toast') : t('maintenance.enabled_toast'), current ? 'success' : 'info');
@@ -2489,15 +2545,14 @@ async function loadServers() {
     return;
   }
   list.innerHTML = servers.map(s => `
-    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid ${s.active ? 'var(--accent)' : 'var(--border)'};border-radius:6px;padding:8px 12px">
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:.85rem;font-weight:500;${s.active ? 'color:var(--accent)' : ''}">${esc(s.name)}${s.active ? ' <span style="font-size:.6rem;font-family:\'DM Mono\',monospace;opacity:.7">(aktiv)</span>' : ''}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">${esc(s.server_ip)}:${esc(s.port)} · ${esc(s.username)} · ID: ${esc(s.id)}</div>
+        <div style="font-size:.85rem;font-weight:500">${esc(s.name)}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">${esc(s.server_ip)}:${esc(s.port)} · ${esc(s.username)}</div>
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0">
-        ${!s.active ? `<button class="btn-icon" onclick="switchServer('${esc(s.id)}','${esc(s.name)}')">↗ Wechseln</button>` : ''}
-        <button class="btn-icon" onclick="renameServer('${esc(s.id)}','${esc(s.name)}')">✏️</button>
-        ${!s.active ? `<button class="btn-icon danger" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>` : ''}
+        <button class="btn-icon" onclick="openEditServerModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
+        <button class="btn-icon danger" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>
       </div>
     </div>`).join('');
 }
@@ -2510,12 +2565,38 @@ async function switchServer(serverId, name) {
   setTimeout(() => location.reload(), 1200);
 }
 
-async function renameServer(serverId, currentName) {
-  const name = prompt('Neuer Name für diesen Server:', currentName);
-  if (!name || name.trim() === '') return;
-  const d = await apiPost('save_server', {server_id: serverId, name: name.trim()});
-  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast('✅ Umbenannt', 'success');
+let _editServerId = '';
+function openEditServerModal(s) {
+  _editServerId = s.id;
+  document.getElementById('esrv-name').value      = s.name      ?? '';
+  document.getElementById('esrv-ip').value        = s.server_ip ?? '';
+  document.getElementById('esrv-port').value      = s.port      ?? '80';
+  document.getElementById('esrv-username').value  = s.username  ?? '';
+  document.getElementById('esrv-password').value  = '';
+  document.getElementById('esrv-password').placeholder = s.password ? t('cfg.pw_set') : t('cfg.password');
+  document.getElementById('esrv-msg').textContent = '';
+  document.getElementById('edit-server-modal').style.display = 'flex';
+}
+function closeEditServerModal() {
+  document.getElementById('edit-server-modal').style.display = 'none';
+}
+async function saveEditServer() {
+  const msg  = document.getElementById('esrv-msg');
+  const name = document.getElementById('esrv-name').value.trim();
+  const ip   = document.getElementById('esrv-ip').value.trim();
+  const port = document.getElementById('esrv-port').value.trim();
+  const user = document.getElementById('esrv-username').value.trim();
+  const pw   = document.getElementById('esrv-password').value;
+  if (!name || !ip || !user) {
+    msg.textContent = '❌ Name, IP und Benutzername sind Pflichtfelder';
+    msg.className = 'settings-msg err'; return;
+  }
+  const payload = {server_id: _editServerId, name, server_ip: ip, port: port || '80', username: user};
+  if (pw) payload.password = pw;
+  const d = await apiPost('save_server', payload);
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  msg.textContent = '✓ Gespeichert'; msg.className = 'settings-msg ok';
+  setTimeout(() => closeEditServerModal(), 600);
   loadServers();
 }
 
@@ -2982,15 +3063,8 @@ async function refreshDashboard() {
   const ub = document.getElementById('unconfigured-banner');
   <?php if ($can_settings): ?>
   const c = await api('get_config');
-  const ds = document.getElementById('dash-server');
-  const du = document.getElementById('dash-user');
-  const dd = document.getElementById('dash-dest');
-  if (ds) ds.textContent = c.server_ip ? `${c.server_ip}:${c.port}` : '–';
-  if (du) du.textContent = c.username  ?? '–';
-  if (dd) dd.textContent = c.dest_path || (c.rclone_enabled ? c.rclone_remote + ':' + c.rclone_path : '–');
   if (ub) ub.style.display = c.configured ? 'none' : '';
   if (c.configured) {
-    loadServerInfo();
     loadDashboardData();
   }
   <?php else: ?>
@@ -3300,10 +3374,10 @@ async function loadDashboardData() {
   const disk = document.getElementById('dash-disk');
   if (disk && d.disk) {
     if (d.disk.rclone) {
-      disk.innerHTML = `<div style="font-size:.85rem">☁️ rclone</div><div style="color:var(--muted);font-size:.75rem;margin-top:4px">${esc(d.disk.remote)}</div>`;
+      disk.innerHTML = `<div style="font-size:.85rem">☁️ ${esc(d.disk.remote)}</div>`;
     } else {
-      const pct  = d.disk.percent ?? 0;
-      const col  = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
+      const pct = d.disk.percent ?? 0;
+      const col = pct > 90 ? 'var(--red)' : pct > 75 ? 'var(--orange)' : 'var(--green)';
       disk.innerHTML = `
         <div style="display:flex;justify-content:space-between;margin-bottom:6px">
           <span style="font-size:.85rem">${fmtBytes(d.disk.used)} / ${fmtBytes(d.disk.total)}</span>
@@ -3318,15 +3392,34 @@ async function loadDashboardData() {
     disk.innerHTML = `<div style="color:var(--muted);font-size:.8rem">–</div>`;
   }
 
-  // System-Status
+  // System-Info
   const sys = document.getElementById('dash-system');
   if (sys && d.system) {
     const s = d.system;
+    const memUsed  = fmtBytes(s.mem_used  ?? 0);
+    const memTotal = fmtBytes(s.mem_total ?? 0);
     sys.innerHTML = `
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(s.php_version)}</span></div>
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${fmtBytes(s.mem_used)}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(String(s.php_version ?? '–'))}</span></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${memUsed} / ${memTotal}</span></div>
       ${s.uptime ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Uptime</span><span>${esc(s.uptime)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">${t('stats.downloads')}</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
+    `;
+  } else if (sys) {
+    sys.innerHTML = `<div style="color:var(--muted);font-size:.8rem">–</div>`;
+  }
+
+  // Server-Status
+  const srvEl = document.getElementById('dash-servers');
+  if (srvEl) {
+    if (d.servers?.length) {
+      srvEl.innerHTML = d.servers.map(s => `
+        <div style="display:flex;align-items:center;gap:6px;font-size:.78rem;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span style="color:${s.has_cache ? 'var(--green)' : 'var(--orange)'}">●</span>
+          <span style="flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</span>
+          ${!s.has_cache ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--orange)">NO CACHE</span>` : `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted)">✓</span>`}
+        </div>`).join('');
+    } else {
+      srvEl.innerHTML = `<div style="color:var(--muted);font-size:.78rem">–</div>`;
+    }
   }
 
   // Letzte Downloads
@@ -3390,46 +3483,13 @@ async function dashClearDone() {
 }
 async function dashClearAll() {
   if (!confirm('Wirklich die gesamte Queue löschen?')) return;
-  const r = await fetch(`${API}?action=queue_clear_all`, {method:'POST'});
+  const r = await apiPost('queue_clear_all', {});
   showToast(t('queue.cleared'), 'info');
   loadDashboardData();
 }
 // ── Xtream Server Info ────────────────────────────────────────
-async function loadServerInfo() {
-  const d = await api('get_server_info');
-  if (d.error) return;
-  const u = d.user   ?? {};
-  const s = d.server ?? {};
+// loadServerInfo entfernt — Serverinfos werden nicht mehr im Dashboard angezeigt
 
-  const set = (id, val, cls = '') => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = val;
-    if (cls) el.className = 'dic-val ' + cls;
-  };
-
-  const statusCls = u.status === 'Active' ? 'ok' : u.status === 'Banned' ? 'error' : 'warn';
-  set('si-status',  u.status  || '–', statusCls);
-
-  // Ablaufdatum: Unix-Timestamp → lesbares Datum
-  if (u.exp_date && u.exp_date !== '0') {
-    const d = new Date(parseInt(u.exp_date) * 1000);
-    const now = Date.now();
-    const daysLeft = Math.ceil((d - now) / 86400000);
-    const dateStr = d.toLocaleDateString('de-DE');
-    const cls = daysLeft < 7 ? 'error' : daysLeft < 30 ? 'warn' : 'ok';
-    set('si-exp', `${dateStr} (${daysLeft}d)`, cls);
-  } else {
-    set('si-exp', 'Unbegrenzt', 'ok');
-  }
-
-  set('si-cons',    `${u.active_cons ?? '–'} / ${u.max_connections ?? '–'}`);
-  set('si-trial',   u.is_trial === '1' ? 'Ja' : 'Nein');
-  set('si-formats', Array.isArray(u.allowed_output_formats) ? u.allowed_output_formats.join(', ') : '–');
-  set('si-tz',      s.timezone || '–');
-  set('si-time',    s.time_now || '–');
-  set('si-proto',   s.server_protocol || '–');
-}
 
 // ── Statistiken ───────────────────────────────────────────────
 <?php if ($can_settings): ?>

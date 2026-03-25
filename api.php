@@ -112,6 +112,21 @@ function xtream(string $action, array $extra = []): mixed {
     return json_decode($raw, true);
 }
 
+function xtream_for_server(array $server, string $action, array $extra = []): array {
+    $params = array_merge([
+        'username' => $server['username'],
+        'password' => $server['password'] ?? '',
+        'action'   => $action,
+    ], $extra);
+    $url = 'http://' . $server['server_ip'] . ':' . $server['port'] . '/player_api.php?' . http_build_query($params);
+    $ctx = stream_context_create(['http' => [
+        'timeout' => 20,
+        'header'  => "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\n"
+    ]]);
+    $raw = @file_get_contents($url, false, $ctx);
+    return $raw ? (json_decode($raw, true) ?? []) : [];
+}
+
 function load_db(): array {
     if (file_exists(DOWNLOAD_DB))
         return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
@@ -140,6 +155,11 @@ function sanitize(string $n): string {
 function stream_url(string $type, $id, string $ext): string {
     $p = $type === 'movie' ? 'movie' : 'series';
     return 'http://' . SERVER_IP . ':' . PORT . "/{$p}/" . USERNAME . '/' . PASSWORD . "/{$id}.{$ext}";
+}
+
+function stream_url_for_server(array $server, string $type, $id, string $ext): string {
+    $p = $type === 'movie' ? 'movie' : 'series';
+    return 'http://' . $server['server_ip'] . ':' . $server['port'] . "/{$p}/" . $server['username'] . '/' . ($server['password'] ?? '') . "/{$id}.{$ext}";
 }
 
 // ─── Router ───────────────────────────────────────────────────────────────────
@@ -217,11 +237,11 @@ switch ($action) {
         }
         $data = json_decode(file_get_contents($file), true) ?? [];
         $db   = load_db();
-        // Downloaded-Status anreichern
         foreach (($data['movies'] ?? []) as &$m) {
-            $m['downloaded'] = in_array((string)$m['id'], $db['movies']);
-            $m['stream_id']  = $m['id'];
+            $m['downloaded']  = in_array((string)($m['stream_id'] ?? $m['id'] ?? ''), $db['movies']);
+            $m['stream_id']   = $m['stream_id'] ?? $m['id'] ?? '';
             $m['clean_title'] = display_title($m['title'] ?? '');
+            // _server_id aus Cache übernehmen falls vorhanden
         }
         unset($m);
         echo json_encode([
@@ -879,7 +899,14 @@ switch ($action) {
         // Existierenden Eintrag updaten oder neu anlegen
         $found = false;
         foreach ($servers as &$s) {
-            if ($s['id'] === $sid) { $s['name'] = $name; $found = true; break; }
+            if ($s['id'] === $sid) {
+                $s['name']       = $name;
+                $s['server_ip']  = $d['server_ip'] ?? $s['server_ip'];
+                $s['port']       = $d['port']       ?? $s['port'];
+                $s['username']   = $d['username']   ?? $s['username'];
+                if (!empty($d['password'])) $s['password'] = $d['password'];
+                $found = true; break;
+            }
         }
         unset($s);
         if (!$found) {
@@ -889,6 +916,7 @@ switch ($action) {
                 'server_ip'  => $d['server_ip']  ?? '',
                 'port'       => $d['port']        ?? '80',
                 'username'   => $d['username']    ?? '',
+                'password'   => $d['password']    ?? '',
                 'saved_at'   => date('Y-m-d H:i:s'),
             ];
         }
@@ -1224,34 +1252,89 @@ switch ($action) {
         echo json_encode(xtream('get_series_categories'));
         break;
 
+    case 'get_all_movie_categories':
+    case 'get_all_series_categories': {
+        $catAction = ($action === 'get_all_movie_categories') ? 'get_vod_categories' : 'get_series_categories';
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        // Aktiven Server sicherstellen
+        $hasActive = false;
+        foreach ($servers as &$s) {
+            if ($s['id'] === SERVER_ID) {
+                $s['server_ip'] = SERVER_IP; $s['port'] = PORT;
+                $s['username']  = USERNAME;  $s['password'] = PASSWORD;
+                $hasActive = true; break;
+            }
+        }
+        unset($s);
+        if (!$hasActive) {
+            array_unshift($servers, [
+                'id' => SERVER_ID, 'name' => SERVER_IP . ':' . PORT,
+                'server_ip' => SERVER_IP, 'port' => PORT,
+                'username' => USERNAME, 'password' => PASSWORD,
+            ]);
+        }
+        $result = [];
+        foreach ($servers as $srv) {
+            $cats = ($srv['id'] === SERVER_ID)
+                ? xtream($catAction)
+                : xtream_for_server($srv, $catAction);
+            if (!is_array($cats)) continue;
+            $result[] = [
+                'server_id'   => $srv['id'],
+                'server_name' => $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']),
+                'categories'  => $cats,
+            ];
+        }
+        echo json_encode($result);
+        break;
+    }
+
     // ── Streams ───────────────────────────────────────────────────────────────
-    case 'get_movies':
-        $movies   = xtream('get_vod_streams', ['category_id' => $_GET['category_id'] ?? '']);
-        $db       = load_db();
-        $queue    = load_queue();
-        $qids     = array_map('strval', array_column($queue, 'stream_id'));
-        $is_admin = can('settings');
+    case 'get_movies': {
+        $catId    = $_GET['category_id'] ?? '';
+        $srvId    = $_GET['server_id']   ?? '';
+        // Anderen Server verwenden falls angegeben
+        if ($srvId && $srvId !== SERVER_ID) {
+            $allSrv = file_exists(SERVERS_FILE) ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? []) : [];
+            $srv = null;
+            foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+            $movies = $srv ? xtream_for_server($srv, 'get_vod_streams', ['category_id' => $catId]) : [];
+        } else {
+            $movies = xtream('get_vod_streams', ['category_id' => $catId]);
+        }
+        $db    = load_db();
+        $queue = load_queue();
+        $qids  = array_map('strval', array_column($queue, 'stream_id'));
         foreach ($movies as &$m) {
             $m['downloaded']  = in_array((string)$m['stream_id'], $db['movies']);
             $m['queued']      = in_array((string)$m['stream_id'], $qids);
             $m['clean_title'] = display_title($m['name'] ?? '');
-            if ($is_admin) {
-                $m['stream_url'] = stream_url('movie', $m['stream_id'], $m['container_extension'] ?? 'mp4');
-            } else {
-                unset($m['stream_url']);
-            }
+            $m['_server_id']  = $srvId ?: SERVER_ID;
         }
         echo json_encode($movies);
         break;
+    }
 
-    case 'get_series':
-        $list = xtream('get_series', ['category_id' => $_GET['category_id'] ?? '']);
+    case 'get_series': {
+        $catId = $_GET['category_id'] ?? '';
+        $srvId = $_GET['server_id']   ?? '';
+        if ($srvId && $srvId !== SERVER_ID) {
+            $allSrv = file_exists(SERVERS_FILE) ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? []) : [];
+            $srv = null;
+            foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+            $list = $srv ? xtream_for_server($srv, 'get_series', ['category_id' => $catId]) : [];
+        } else {
+            $list = xtream('get_series', ['category_id' => $catId]);
+        }
         foreach ($list as &$s) {
             $s['clean_title'] = display_title($s['name'] ?? '');
-            if (!can('settings')) unset($s['stream_url']);
+            $s['_server_id']  = $srvId ?: SERVER_ID;
         }
         echo json_encode($list);
         break;
+    }
 
     case 'get_series_info':
         $data     = xtream('get_series_info', ['series_id' => $_GET['series_id'] ?? '']);
@@ -1357,6 +1440,115 @@ switch ($action) {
             }
         }
         echo json_encode(['results' => $results, 'source' => 'xtream']);
+        break;
+
+    case 'search_all_servers':
+        // Suche über alle gespeicherten Server + aktiven Server
+        $q    = strtolower(trim($_GET['q'] ?? ''));
+        $type = $_GET['type'] ?? 'movies'; // 'movies' oder 'series'
+        if ($q === '') { echo json_encode(['results' => [], 'source' => 'multi']); break; }
+
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+
+        // Aktiven Server als ersten Eintrag einfügen falls nicht schon in Liste
+        // Für den aktiven Server immer aktuelle Zugangsdaten aus config.json nutzen
+        $activeId = SERVER_ID;
+        $hasActive = false;
+        foreach ($servers as &$s) {
+            if ($s['id'] === $activeId) {
+                // Passwort immer aktuell halten
+                $s['server_ip'] = SERVER_IP;
+                $s['port']      = PORT;
+                $s['username']  = USERNAME;
+                $s['password']  = PASSWORD;
+                $hasActive = true;
+                break;
+            }
+        }
+        unset($s);
+        if (!$hasActive) {
+            array_unshift($servers, [
+                'id'        => $activeId,
+                'name'      => SERVER_IP . ':' . PORT,
+                'server_ip' => SERVER_IP,
+                'port'      => PORT,
+                'username'  => USERNAME,
+                'password'  => PASSWORD,
+            ]);
+        }
+
+        $allResults = [];
+        $db    = load_db();
+        $queue = load_queue();
+        $qids  = array_map('strval', array_column($queue, 'stream_id'));
+
+        foreach ($servers as $srv) {
+            $srvId   = $srv['id'];
+            $srvName = $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']);
+
+            // Cache für diesen Server prüfen
+            $cacheFile = DATA_DIR . '/library_cache_' . $srvId . '.json';
+            if ($type === 'series') $cacheFile = DATA_DIR . '/series_cache_' . $srvId . '.json';
+            $useCache = file_exists($cacheFile) && (time() - filemtime($cacheFile)) < 86400;
+
+            $srvResults = [];
+            if ($useCache) {
+                $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
+                foreach ($cache as $sid => $m) {
+                    $title = strtolower($m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '');
+                    if (!str_contains($title, $q)) continue;
+                    $sidStr = (string)($m['stream_id'] ?? $sid);
+                    $srvResults[] = [
+                        'stream_id'           => $sidStr,
+                        'clean_title'         => $m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '',
+                        'stream_icon'         => $m['cover'] ?? $m['stream_icon'] ?? '',
+                        'category'            => $m['category'] ?? '',
+                        'container_extension' => $m['ext'] ?? $m['container_extension'] ?? 'mp4',
+                        'downloaded'          => in_array($sidStr, $db['movies'] ?? []),
+                        'queued'              => in_array($sidStr, $qids),
+                        '_server_id'          => $srvId,
+                        '_server_name'        => $srvName,
+                    ];
+                }
+            } else {
+                // Kein Cache — direkt beim Server anfragen (nur aktiver Server, andere überspringen)
+                if ($srvId === $activeId) {
+                    if ($type === 'series') {
+                        foreach (xtream('get_series_categories') as $cat) {
+                            foreach (xtream('get_series', ['category_id' => $cat['category_id']]) as $s) {
+                                $title = display_title($s['name'] ?? '');
+                                if (!str_contains(strtolower($title), $q)) continue;
+                                $s['clean_title']  = $title;
+                                $s['category']     = $cat['category_name'];
+                                $s['_server_id']   = $srvId;
+                                $s['_server_name'] = $srvName;
+                                $srvResults[]      = $s;
+                            }
+                        }
+                    } else {
+                        foreach (xtream('get_vod_categories') as $cat) {
+                            foreach (xtream('get_vod_streams', ['category_id' => $cat['category_id']]) as $m) {
+                                $title = display_title($m['name'] ?? '');
+                                if (!str_contains(strtolower($title), $q)) continue;
+                                $m['clean_title']  = $title;
+                                $m['category']     = $cat['category_name'];
+                                $m['downloaded']   = in_array((string)$m['stream_id'], $db['movies'] ?? []);
+                                $m['queued']       = in_array((string)$m['stream_id'], $qids);
+                                $m['_server_id']   = $srvId;
+                                $m['_server_name'] = $srvName;
+                                $srvResults[]      = $m;
+                            }
+                        }
+                    }
+                }
+                // Andere Server ohne Cache: überspringen (Cache-Run nötig)
+            }
+            $allResults = array_merge($allResults, $srvResults);
+        }
+
+        echo json_encode(['results' => $allResults, 'source' => 'multi', 'server_count' => count($servers)]);
         break;
 
     case 'queue_add_bulk':
@@ -1506,7 +1698,27 @@ switch ($action) {
         }
 
         // stream_url immer serverseitig berechnen – Client-Angabe wird ignoriert
-        $server_stream_url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
+        // Stream-URL vom richtigen Server bauen
+        $qServerSid = trim($_JSON_BODY['_server_id'] ?? '');
+        if ($qServerSid && $qServerSid !== SERVER_ID) {
+            // Anderer Server — Zugangsdaten aus servers.json holen
+            $allServers = file_exists(SERVERS_FILE)
+                ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+                : [];
+            $qSrv = null;
+            foreach ($allServers as $s) {
+                if ($s['id'] === $qServerSid) { $qSrv = $s; break; }
+            }
+            if ($qSrv && !empty($qSrv['password'])) {
+                $server_stream_url = stream_url_for_server($qSrv, $type === 'episode' ? 'series' : 'movie', $sid, $ext);
+            } else {
+                // Kein Passwort in servers.json — Fallback auf aktiven Server
+                $server_stream_url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
+            }
+        } else {
+            // Aktiver Server
+            $server_stream_url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
+        }
 
         // ── Dubletten-Erkennung (nur Movies, nur wenn nicht force_add) ─────────
         if ($type === 'movie' && empty($_JSON_BODY['force_add'])) {
@@ -1634,9 +1846,10 @@ switch ($action) {
                     'stream_id' => $sid,
                     'type'      => $type,
                     'title'     => sanitize($d['title']    ?? ''),
-                    'cover'     => $d['cover']    ?? '',
-                    'category'  => $d['category'] ?? '',
-                    'ext'       => $d['ext']       ?? 'mp4',
+                    'cover'     => $d['cover']     ?? '',
+                    'category'  => $d['category']  ?? '',
+                    'ext'       => $d['ext']        ?? 'mp4',
+                    'server_id' => $d['server_id']  ?? '',
                     'added_at'  => date('Y-m-d H:i:s'),
                 ];
                 $action = 'added';
@@ -2297,20 +2510,47 @@ switch ($action) {
             $diskInfo = ['rclone' => true, 'remote' => RCLONE_REMOTE . ':' . RCLONE_PATH];
         }
 
-        // ── System-Status ─────────────────────────────────────────────────────
-        $memUsed  = memory_get_usage(true);
-        $memPeak  = memory_get_peak_usage(true);
-        $memLimit = ini_get('memory_limit');
-
-        // Uptime via /proc/uptime (Linux)
-        $uptime = null;
-        if (file_exists('/proc/uptime')) {
-            $up = (float)explode(' ', file_get_contents('/proc/uptime'))[0];
-            $d  = floor($up / 86400);
-            $h  = floor(($up % 86400) / 3600);
-            $m  = floor(($up % 3600) / 60);
-            $uptime = ($d > 0 ? "{$d}d " : '') . "{$h}h {$m}m";
+        // ── Server-Liste ──────────────────────────────────────────────────────
+        $srvList = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        // Aktiven Server sicherstellen
+        $hasActive = false;
+        foreach ($srvList as $s) { if ($s['id'] === SERVER_ID) { $hasActive = true; break; } }
+        if (!$hasActive) {
+            array_unshift($srvList, [
+                'id' => SERVER_ID, 'name' => SERVER_IP . ':' . PORT,
+                'server_ip' => SERVER_IP, 'port' => PORT,
+            ]);
         }
+        $serverStatus = array_map(fn($s) => [
+            'id'        => $s['id'],
+            'name'      => $s['name'] ?? ($s['server_ip'] . ':' . $s['port']),
+            'active'    => $s['id'] === SERVER_ID,
+            'has_cache' => file_exists(DATA_DIR . '/library_cache_' . $s['id'] . '.json'),
+        ], $srvList);
+
+        // ── System-Info ───────────────────────────────────────────────────────
+        $memTotal = 0; $memFree = 0;
+        if (file_exists('/proc/meminfo')) {
+            foreach (file('/proc/meminfo') as $line) {
+                if (str_starts_with($line, 'MemTotal:'))     $memTotal = (int)preg_replace('/\D/', '', $line) * 1024;
+                if (str_starts_with($line, 'MemAvailable:')) $memFree  = (int)preg_replace('/\D/', '', $line) * 1024;
+            }
+        }
+        $uptime = '';
+        if (file_exists('/proc/uptime')) {
+            $secs = (int)explode(' ', file_get_contents('/proc/uptime'))[0];
+            $d_up = floor($secs / 86400);
+            $h_up = floor(($secs % 86400) / 3600);
+            $uptime = $d_up > 0 ? "{$d_up}d {$h_up}h" : "{$h_up}h " . floor(($secs % 3600) / 60) . "m";
+        }
+        $sysInfo = [
+            'php_version' => PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION,
+            'mem_used'    => $memTotal > 0 ? $memTotal - $memFree : 0,
+            'mem_total'   => $memTotal,
+            'uptime'      => $uptime,
+        ];
 
         echo json_encode([
             'queue_stats'      => $qStats,
@@ -2323,14 +2563,8 @@ switch ($action) {
                 'cover'     => $q['cover']    ?? '',
             ], $recentDownloads),
             'disk'             => $diskInfo,
-            'system'           => [
-                'php_version' => PHP_VERSION,
-                'mem_used'    => $memUsed,
-                'mem_peak'    => $memPeak,
-                'mem_limit'   => $memLimit,
-                'uptime'      => $uptime,
-                'os'          => php_uname('s') . ' ' . php_uname('r'),
-            ],
+            'system'           => $sysInfo,
+            'servers'          => $serverStatus,
             'total_downloaded' => count($db['movies']) + count($db['episodes']),
         ]);
         break;

@@ -376,4 +376,6 @@ return [
 
 
     'nav.updates' => 'Updates',
+
+    'search.all_servers' => 'Alle Server',
 ];
