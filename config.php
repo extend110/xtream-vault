@@ -403,3 +403,27 @@ function clean_title(string $name): string {
     }
     return $name;
 }
+
+// ── i18n ─────────────────────────────────────────────────────────────────────
+function get_user_lang(): string {
+    // Aus Session (gesetzt nach Login)
+    if (!empty($_SESSION['lang'])) return $_SESSION['lang'];
+    return 'de'; // Standard: Deutsch
+}
+
+function load_lang(string $lang = ''): array {
+    if ($lang === '') $lang = get_user_lang();
+    $file = __DIR__ . '/lang/' . preg_replace('/[^a-z]/', '', $lang) . '.php';
+    if (!file_exists($file)) $file = __DIR__ . '/lang/de.php';
+    return file_exists($file) ? (require $file) : [];
+}
+
+function t(string $key, array $vars = []): string {
+    static $strings = null;
+    if ($strings === null) $strings = load_lang();
+    $str = $strings[$key] ?? $key;
+    foreach ($vars as $k => $v) {
+        $str = str_replace('{{' . $k . '}}', $v, $str);
+    }
+    return $str;
+}

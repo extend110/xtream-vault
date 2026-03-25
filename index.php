@@ -41,44 +41,44 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="stat-box"><div class="stat-num" id="stat-movies">–</div><div class="stat-label">Movies</div></div>
     <div class="stat-box"><div class="stat-num" id="stat-episodes">–</div><div class="stat-label">Episodes</div></div>
     <?php if ($can_queue_view): ?>
-    <div class="stat-box queue-stat"><div class="stat-num" id="stat-queued">0</div><div class="stat-label">Queued</div></div>
+    <div class="stat-box queue-stat"><div class="stat-num" id="stat-queued">0</div><div class="stat-label"><?= t('filter.queued') ?></div></div>
     <?php endif; ?>
   </div>
   <nav class="nav">
     <div class="nav-section-title">Navigate</div>
-    <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">⬛</span> Dashboard</div>
+    <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">⬛</span><?= t('nav.dashboard') ?></div>
     <?php if ($show_movies): ?>
-    <div class="nav-item" data-view="movies" onclick="toggleCats('movies')"><span class="nav-icon">🎬</span> Movies</div>
+    <div class="nav-item" data-view="movies" onclick="toggleCats('movies')"><span class="nav-icon">🎬</span><?= t('nav.movies') ?></div>
     <div class="category-list" id="cats-movies"></div>
     <?php endif; ?>
     <?php if ($show_series): ?>
-    <div class="nav-item" data-view="series" onclick="toggleCats('series')"><span class="nav-icon">📺</span> Series</div>
+    <div class="nav-item" data-view="series" onclick="toggleCats('series')"><span class="nav-icon">📺</span><?= t('nav.series') ?></div>
     <div class="category-list" id="cats-series"></div>
     <?php endif; ?>
     <div class="nav-section-title" style="margin-top:8px">Tools</div>
-    <div class="nav-item" onclick="showView('favourites')"><span class="nav-icon">♥</span> Favoriten <span class="nav-badge" id="fav-badge" style="display:none">0</span></div>
-    <div class="nav-item" onclick="showView('new-releases')"><span class="nav-icon">🆕</span> Neu <span class="nav-badge" id="new-releases-badge" style="display:none">0</span></div>
-    <div class="nav-item" onclick="showView('search')"><span class="nav-icon">🔍</span> Suche</div>
+    <div class="nav-item" onclick="showView('favourites')"><span class="nav-icon">♥</span><?= t('nav.favourites') ?> <span class="nav-badge" id="fav-badge" style="display:none">0</span></div>
+    <div class="nav-item" onclick="showView('new-releases')"><span class="nav-icon">🆕</span><?= t('nav.new') ?> <span class="nav-badge" id="new-releases-badge" style="display:none">0</span></div>
+    <div class="nav-item" onclick="showView('search')"><span class="nav-icon">🔍</span><?= t('nav.search') ?></div>
     <?php if ($can_queue_view): ?>
     <div class="nav-item queue-nav" onclick="showView('queue')">
-      <span class="nav-icon">📋</span> Download Queue
+      <span class="nav-icon">📋</span><?= t('nav.queue') ?>
       <span class="nav-badge" id="nav-badge">0</span>
     </div>
     <?php endif; ?>
     <?php if ($can_cron_log): ?>
-    <div class="nav-item" onclick="showView('log')"><span class="nav-icon">🖥</span> Cron Log</div>
+    <div class="nav-item" onclick="showView('log')"><span class="nav-icon">🖥</span><?= t('nav.log') ?></div>
     <?php endif; ?>
     <?php if ($can_settings): ?>
-    <div class="nav-item" onclick="showView('api-docs')"><span class="nav-icon">📖</span> API-Dokumentation</div>
+    <div class="nav-item" onclick="showView('api-docs')"><span class="nav-icon">📖</span> <?= t('nav.api_docs') ?></div>
     <?php endif; ?>
     <?php if ($can_settings): ?>
-    <div class="nav-item" onclick="showView('stats')"><span class="nav-icon">📊</span> Statistiken</div>
+    <div class="nav-item" onclick="showView('stats')"><span class="nav-icon">📊</span><?= t('nav.stats') ?></div>
     <?php endif; ?>
     <?php if ($can_users): ?>
-    <div class="nav-item" onclick="showView('users')"><span class="nav-icon">👥</span> Benutzer</div>
+    <div class="nav-item" onclick="showView('users')"><span class="nav-icon">👥</span><?= t('nav.users') ?></div>
     <?php endif; ?>
     <?php if ($can_settings): ?>
-    <div class="nav-item" onclick="showView('settings')" style="margin-top:auto;border-top:1px solid var(--border)"><span class="nav-icon">⚙️</span> Einstellungen</div>
+    <div class="nav-item" onclick="showView('settings')" style="margin-top:auto;border-top:1px solid var(--border)"><span class="nav-icon">⚙️</span><?= t('nav.settings') ?></div>
     <?php endif; ?>
   </nav>
 </aside>
@@ -89,17 +89,17 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
     <div class="page-title" id="page-title">Dashboard</div>
     <div class="search-wrap" id="search-bar" style="display:none">
-      <input type="text" id="search-input" placeholder="Film suchen…">
+      <input type="text" id="search-input" placeholder="<?= t('search.placeholder') ?>">
       <span class="search-icon">🔍</span>
     </div>
     <div class="filter-bar" id="filter-bar" style="display:none">
       <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-      <button class="filter-btn" onclick="setFilter('new',this)">New</button>
-      <button class="filter-btn" onclick="setFilter('queued',this)">Queued</button>
-      <button class="filter-btn" onclick="setFilter('done',this)">Downloaded</button>
+      <button class="filter-btn" onclick="setFilter('new',this)"><?= t('filter.new') ?></button>
+      <button class="filter-btn" onclick="setFilter('queued',this)"><?= t('filter.queued') ?></button>
+      <button class="filter-btn" onclick="setFilter('done',this)"><?= t('status.done') ?></button>
     </div>
     <?php if ($can_queue_view): ?>
-    <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> in Queue</span>
+    <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
     <?php endif; ?>
     <?php if ($can_queue_view): ?>
     <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log" style="display:none;align-items:center;gap:8px;
@@ -168,15 +168,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Admin Dashboard -->
       <div id="unconfigured-banner" class="unconfigured-banner" style="display:none" onclick="showView('settings')">
         <span class="ub-icon">⚠️</span>
-        <div><strong>Nicht konfiguriert</strong> — Bitte zuerst Server-Zugangsdaten in den Einstellungen hinterlegen.</div>
+        <div><strong><?= t('cfg.not_configured') ?></div>
       </div>
 
-      <!-- Zeile 1: Verbindung + Downloads gesamt -->
+      <!-- Zeile 1: Verbindung + <?= t('stats.total') ?> -->
       <div id="dash-stat-grid" class="dash-kpi-grid">
         <div class="dkpi"><div class="dkpi-l">Server</div><div class="dkpi-v" id="dash-server">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Account</div><div class="dkpi-v" id="dash-user">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Destination</div><div class="dkpi-v" style="word-break:break-all;font-size:.8rem" id="dash-dest">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" style="color:var(--green)" id="dash-total-dl">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('stats.total') ?></div><div class="dkpi-n" style="color:var(--green)" id="dash-total-dl">–</div></div>
       </div>
 
       <!-- Zeile 2: Queue-Zahlen + Disk + System in einer Zeile -->
@@ -185,8 +185,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="dkpi"><div class="dkpi-l">Lädt</div><div class="dkpi-n" style="color:var(--orange)" id="dqs-downloading">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Fertig</div><div class="dkpi-n" style="color:var(--green)" id="dqs-done">–</div></div>
         <div class="dkpi"><div class="dkpi-l">Fehler</div><div class="dkpi-n" style="color:var(--red)" id="dqs-error">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Speicher</div><div id="dash-disk"><div style="color:var(--muted);font-size:.75rem">Lade…</div></div></div>
-        <div class="dkpi"><div class="dkpi-l">System</div><div id="dash-system" style="font-size:.78rem;line-height:1.75"><div style="color:var(--muted)">Lade…</div></div></div>
+        <div class="dkpi"><div class="dkpi-l">Speicher</div><div id="dash-disk"><div style="color:var(--muted);font-size:.75rem"><?= t('status.loading') ?></div></div></div>
+        <div class="dkpi"><div class="dkpi-l">System</div><div id="dash-system" style="font-size:.78rem;line-height:1.75"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div></div>
       </div>
 
       <!-- Zeile 3: Xtream Server Info (6 kompakte Kacheln) -->
@@ -201,9 +201,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
       <!-- Schnellzugriff -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="btn-secondary" data-label="▶ Queue starten" onclick="startQueue(this)">▶ Queue starten</button>
-        <button class="btn-secondary" onclick="dashRebuildCache()">↻ Cache aufbauen</button>
-        <button class="btn-secondary" onclick="dashClearDone()">Erledigte leeren</button>
+        <button class="btn-secondary" data-label="▶ Queue starten" onclick="startQueue(this)"><?= t('queue.start') ?></button>
+        <button class="btn-secondary" onclick="dashRebuildCache()"><?= t('cfg.cache_build') ?></button>
+        <button class="btn-secondary" onclick="dashClearDone()"><?= t('btn.delete') ?></button>
         <button class="btn-secondary danger" onclick="dashClearAll()">Queue leeren</button>
         <button class="btn-secondary" onclick="showView('settings')">Einstellungen</button>
         <button class="btn-secondary" onclick="showView('log')">Cron Log</button>
@@ -216,7 +216,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-title" id="dash-pc-title">–</div>
           <div class="pc-pos"   id="dash-pc-pos"></div>
           <?php if ($can_queue_remove): ?>
-          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()">✕ Abbrechen</button>
+          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
           <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="dash-pc-bar"></div></div>
@@ -240,7 +240,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <div class="dkpi-l">Queue</div>
-            <button class="btn-sm" onclick="showView('queue')">Alle →</button>
+            <button class="btn-sm" onclick="showView('queue')"><?= t('dash.all') ?></button>
           </div>
           <div class="queue-list" id="dash-queue-list">
             <div style="padding:32px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
@@ -254,7 +254,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- KPI-Zeile -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
         <div class="dkpi" style="flex:1;min-width:140px">
-          <div class="dkpi-l">Downloads gesamt</div>
+          <div class="dkpi-l"><?= t('stats.total') ?></div>
           <div class="dkpi-n" style="color:var(--green)" id="ue-total-dl">–</div>
         </div>
         <?php if ($can_queue_view): ?>
@@ -272,19 +272,19 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Neue Releases -->
       <div style="margin-bottom:24px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">🆕 Neue Releases</div>
-          <button class="btn-sm" onclick="showView('new-releases')">Alle →</button>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase"><?= t('dash.new_releases') ?></div>
+          <button class="btn-sm" onclick="showView('new-releases')"><?= t('dash.all') ?></button>
         </div>
         <div id="ue-new-releases" style="display:flex;gap:10px;overflow-x:auto;padding-bottom:8px">
-          <div style="color:var(--muted);font-size:.8rem;padding:8px">Lade…</div>
+          <div style="color:var(--muted);font-size:.8rem;padding:8px"><?= t('status.loading') ?></div>
         </div>
       </div>
 
       <!-- Letzte Downloads -->
       <div>
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">📥 Zuletzt heruntergeladen</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px"><?= t('dash.recent') ?></div>
         <div id="ue-recent" class="grid">
-          <div style="color:var(--muted);font-size:.8rem;padding:8px">Lade…</div>
+          <div style="color:var(--muted);font-size:.8rem;padding:8px"><?= t('status.loading') ?></div>
         </div>
       </div>
       <?php endif; ?>
@@ -297,9 +297,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div style="flex:1"></div>
         <button class="view-mode-btn" id="view-mode-btn-movies" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)"><?= t('lbl.sortierung') ?></span>
           <select id="sort-movies" class="sort-select" onchange="setSortOrder(this.value,'movies')">
-            <option value="default">Standard</option><option value="az">A → Z</option><option value="za">Z → A</option>
+            <option value="default"><?= t('sort.default') ?></option><option value="az"><?= t('sort.az') ?></option><option value="za"><?= t('sort.za') ?></option>
           </select>
         </div>
       </div>
@@ -313,9 +313,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div style="flex:1"></div>
         <button class="view-mode-btn" id="view-mode-btn-series" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
         <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)">Sortierung:</span>
+          <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)"><?= t('lbl.sortierung') ?></span>
           <select id="sort-series" class="sort-select" onchange="setSortOrder(this.value,'series')">
-            <option value="default">Standard</option><option value="az">A → Z</option><option value="za">Z → A</option>
+            <option value="default"><?= t('sort.default') ?></option><option value="az"><?= t('sort.az') ?></option><option value="za"><?= t('sort.za') ?></option>
           </select>
         </div>
       </div>
@@ -327,8 +327,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-search" style="display:none">
       <div id="search-history-box" style="margin-bottom:16px"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-        <button class="filter-btn active" id="search-tab-movies"  onclick="switchSearchTab('movies',this)">🎬 Filme</button>
-        <button class="filter-btn"        id="search-tab-series"  onclick="switchSearchTab('series',this)">📺 Serien</button>
+        <button class="filter-btn active" id="search-tab-movies"  onclick="switchSearchTab('movies',this)"><?= t('search.movies_tab') ?></button>
+        <button class="filter-btn"        id="search-tab-series"  onclick="switchSearchTab('series',this)"><?= t('search.series_tab') ?></button>
         <?php if ($can_queue_add): ?>
         <div id="multiselect-toolbar" style="display:none;margin-left:auto;display:flex;gap:8px;align-items:center">
           <span id="multiselect-count" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted)">0 ausgewählt</span>
@@ -337,6 +337,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
         <?php endif; ?>
       </div>
+      <div id="search-cache-hint" style="display:none;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:10px"></div>
       <div id="search-movies-grid" class="grid"></div>
       <div id="search-series-grid" class="grid" style="display:none"></div>
     </div>
@@ -351,7 +352,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-title" id="pc-title">–</div>
           <div class="pc-pos" id="pc-pos"></div>
           <?php if ($can_queue_remove): ?>
-          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()">✕ Abbrechen</button>
+          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
           <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="pc-bar"></div></div>
@@ -367,7 +368,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="queue-toolbar-title">Download Queue</div>
         <button class="btn-sm" onclick="refreshQueue()">↻ Refresh</button>
         <?php if ($can_settings): ?>
-        <button class="btn-sm" data-label="▶ Starten" onclick="startQueue(this)">▶ Starten</button>
+        <button class="btn-sm" data-label="▶ Starten" onclick="startQueue(this)"><?= t('queue.start') ?></button>
         <?php endif; ?>
         <?php if ($can_queue_clear): ?>
         <button class="btn-sm" onclick="clearDone()">✕ Done entfernen</button>
@@ -389,14 +390,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="view-mode-btn" id="view-mode-btn-favourites" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
-          <button class="filter-btn active" id="fav-tab-all"    onclick="switchFavTab('all',this)">Alle</button>
-          <button class="filter-btn"        id="fav-tab-movies" onclick="switchFavTab('movie',this)">🎬 Filme</button>
-          <button class="filter-btn"        id="fav-tab-series" onclick="switchFavTab('series',this)">📺 Serien</button>
+          <button class="filter-btn active" id="fav-tab-all"    onclick="switchFavTab('all',this)"><?= t('fav.all') ?></button>
+          <button class="filter-btn"        id="fav-tab-movies" onclick="switchFavTab('movie',this)"><?= t('search.movies_tab') ?></button>
+          <button class="filter-btn"        id="fav-tab-series" onclick="switchFavTab('series',this)"><?= t('search.series_tab') ?></button>
         </div>
       </div>
       <div style="margin-bottom:14px">
         <div class="search-wrap" style="max-width:300px">
-          <input type="text" id="fav-search" placeholder="Favoriten durchsuchen…" oninput="renderFavourites()">
+          <input type="text" id="fav-search" placeholder="<?= t('fav.search') ?>" oninput="renderFavourites()">
           <span class="search-icon">🔍</span>
         </div>
       </div>
@@ -411,7 +412,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px" id="new-releases-meta">–</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn-sm" onclick="dismissAllNewReleases(this)" style="margin-left:4px">✓ Alle gesehen</button>
+          <button class="btn-sm" onclick="dismissAllNewReleases(this)" style="margin-left:4px"><?= t('new.all_seen') ?></button>
         </div>
       </div>
       <div class="grid" id="new-releases-grid"></div>
@@ -423,12 +424,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
       <!-- KPI Cards -->
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-        <div class="dkpi"><div class="dkpi-l">Downloads gesamt</div><div class="dkpi-n" id="stats-total-count">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">🎬 Filme</div><div class="dkpi-n" id="stats-total-movies">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('stats.total') ?></div><div class="dkpi-n" id="stats-total-count">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('search.movies_tab') ?></div><div class="dkpi-n" id="stats-total-movies">–</div></div>
         <div class="dkpi"><div class="dkpi-l">📺 Episoden</div><div class="dkpi-n" id="stats-total-episodes">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Datenvolumen gesamt</div><div class="dkpi-n" id="stats-total-gb">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Dieser Monat</div><div class="dkpi-n" id="stats-this-month">–</div></div>
-        <div class="dkpi"><div class="dkpi-l">Diesen Monat (GB)</div><div class="dkpi-n" id="stats-this-month-gb">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('stats.volume') ?></div><div class="dkpi-n" id="stats-total-gb">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('stats.this_month') ?></div><div class="dkpi-n" id="stats-this-month">–</div></div>
+        <div class="dkpi"><div class="dkpi-l"><?= t('stats.this_month_gb') ?></div><div class="dkpi-n" id="stats-this-month-gb">–</div></div>
       </div>
 
       <!-- Charts: 2 Spalten -->
@@ -589,7 +590,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_cron_log): ?>
     <div id="view-log" style="display:none">      <div class="queue-toolbar">
         <div class="queue-toolbar-title">Cron Log</div>
-        <button class="btn-sm" onclick="loadLog()">↻ Aktualisieren</button>
+        <button class="btn-sm" onclick="loadLog()"><?= t('btn.refresh') ?></button>
       </div>
       <div class="log-wrap" id="log-wrap">Lade Log…</div>
     </div>
@@ -601,7 +602,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div>
 
         <div class="settings-card">
-          <h3>Xtream Server</h3>
+          <h3><?= t('cfg.server') ?></h3>
           <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px;font-family:'DM Mono',monospace">
             Server-ID: <span id="cfg-server-id-display" style="color:var(--accent2)">–</span>
             <span style="margin-left:8px;font-size:.65rem;opacity:.6">Downloads und Queue sind pro Server getrennt</span>
@@ -609,35 +610,35 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
           <!-- Gespeicherte Server -->
           <div id="saved-servers-box" style="margin-bottom:18px">
-            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Gespeicherte Server</div>
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px"><?= t('cfg.servers') ?></div>
             <div id="saved-servers-list" style="display:flex;flex-direction:column;gap:6px">
-              <div style="color:var(--muted);font-size:.8rem">Lade…</div>
+              <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
             </div>
           </div>
           <div class="field">
-            <label>Server IP / Domain</label>
-            <input type="text" id="cfg-server-ip" placeholder="z.B. line.example.com">
+            <label><?= t('cfg.server_ip') ?></label>
+            <input type="text" id="cfg-server-ip" placeholder="<?= t('cfg.server_ip') ?>">
           </div>
           <div class="field">
-            <label>Port</label>
+            <label><?= t('cfg.port') ?></label>
             <input type="text" id="cfg-port" placeholder="80" value="80" style="max-width:120px">
           </div>
           <div class="field">
-            <label>Username</label>
-            <input type="text" id="cfg-username" placeholder="Xtream Username" autocomplete="off">
+            <label><?= t('cfg.username') ?></label>
+            <input type="text" id="cfg-username" placeholder="<?= t('cfg.username') ?>" autocomplete="off">
           </div>
           <div class="field">
-            <label>Passwort</label>
-            <input type="password" id="cfg-password" placeholder="Xtream Passwort" autocomplete="new-password">
-            <span class="hint">Leer lassen um das bestehende Passwort zu behalten</span>
+            <label><?= t('cfg.password') ?></label>
+            <input type="password" id="cfg-password" placeholder="<?= t('cfg.password') ?>" autocomplete="new-password">
+            <span class="hint"><?= t('cfg.pw_keep') ?></span>
           </div>
         </div>
 
         <div class="settings-card">
-          <h3>Download-Zielordner</h3>
+          <h3><?= t('cfg.dest') ?></h3>
           <div id="rclone-disabled-fields">
             <div class="field">
-              <label>Absoluter Pfad auf dem Server</label>
+              <label><?= t('cfg.dest_path') ?></label>
               <input type="text" id="cfg-dest-path" placeholder="/var/www/html/xtream/downloads">
               <span class="hint">Wird ignoriert wenn rclone aktiviert ist</span>
             </div>
@@ -645,7 +646,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
-          <h3>Editor / Viewer — Sichtbarkeit</h3>
+          <h3><?= t('cfg.server') ?> — <?= t('cfg.editor_movies') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             Steuert welche Bereiche für editor- und viewer-Accounts sichtbar sind.<br>
             Admins sehen immer alles.
@@ -667,27 +668,27 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
           <label class="settings-toggle" style="margin-bottom:14px">
             <input type="checkbox" id="cfg-rclone-enabled" onchange="toggleRcloneFields(this.checked)">
-            <span>rclone aktivieren</span>
+            <span><?= t('cfg.rclone_enable') ?></span>
           </label>
           <div id="rclone-fields" style="display:none">
             <div class="field">
-              <label>Remote-Name</label>
+              <label><?= t('cfg.rclone_remote') ?></label>
               <input type="text" id="cfg-rclone-remote" placeholder="gdrive">
               <span class="hint">Name des konfigurierten rclone-Remotes (z.B. gdrive, onedrive, dropbox)</span>
             </div>
             <div class="field">
-              <label>Ziel-Pfad im Remote</label>
+              <label><?= t('cfg.rclone_path') ?></label>
               <input type="text" id="cfg-rclone-path" placeholder="Media/VOD">
-              <span class="hint">Ordner im Cloud-Speicher (ohne Remote-Name)</span>
+              <span class="hint"><?= t('cfg.rclone_path_hint') ?></span>
             </div>
             <div class="field">
-              <label>rclone Binary-Pfad</label>
+              <label><?= t('cfg.rclone_bin') ?></label>
               <input type="text" id="cfg-rclone-bin" placeholder="rclone">
               <span class="hint">Vollständiger Pfad wenn nicht im PATH: z.B. /usr/bin/rclone</span>
             </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-              <button class="btn-secondary" onclick="testRclone()">🔌 rclone testen</button>
-              <button class="btn-secondary" id="btn-rclone-cache" onclick="refreshRcloneCache(this)">🗂 Remote-Cache aktualisieren</button>
+              <button class="btn-secondary" onclick="testRclone()"><?= t('cfg.rclone_test') ?></button>
+              <button class="btn-secondary" id="btn-rclone-cache" onclick="refreshRcloneCache(this)"><?= t('cfg.rclone_cache') ?></button>
               <div class="settings-msg" id="rclone-test-msg" style="margin:0"></div>
             </div>
             <div id="rclone-cache-status" style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:10px"></div>
@@ -695,37 +696,37 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
-          <h3>Medien-Cache</h3>
+          <h3><?= t('cfg.cache_status') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             Der Cache speichert Titel und Cover aller VODs lokal.<br>
             Er wird automatisch nach jedem Download-Run aktualisiert.
           </div>
-          <div id="cache-status-box" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:14px">Lade Status…</div>
-          <button class="btn-secondary" id="btn-rebuild-cache" onclick="rebuildCache(this)">🔄 Cache jetzt aufbauen</button>
+          <div id="cache-status-box" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:14px"><?= t('status.loading') ?></div>
+          <button class="btn-secondary" id="btn-rebuild-cache" onclick="rebuildCache(this)"><?= t('cfg.cache_build') ?></button>
           <div class="settings-msg" id="cache-msg"></div>
         </div>
 
         <div class="settings-card">
-          <h3>🎬 TMDB Integration</h3>
+          <h3><?= t('cfg.tmdb') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             The Movie Database — zeigt Plot und Bewertung beim Klick auf eine Karte an.<br>
             API-Key unter <a href="https://www.themoviedb.org/settings/api" target="_blank" style="color:var(--accent2)">themoviedb.org/settings/api</a> erstellen.
           </div>
           <div class="field">
-            <label>TMDB API-Key (v3 auth)</label>
-            <input type="password" id="cfg-tmdb-api-key" placeholder="Leer lassen um TMDB zu deaktivieren" autocomplete="off">
+            <label><?= t('cfg.tmdb_key') ?></label>
+            <input type="password" id="cfg-tmdb-api-key" placeholder="<?= t('cfg.tmdb_placeholder') ?>" autocomplete="off">
           </div>
         </div>
 
         <div class="settings-card">
-          <h3>🔄 Updates</h3>
+          <h3>🔄 <?= t('nav.updates') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             Lädt die neueste Version als ZIP von
             <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--accent2)">GitHub</a>
             herunter und installiert sie. Vor dem Update wird automatisch ein Backup von <code>data/</code> erstellt.
           </div>
           <div id="update-status" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:12px 14px;margin-bottom:14px;font-family:'DM Mono',monospace;font-size:.72rem;line-height:1.8">
-            <div style="color:var(--muted)">– noch nicht geprüft –</div>
+            <div style="color:var(--muted)"><?= t('cfg.update_not_checked') ?></div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button class="btn-secondary" onclick="checkUpdate(this)">🔍 Auf Updates prüfen</button>
@@ -758,11 +759,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span>VPN für Downloads aktivieren</span>
           </label>
           <div class="field">
-            <label>Interface-Name</label>
+            <label><?= t('cfg.vpn_iface_label') ?></label>
             <input type="text" id="cfg-vpn-interface" placeholder="wg0" style="max-width:160px">
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn-secondary" id="vpn-toggle-btn" onclick="vpnToggle(this)">⏳ Lade…</button>
+            <button class="btn-secondary" id="vpn-toggle-btn" onclick="vpnToggle(this)"><?= t('status.loading') ?></button>
             <div class="settings-msg" id="vpn-status-msg" style="margin:0"></div>
           </div>
           <!-- VPN Live-Statistiken (nur sichtbar wenn aktiv) -->
@@ -785,7 +786,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
           <div class="field">
             <label>Bot Token</label>
-            <input type="password" id="cfg-telegram-bot-token" placeholder="Leer lassen um Telegram zu deaktivieren" autocomplete="off">
+            <input type="password" id="cfg-telegram-bot-token" placeholder="<?= t('cfg.telegram_placeholder') ?>" autocomplete="off">
           </div>
           <div class="field">
             <label>Chat ID</label>
@@ -813,7 +814,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
             <input type="text" id="apikey-name-input" placeholder="Name des Keys (z.B. Webshop)" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none;flex:1">
-            <button class="btn-primary" onclick="createApiKey()">+ API-Key erstellen</button>
+            <button class="btn-primary" onclick="createApiKey()"><?= t('cfg.api_key_create') ?></button>
           </div>
           <div class="apikey-table-wrap">
             <table class="apikey-table" id="apikey-table">
@@ -832,11 +833,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <button class="btn-secondary" onclick="runBackup(this)">▶ Jetzt sichern</button>
             <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
           </div>
-          <div id="backup-list" style="overflow-x:auto"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
+          <div id="backup-list" style="overflow-x:auto"><div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div></div>
         </div>
 
         <div class="settings-card" style="border-color:rgba(255,71,87,.2)">
-          <h3>🔧 Wartungsmodus</h3>
+          <h3>🔧 <?= t('cfg.maintenance') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             Wenn aktiv, können sich nur Admins einloggen. Alle anderen sehen eine Wartungsseite.
           </div>
@@ -849,8 +850,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-actions">
-          <button class="btn-secondary" onclick="testConnection()">🔌 Verbindung testen</button>
-          <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()">💾 Speichern</button>
+          <button class="btn-secondary" onclick="testConnection()"><?= t('cfg.test_connection') ?></button>
+          <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()"><?= t('cfg.save') ?></button>
         </div>
         <div class="settings-msg" id="settings-msg"></div>
 
@@ -866,7 +867,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div class="queue-toolbar">
         <div class="queue-toolbar-title">Benutzerverwaltung</div>
         <button class="btn-sm" onclick="showView('activity-log')">📋 Aktivitätslog</button>
-        <button class="btn-sm" onclick="openInviteModal()">🔗 Einladung erstellen</button>
+        <button class="btn-sm" onclick="openInviteModal()"><?= t('invite.create') ?></button>
         <button class="btn-sm" onclick="openCreateUser()">+ Benutzer anlegen</button>
       </div>
       <div class="user-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px">
@@ -890,7 +891,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Aktive Einladungslinks -->
       <div style="margin-top:24px">
         <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Einladungslinks</div>
-        <div id="invite-list"><div style="color:var(--muted);font-size:.8rem">Lade…</div></div>
+        <div id="invite-list"><div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div></div>
       </div>
       <?php else: ?>
       <div class="state-box"><div class="icon">🔒</div><p>Keine Berechtigung</p></div>
@@ -922,9 +923,23 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="theme-picker" id="theme-picker"></div>
         </div>
         <div class="settings-card">
-          <h3>Passwort ändern</h3>
+          <h3>🌐 Sprache / Language</h3>
+          <div style="display:flex;gap:10px;margin-top:4px">
+            <button class="btn-secondary lang-btn" data-lang="de" onclick="setLanguage('de',this)"
+              style="<?= get_user_lang() === 'de' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
+              🇩🇪 Deutsch
+            </button>
+            <button class="btn-secondary lang-btn" data-lang="en" onclick="setLanguage('en',this)"
+              style="<?= get_user_lang() === 'en' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
+              🇬🇧 English
+            </button>
+          </div>
+          <div class="settings-msg" id="lang-msg" style="margin-top:10px"></div>
+        </div>
+        <div class="settings-card">
+          <h3><?= t('profile.change_pw') ?></h3>
           <div class="field">
-            <label>Aktuelles Passwort</label>
+            <label><?= t('profile.old_pw') ?></label>
             <input type="password" id="prof-old-pw" autocomplete="current-password">
           </div>
           <div class="field">
@@ -932,11 +947,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <input type="password" id="prof-new-pw" autocomplete="new-password">
           </div>
           <div class="field">
-            <label>Neues Passwort bestätigen</label>
+            <label><?= t('profile.new_pw2') ?></label>
             <input type="password" id="prof-new-pw2" autocomplete="new-password">
           </div>
           <div class="settings-actions" style="margin-top:16px">
-            <button class="btn-primary" onclick="changeOwnPassword()">💾 Passwort ändern</button>
+            <button class="btn-primary" onclick="changeOwnPassword()"><?= t('profile.change_pw') ?></button>
           </div>
           <div class="settings-msg" id="profile-msg"></div>
         </div>
@@ -970,7 +985,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <input type="password" id="umodal-password" autocomplete="new-password">
     </div>
     <div class="field">
-      <label>Rolle</label>
+      <label><?= t('users.role') ?></label>
       <select id="umodal-role" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:9px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.875rem;outline:none;width:100%">
         <option value="viewer">viewer – Nur browsen</option>
         <option value="editor">editor – Browsen + Queue</option>
@@ -979,7 +994,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     </div>
     <div class="settings-msg" id="umodal-msg"></div>
     <div class="umodal-actions">
-      <button class="btn-secondary" onclick="closeUModal()">Abbrechen</button>
+      <button class="btn-secondary" onclick="closeUModal()"><?= t('btn.cancel') ?></button>
       <button class="btn-primary" id="umodal-submit" onclick="submitUModal()">Anlegen</button>
     </div>
   </div>
@@ -1019,8 +1034,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <input type="password" id="pw-reset-confirm" placeholder="Passwort wiederholen" autocomplete="new-password">
     </div>
     <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn-primary" onclick="submitPwReset()" style="flex:1">💾 Speichern</button>
-      <button class="btn-secondary" onclick="closePwResetModal()">Abbrechen</button>
+      <button class="btn-primary" onclick="submitPwReset()" style="flex:1"><?= t('cfg.save') ?></button>
+      <button class="btn-secondary" onclick="closePwResetModal()"><?= t('btn.cancel') ?></button>
     </div>
     <div class="settings-msg" id="pw-reset-msg" style="margin-top:8px"></div>
   </div>
@@ -1037,7 +1052,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <button class="modal-close" onclick="closeUserHistoryModal()">✕</button>
     </div>
     <div id="user-history-list" style="overflow-y:auto;flex:1">
-      <div style="color:var(--muted);text-align:center;padding:24px">⏳ Lade…</div>
+      <div style="color:var(--muted);text-align:center;padding:24px"><?= t('status.loading') ?></div>
     </div>
   </div>
 </div>
@@ -1050,7 +1065,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <button class="modal-close" onclick="closeInviteModal()">✕</button>
     </div>
     <div class="field">
-      <label>Rolle</label>
+      <label><?= t('users.role') ?></label>
       <select id="invite-role" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none">
         <option value="viewer">Viewer</option>
         <option value="editor">Editor</option>
@@ -1058,7 +1073,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       </select>
     </div>
     <div class="field">
-      <label>Gültigkeitsdauer</label>
+      <label><?= t('cfg.invite_expires') ?></label>
       <select id="invite-hours" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.9rem;outline:none">
         <option value="6">6 Stunden</option>
         <option value="24" selected>24 Stunden</option>
@@ -1080,8 +1095,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:16px">
-      <button class="btn-primary" id="btn-create-invite" onclick="createInvite()" style="flex:1">Link generieren</button>
-      <button class="btn-secondary" onclick="closeInviteModal()">Schließen</button>
+      <button class="btn-primary" id="btn-create-invite" onclick="createInvite()" style="flex:1"><?= t('invite.create') ?></button>
+      <button class="btn-secondary" onclick="closeInviteModal()"><?= t('btn.close') ?></button>
     </div>
     <div class="settings-msg" id="invite-msg" style="margin-top:8px"></div>
   </div>
@@ -1110,7 +1125,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div id="tmdb-stream-badges" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
       <div id="tmdb-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap"></div>
-      <div id="tmdb-loading" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">⏳ Lade Informationen…</div>
+      <div id="tmdb-loading" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem"><?= t('status.loading') ?></div>
       <div id="tmdb-error" style="display:none;text-align:center;padding:16px;color:var(--muted);font-size:.82rem"></div>
     </div>
   </div>
@@ -1127,14 +1142,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           Gib dein Admin-Passwort ein um den API-Key anzuzeigen.
         </p>
         <div class="field" style="margin-bottom:12px">
-          <label>Admin-Passwort</label>
-          <input type="password" id="reveal-password-input" placeholder="Dein Passwort"
+          <label><?= t('cfg.password') ?></label>
+          <input type="password" id="reveal-password-input" placeholder="<?= t('cfg.password') ?>"
             onkeydown="if(event.key==='Enter')submitReveal()">
         </div>
         <div id="reveal-error" style="font-size:.78rem;color:var(--red);margin-bottom:10px;display:none"></div>
         <div style="display:flex;gap:8px">
-          <button class="btn-primary" onclick="submitReveal()">Bestätigen</button>
-          <button class="btn-secondary" onclick="closeRevealModal()">Abbrechen</button>
+          <button class="btn-primary" onclick="submitReveal()"><?= t('btn.save') ?></button>
+          <button class="btn-secondary" onclick="closeRevealModal()"><?= t('btn.cancel') ?></button>
         </div>
       </div>
       <div id="reveal-key-section" style="display:none">
@@ -1145,8 +1160,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
                     font-family:'DM Mono',monospace;font-size:.78rem;word-break:break-all;
                     color:var(--accent);margin-bottom:12px" id="reveal-key-value"></div>
         <div style="display:flex;gap:8px">
-          <button class="btn-primary" onclick="copyRevealKey()">📋 Kopieren</button>
-          <button class="btn-secondary" onclick="closeRevealModal()">Schließen</button>
+          <button class="btn-primary" onclick="copyRevealKey()"><?= t('cfg.api_key_copy') ?> Kopieren</button>
+          <button class="btn-secondary" onclick="closeRevealModal()"><?= t('btn.close') ?></button>
         </div>
       </div>
     </div>
@@ -1154,9 +1169,31 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="dup-toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+     background:var(--bg2);border:1px solid var(--orange);border-radius:10px;
+     padding:14px 18px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,.5);
+     max-width:420px;width:calc(100% - 48px);font-size:.82rem">
+  <div style="color:var(--orange);font-weight:600;margin-bottom:6px"><?= t('dup.title') ?></div>
+  <div style="color:var(--muted);margin-bottom:12px;line-height:1.5">
+    <?= t('dup.body') ?><br>
+    <span id="dup-match-title" style="color:var(--text);font-style:italic"></span>
+  </div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button class="btn-secondary" onclick="closeDupToast()" style="font-size:.75rem;padding:5px 12px"><?= t('btn.cancel') ?></button>
+    <button class="btn-primary"   onclick="forceQueueAdd()" style="font-size:.75rem;padding:5px 12px"><?= t('dup.force') ?></button>
+  </div>
+</div>
 
 <script>
 const API = 'api.php';
+const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+const LANG = <?= json_encode(load_lang()) ?>;
+const CURRENT_LANG = <?= json_encode(get_user_lang()) ?>;
+function t(key, vars = {}) {
+  let s = LANG[key] ?? key;
+  for (const [k, v] of Object.entries(vars)) s = s.replaceAll('{{' + k + '}}', v);
+  return s;
+}
 const canQueueAdd       = <?= $can_queue_add        ? 'true' : 'false' ?>;
 const canQueueRemove    = <?= $can_queue_remove     ? 'true' : 'false' ?>;
 const canQueueRemoveOwn = <?= $can_queue_remove_own ? 'true' : 'false' ?>;
@@ -1302,22 +1339,19 @@ function renderSearchHistory() {
   const box = document.getElementById('search-history-box');
   if (!box) return;
   const history = getSearchHistory();
-  const catHist = getCatHistory();
-  if (!history.length && !catHist.length) { box.innerHTML = ''; return; }
-  let html = '';
-  if (history.length) {
-    html += `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">Zuletzt gesucht</div>`;
-    html += history.map(q => `<div class="history-chip" onclick="doSearchFromHistory(${JSON.stringify(q)})">${esc(q)}</div>`).join('');
-  }
-  if (catHist.length) {
-    html += `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin:12px 0 8px">Zuletzt angesehen</div>`;
-    html += catHist.map(c => `<div class="history-chip" onclick="loadCatFromHistory('${esc(c.type)}','${esc(c.catId)}','${esc(c.catName)}')">${c.type === 'series' ? '📺' : '🎬'} ${esc(c.catName)}</div>`).join('');
-  }
+  if (!history.length) { box.innerHTML = ''; return; }
+  let html = `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">${t('search.history')}</div>`;
+  html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
+  html += history.map(q => {
+    const escaped = esc(q).replace(/'/g, '&#39;');
+    return `<button class="history-chip" onclick="doSearchFromHistory('${escaped}')" style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.78rem;cursor:pointer;color:var(--text);font-family:'DM Sans',sans-serif;transition:border-color .15s,color .15s">🔍 ${esc(q)}</button>`;
+  }).join('');
+  html += `</div>`;
   box.innerHTML = html;
 }
 function doSearchFromHistory(query) {
   document.getElementById('search-input').value = query;
-  doSearch();
+  doSearch(query);
 }
 function loadCatFromHistory(type, catId, catName) {
   if (type === 'series') {
@@ -1551,7 +1585,7 @@ function seriesCard(s) {
 // ── Series Modal ──────────────────────────────────────────────
 async function openSeriesModal(id, title, cover, category) {
   document.getElementById('modal-title').textContent = title;
-  document.getElementById('modal-meta').textContent  = 'Loading…';
+  document.getElementById('modal-meta').textContent  = t('modal.loading');
   document.getElementById('modal-img').src           = cover || '';
   document.getElementById('modal-body').innerHTML    = `<div class="state-box"><div class="spinner"></div></div>`;
   document.getElementById('series-modal').classList.add('open');
@@ -1559,12 +1593,12 @@ async function openSeriesModal(id, title, cover, category) {
   const episodes = data.episodes ?? {};
   const seasons  = Object.keys(episodes).sort();
   document.getElementById('modal-meta').textContent = `${seasons.length} Season(s)`;
-  if (!seasons.length) { document.getElementById('modal-body').innerHTML = emptyHTML('Keine Episoden'); return; }
+  if (!seasons.length) { document.getElementById('modal-body').innerHTML = emptyHTML(t('modal.no_episodes')); return; }
   let html = '';
   for (const season of seasons) {
     const eps = episodes[season];
     const seasonNum = parseInt(season, 10) || 1;
-    html += `<div class="season-header">Season ${season}
+    html += `<div class="season-header">${t('modal.season')} ${season}
       <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}','${esc(category||'')}')">⏳ All queuen</span>
     </div>`;
     for (const ep of eps) {
@@ -1642,6 +1676,8 @@ async function addMovieToQueue(m, card) {
     dest_subfolder:      'Movies',
     category:            m.category ?? m._category ?? '',
   });
+  // Karte per ID suchen falls nicht direkt übergeben (z.B. aus TMDB-Modal)
+  if (!card) card = document.getElementById('card-m-' + m.stream_id);
   if (card) {
     card.classList.add('queued');
     const badge = card.querySelector('.card-badge');
@@ -1649,16 +1685,16 @@ async function addMovieToQueue(m, card) {
     else {
       const b = document.createElement('span');
       b.className = 'card-badge badge-queue'; b.textContent = '⏳ Queue';
-      card.querySelector('.card-thumb').appendChild(b);
+      card.querySelector('.card-thumb')?.appendChild(b);
     }
     const btn = card.querySelector('.btn-q');
     if (btn) {
       if (canQueueRemove) {
-        btn.textContent = '✕ Remove';
+        btn.textContent = t('btn.remove_queue');
         btn.className = 'btn-q remove';
         btn.onclick = () => removeFromQueue(m.stream_id, card);
       } else {
-        btn.textContent = '⏳ Queued';
+        btn.textContent = t('btn.queued');
         btn.className = 'btn-q done';
         btn.disabled = true;
         btn.onclick = null;
@@ -1679,32 +1715,35 @@ async function removeFromQueue(sid, card) {
     const btn = card.querySelector('.btn-q');
     if (btn) {
       const m = allMovies.find(x => String(x.stream_id) === String(sid));
-      btn.textContent = '+ Queue'; btn.className = 'btn-q add';
+      btn.textContent = t('btn.add_queue'); btn.className = 'btn-q add';
       if (m) btn.onclick = () => addMovieToQueue(m, card);
     }
   }
   const idx = allMovies.findIndex(x => String(x.stream_id) === String(sid));
   if (idx >= 0) allMovies[idx].queued = false;
   updateQueueBadge(); loadStats();
-  showToast('Aus Queue entfernt', 'info');
+  showToast(t('queue.removed'), 'info');
 }
 
 async function queueItem(item) {
   const r = await fetch(API + '?action=queue_add', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(item)
+    body: JSON.stringify({...item, _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.already) {
     if (d.reason === 'on_remote') {
       showToast(`☁️ Bereits auf Remote vorhanden: ${d.filename}`, 'info');
     } else if (d.reason === 'downloaded') {
-      showToast('✓ Bereits heruntergeladen', 'info');
+      showToast(t('queue.already_dl'), 'info');
     } else if (d.reason === 'duplicate_title') {
-      showToast(`⚠️ Titel bereits in Queue: ${d.title}`, 'info');
+      showToast(`⚠️ ${t('queue.duplicate', {title: d.title})}`, 'info');
+    } else if (d.reason === 'duplicate') {
+      // Dublette gefunden — Toast mit Bypass-Option
+      showDuplicateToast(d.match_title, item);
     } else {
-      showToast('Bereits in der Queue', 'info');
+      showToast(t('queue.already_queue'), 'info');
     }
     return null;
   }
@@ -1798,7 +1837,7 @@ async function refreshQueue() {
       if (existing.className !== newCls) existing.className = newCls;
 
       const statusEl = existing.querySelector('.qi-status');
-      const statusLabel = {pending:'Ausstehend', downloading:'Lädt…', done:'Fertig', error:'Fehler'}[item.status] ?? item.status;
+      const statusLabel = {pending:t('status.pending'), downloading:t('status.downloading'), done:t('status.done'), error:t('status.error')}[item.status] ?? item.status;
       if (statusEl) {
         statusEl.className = `qi-status ${item.status}`;
         const retryBtn = item.status === 'error' && canQueueRemove
@@ -1814,7 +1853,7 @@ async function refreshQueue() {
 }
 
 function queueItemHTML(item) {
-  const statusLabel = {pending:'Ausstehend', downloading:'Lädt…', done:'Fertig', error:'Fehler'}[item.status] ?? item.status;
+  const statusLabel = {pending:t('status.pending'), downloading:t('status.downloading'), done:t('status.done'), error:t('status.error')}[item.status] ?? item.status;
   const thumb = item.cover ? `<img class="qi-thumb" src="${item.cover}" alt="">` : `<div class="qi-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">🎬</div>`;
   const isOwn = item.added_by === currentUsername;
   const canDel = item.status !== 'downloading' && (
@@ -1827,13 +1866,13 @@ function queueItemHTML(item) {
   const addedBy = canSeeAddedBy && item.added_by ? `· ${item.added_by}` : '';
 
   // Priorität
-  const prioLabels = {1:'🔴 Hoch', 2:'🟡 Normal', 3:'🔵 Niedrig'};
+  const prioLabels = {1:t('queue.prio_high'), 2:t('queue.prio_normal'), 3:t('queue.prio_low')};
   const prio = item.priority ?? 2;
   const prioBtn = canQueueRemove && item.status === 'pending'
     ? `<select class="qi-prio" onchange="setPriority('${item.stream_id}',this.value)" title="Priorität">
-        <option value="1"${prio===1?' selected':''}>🔴 Hoch</option>
-        <option value="2"${prio===2?' selected':''}>🟡 Normal</option>
-        <option value="3"${prio===3?' selected':''}>🔵 Niedrig</option>
+        <option value="1"${prio===1?' selected':''}><?= t('queue.prio_high') ?></option>
+        <option value="2"${prio===2?' selected':''}><?= t('queue.prio_normal') ?></option>
+        <option value="3"${prio===3?' selected':''}><?= t('queue.prio_low') ?></option>
       </select>`
     : `<span class="qi-prio-badge prio-${prio}">${prioLabels[prio] ?? ''}</span>`;
 
@@ -1895,7 +1934,7 @@ async function toggleFav(type, sid, title, cover, category, ext, btn) {
     favourites.delete(key);
     favouriteData = favouriteData.filter(f => !(f.type === type && f.stream_id === sid));
     btn.classList.remove('active');
-    showToast('Aus Favoriten entfernt', 'info');
+    showToast(t('fav.removed'), 'info');
   }
   updateFavBadge();
   if (currentView === 'favourites') renderFavourites();
@@ -1986,7 +2025,7 @@ function switchNrTab(tab, el) {
 
 async function loadNewReleases() {
   const grid = document.getElementById('new-releases-grid');
-  if (grid) grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>Lade…</p></div>`;
+  if (grid) grid.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>${t('status.loading')}</p></div>`;
   _nrData = await api('get_new_releases');
   const meta = document.getElementById('new-releases-meta');
   if (_nrData.generated_at) {
@@ -2059,13 +2098,13 @@ async function dismissAllNewReleases(btn) {
   const meta = document.getElementById('new-releases-meta');
   if (meta) meta.textContent = '0 neue Filme';
   renderNewReleases();
-  showToast('✓ Alle als gesehen markiert', 'success');
+  showToast(t('new.all_seen_done'), 'success');
 }
 
 async function removeQueueItem(sid, el) {
   const r = await fetch(`${API}?action=queue_remove`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({stream_id: sid})
+    body: JSON.stringify({...({stream_id: sid}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -2077,11 +2116,11 @@ async function removeQueueItem(sid, el) {
 async function setPriority(sid, priority) {
   const r = await fetch(`${API}?action=set_priority`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({stream_id: sid, priority: parseInt(priority)})
+    body: JSON.stringify({...({stream_id: sid, priority: parseInt(priority)}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast('Priorität geändert', 'info');
+  showToast(t('queue.priority_changed'), 'info');
   refreshQueue();
 }
 
@@ -2089,7 +2128,7 @@ async function resetEpisode(sid, ep, season, seriesTitle, category) {
   if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
   const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast('↺ Zurückgesetzt', 'success');
+  showToast(t('reset.done'), 'success');
   const btn = document.getElementById('epbtn-' + sid);
   const epRow = document.getElementById('ep-' + sid);
   if (epRow) {
@@ -2126,7 +2165,7 @@ async function resetDownload(sid, type, rowEl) {
 async function retryQueueItem(sid) {
   const r = await fetch(`${API}?action=queue_retry`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({stream_id: sid})
+    body: JSON.stringify({...({stream_id: sid}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -2142,7 +2181,7 @@ async function clearAll() {
   if (!confirm('Wirklich die gesamte Queue löschen?')) return;
   await api('queue_clear_all');
   refreshQueue(); updateQueueBadge(); loadStats();
-  showToast('Queue geleert', 'success');
+  showToast(t('queue.cleared'), 'success');
 }
 
 // ── Log ───────────────────────────────────────────────────────
@@ -2223,6 +2262,8 @@ async function doSearch(q) {
 
   if (searchTab === 'movies') {
     if (movGrid) movGrid.innerHTML = loadingHTML();
+    const hintEl = document.getElementById('search-cache-hint');
+    if (hintEl) { hintEl.style.display = 'none'; hintEl.innerHTML = ''; }
     const cacheKey = 'movies:' + q;
     let results, source;
     if (_searchCache.has(cacheKey)) {
@@ -2236,13 +2277,20 @@ async function doSearch(q) {
     }
     _lastMovies = results;
     if (movGrid) {
-      const sourceHint = source === 'cache'
-        ? `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:10px">📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">Aktualisieren</span></div>`
-        : '';
+      const hint = document.getElementById('search-cache-hint');
+      if (hint) {
+        if (source === 'cache') {
+          hint.style.display = '';
+          hint.innerHTML = `📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">${t('btn.refresh')}</span>`;
+        } else {
+          hint.style.display = 'none';
+          hint.innerHTML = '';
+        }
+      }
       if (!results.length) {
         movGrid.innerHTML = emptyHTML('Keine Treffer');
       } else {
-        movGrid.innerHTML = sourceHint + results.map(movieCard).join('');
+        movGrid.innerHTML = results.map(movieCard).join('');
         lazyLoadImages();
       }
     }
@@ -2259,13 +2307,20 @@ async function doSearch(q) {
       _searchCache.set(cacheKey, {results, source});
     }
     if (serGrid) {
-      const sourceHint = source === 'cache'
-        ? `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:10px">📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">Aktualisieren</span></div>`
-        : '';
+      const hint = document.getElementById('search-cache-hint');
+      if (hint) {
+        if (source === 'cache') {
+          hint.style.display = '';
+          hint.innerHTML = `📦 Aus lokalem Cache · <span style="cursor:pointer;color:var(--accent2)" onclick="clearSearchCache();doSearch('${esc(q)}')">${t('btn.refresh')}</span>`;
+        } else {
+          hint.style.display = 'none';
+          hint.innerHTML = '';
+        }
+      }
       if (!results.length) {
         serGrid.innerHTML = emptyHTML('Keine Treffer');
       } else {
-        serGrid.innerHTML = sourceHint + results.map(seriesCard).join('');
+        serGrid.innerHTML = results.map(seriesCard).join('');
         lazyLoadImages();
       }
     }
@@ -2301,18 +2356,18 @@ function showView(v) {
   const fb = document.getElementById('filter-bar');
   sb.style.display = v === 'search'  ? '' : 'none';
   fb.style.display = v === 'movies'  ? '' : 'none';
-  if (v === 'search')       { document.getElementById('page-title').textContent = 'Suche'; initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
-  if (v === 'dashboard')    { document.getElementById('page-title').textContent = 'Dashboard'; <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
-  if (v === 'queue')        { document.getElementById('page-title').textContent = 'Download Queue'; refreshQueue(); startProgressPolling(); }
-  if (v === 'log')          { document.getElementById('page-title').textContent = 'Cron Log'; startLogPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = 'Einstellungen'; <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
-  if (v === 'users')        { document.getElementById('page-title').textContent = 'Benutzer'; loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
+  if (v === 'search')       { document.getElementById('page-title').textContent = t('nav.search'); initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
+  if (v === 'dashboard')    { document.getElementById('page-title').textContent = t('nav.dashboard'); <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
+  if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); startProgressPolling(); }
+  if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
+  if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
-  if (v === 'profile')      { document.getElementById('page-title').textContent = 'Mein Profil'; document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
-  if (v === 'favourites')    { document.getElementById('page-title').textContent = 'Favoriten'; renderFavourites(); loadStats(); updateQueueBadge(); }
-  if (v === 'new-releases')  { document.getElementById('page-title').textContent = 'Neue Releases'; loadNewReleases(); }
-  if (v === 'api-docs')     { document.getElementById('page-title').textContent = 'API-Dokumentation'; }
-  if (v === 'stats')        { document.getElementById('page-title').textContent = 'Statistiken'; loadStatsView(); }
+  if (v === 'profile')      { document.getElementById('page-title').textContent = t('profile.title'); document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
+  if (v === 'favourites')    { document.getElementById('page-title').textContent = t('nav.favourites'); renderFavourites(); loadStats(); updateQueueBadge(); }
+  if (v === 'new-releases')  { document.getElementById('page-title').textContent = t('new.title'); loadNewReleases(); }
+  if (v === 'api-docs')     { document.getElementById('page-title').textContent = t('nav.api_docs'); }
+  if (v === 'stats')        { document.getElementById('page-title').textContent = t('nav.stats'); loadStatsView(); }
   clearInterval(queueRefreshInterval);
   if (v === 'queue') {
     // Progress- und Queue-Polling starten (unified — kein separates Queue-Interval nötig)
@@ -2332,7 +2387,7 @@ async function loadBackups() {
   const el = document.getElementById('backup-list');
   if (!el) return;
   if (!d.backups?.length) {
-    el.innerHTML = `<div style="color:var(--muted)">Noch keine Backups vorhanden.</div>`;
+    el.innerHTML = `<div style="color:var(--muted)">${t('cfg.backup_none')}</div>`;
     return;
   }
   el.innerHTML = `<table style="width:100%;border-collapse:collapse">
@@ -2386,7 +2441,7 @@ async function deleteBackup(name, row) {
   const d = await apiPost('backup_delete', {name});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   row?.remove();
-  showToast('Backup gelöscht', 'info');
+  showToast(t('backup.deleted'), 'info');
 }
 
 async function loadMaintenance() {
@@ -2399,29 +2454,29 @@ function applyMaintenanceStatus(active) {
   const btn    = document.getElementById('btn-maintenance-toggle');
   if (!status || !btn) return;
   if (active) {
-    status.textContent = '🔴 Wartungsmodus AKTIV';
+    status.textContent = t('maintenance.active');
     status.style.color = 'var(--red)';
     status.style.borderColor = 'rgba(255,71,87,.3)';
-    btn.textContent = 'Wartungsmodus deaktivieren';
+    btn.textContent = t('maintenance.btn_disable');
     btn.className = 'btn-secondary danger';
   } else {
     status.textContent = '🟢 Normal — Seite erreichbar';
     status.style.color = 'var(--green)';
     status.style.borderColor = 'rgba(46,213,115,.2)';
-    btn.textContent = 'Wartungsmodus aktivieren';
+    btn.textContent = t('maintenance.btn_enable');
     btn.className = 'btn-secondary';
   }
 }
 
 async function toggleMaintenance() {
   const current = document.getElementById('maintenance-status')?.textContent?.includes('AKTIV');
-  if (!current && !confirm('Wartungsmodus aktivieren? Alle nicht-Admin-User werden ausgesperrt.')) return;
+  if (!current && !confirm(t('maintenance.enable_confirm'))) return;
   const action = current ? 'maintenance_disable' : 'maintenance_enable';
   const d = await fetch(`${API}?action=${action}`, {method:'POST'});
   const r = await d.json();
   if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
   applyMaintenanceStatus(!current);
-  showToast(current ? 'Wartungsmodus deaktiviert' : 'Wartungsmodus aktiviert', current ? 'success' : 'info');
+  showToast(current ? t('maintenance.disabled_toast') : t('maintenance.enabled_toast'), current ? 'success' : 'info');
 }
 
 // ── Server-Verwaltung ─────────────────────────────────────────
@@ -2430,7 +2485,7 @@ async function loadServers() {
   if (!list) return;
   const servers = await api('list_servers');
   if (!servers?.length) {
-    list.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine gespeicherten Server</div>`;
+    list.innerHTML = `<div style="color:var(--muted);font-size:.8rem">${t('cfg.server_none')}</div>`;
     return;
   }
   list.innerHTML = servers.map(s => `
@@ -2479,7 +2534,7 @@ async function loadConfig() {
   document.getElementById('cfg-username').value      = c.username      ?? '';
   document.getElementById('cfg-password').value      = '';
   document.getElementById('cfg-dest-path').value     = c.dest_path     ?? '';
-  document.getElementById('cfg-password').placeholder = c.password ? '(gesetzt – leer lassen zum Beibehalten)' : 'Xtream Passwort';
+  document.getElementById('cfg-password').placeholder = c.password ? t('cfg.pw_set') : 'Xtream Passwort';
   // rclone
   const rcloneEnabled = c.rclone_enabled ?? false;
   document.getElementById('cfg-rclone-enabled').checked = rcloneEnabled;
@@ -2491,12 +2546,12 @@ async function loadConfig() {
   document.getElementById('cfg-editor-movies').checked = c.editor_movies_enabled ?? true;
   document.getElementById('cfg-editor-series').checked = c.editor_series_enabled ?? true;
   document.getElementById('cfg-tmdb-api-key').value    = c.tmdb_api_key ?? '';
-  document.getElementById('cfg-tmdb-api-key').placeholder = c.tmdb_api_key === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um TMDB zu deaktivieren';
+  document.getElementById('cfg-tmdb-api-key').placeholder = c.tmdb_api_key === '••••••••' ? t('cfg.pw_saved') : t('cfg.tmdb_placeholder');
   const sidEl = document.getElementById('cfg-server-id-display');
   if (sidEl && c.server_id) sidEl.textContent = c.server_id;
   const tgToken = document.getElementById('cfg-telegram-bot-token');
   const tgChat  = document.getElementById('cfg-telegram-chat-id');
-  if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? 'Gespeichert — leer lassen um zu behalten' : 'Leer lassen um Telegram zu deaktivieren'; }
+  if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? t('cfg.pw_saved') : t('cfg.telegram_placeholder'); }
   if (tgChat)  tgChat.value = c.telegram_chat_id ?? '';
   const tgEnabled = document.getElementById('cfg-telegram-enabled');
   if (tgEnabled) tgEnabled.checked = c.telegram_enabled ?? false;
@@ -2528,11 +2583,11 @@ async function refreshRcloneCache(btn) {
   const statusEl = document.getElementById('rclone-cache-status');
   const msgEl    = document.getElementById('rclone-test-msg');
   btn.disabled = true;
-  btn.textContent = '⏳ Lade…';
+  btn.textContent = t('phplog.loading');
   if (statusEl) statusEl.textContent = '⏳ Lade Dateiliste vom Remote… (kann je nach Größe etwas dauern)';
   const d = await api('rclone_cache_refresh');
   btn.disabled = false;
-  btn.textContent = '🗂 Remote-Cache aktualisieren';
+  btn.textContent = t('cfg.rclone_cache');
   if (d.error) {
     if (msgEl) { msgEl.textContent = '❌ ' + d.error; msgEl.className = 'settings-msg err'; }
     if (statusEl) statusEl.textContent = '❌ Fehler beim Laden';
@@ -2569,8 +2624,8 @@ async function loadPhpErrorLog(btn) {
   const logEl  = document.getElementById('php-error-log');
   const pathEl = document.getElementById('php-log-path');
   if (btn) btn.disabled = true;
-  if (pathEl) pathEl.textContent = '⏳ Lade…';
-  if (logEl)  { logEl.style.display = ''; logEl.textContent = '⏳ Lade…'; }
+  if (pathEl) pathEl.textContent = t('phplog.loading');
+  if (logEl)  { logEl.style.display = ''; logEl.textContent = t('phplog.loading'); }
 
   const d = await api('php_error_log');
   if (btn) btn.disabled = false;
@@ -2582,7 +2637,7 @@ async function loadPhpErrorLog(btn) {
   }
   if (pathEl) pathEl.textContent = d.path ?? '';
   if (!d.lines?.length) {
-    if (logEl) logEl.textContent = '✓ Keine Fehler gefunden';
+    if (logEl) logEl.textContent = t('phplog.empty');
     return;
   }
   if (logEl) {
@@ -2618,13 +2673,13 @@ async function checkUpdate(btn) {
   if (d.up_to_date) {
     statusEl.innerHTML = `
       <div style="color:var(--green)">✅ Aktuell</div>
-      <div style="color:var(--muted);margin-top:4px">Lokaler Commit: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
-      <div style="color:var(--muted)">Remote Commit: <span style="color:var(--text)">${esc(d.remote_commit)}</span>${dateStr}</div>`;
+      <div style="color:var(--muted);margin-top:4px">${t('update.local')}: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
+      <div style="color:var(--muted)">${t('update.remote')}: <span style="color:var(--text)">${esc(d.remote_commit)}</span>${dateStr}</div>`;
   } else {
     statusEl.innerHTML = `
       <div style="color:var(--orange)">🆕 Update verfügbar</div>
-      <div style="color:var(--muted);margin-top:4px">Lokaler Commit: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
-      <div style="color:var(--muted)">Remote Commit: <span style="color:var(--accent2)">${esc(d.remote_commit)}</span>${dateStr}</div>
+      <div style="color:var(--muted);margin-top:4px">${t('update.local')}: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
+      <div style="color:var(--muted)">${t('update.remote')}: <span style="color:var(--accent2)">${esc(d.remote_commit)}</span>${dateStr}</div>
       ${d.remote_message ? `<div style="color:var(--muted);margin-top:4px">💬 ${esc(d.remote_message)}</div>` : ''}`;
     updateBtn.style.display = '';
   }
@@ -2638,7 +2693,7 @@ async function runUpdate(btn) {
   if (!confirm('Update installieren?\n\nEin Backup von data/ wird automatisch erstellt.\nDie Seite wird danach neu geladen.')) return;
 
   btn.disabled = true;
-  msgEl.textContent = '⏳ Update läuft…'; msgEl.className = 'settings-msg info';
+  msgEl.textContent = t('update.installing'); msgEl.className = 'settings-msg info';
   logEl.style.display = 'none';
 
   const d = await apiPost('run_update', {});
@@ -2766,7 +2821,7 @@ function _vpnUpdateToggleBtn(up) {
 async function checkVpnStatus() {
   const msg = document.getElementById('vpn-status-msg');
   const btn = document.getElementById('vpn-toggle-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Prüfe…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('vpn.checking'); }
   msg.textContent = ''; msg.className = 'settings-msg';
   const d = await api('vpn_status');
   if (btn) btn.disabled = false;
@@ -2777,7 +2832,7 @@ async function checkVpnStatus() {
     msg.className = 'settings-msg err'; _vpnUpdateToggleBtn(false); return;
   }
   const ipText = d.public_ip ? ` · IP: ${d.public_ip}` : '';
-  msg.textContent = `${d.up ? '🟢 Aktiv' : '🔴 Inaktiv'} (${d.interface})${ipText}`;
+  msg.textContent = `${d.up ? t('vpn.active') : t('vpn.inactive')} (${d.interface})${ipText}`;
   msg.className = d.up ? 'settings-msg ok' : 'settings-msg err';
   _vpnUpdateToggleBtn(d.up);
 }
@@ -2786,7 +2841,7 @@ async function vpnToggle(btn) {
   const isConnected = btn.textContent.includes('Trennen');
   const msg = document.getElementById('vpn-status-msg');
   btn.disabled = true;
-  btn.textContent = isConnected ? '⏳ Trenne…' : '⏳ Verbinde…';
+  btn.textContent = isConnected ? t('vpn.disconnecting') : t('vpn.connecting');
   msg.textContent = ''; msg.className = 'settings-msg info';
   const d = await apiPost(isConnected ? 'vpn_disconnect' : 'vpn_connect', {});
   btn.disabled = false;
@@ -2795,7 +2850,7 @@ async function vpnToggle(btn) {
     _vpnUpdateToggleBtn(isConnected); // zurücksetzen
     return;
   }
-  msg.textContent = isConnected ? '🔴 Getrennt' : '🟢 Verbunden';
+  msg.textContent = isConnected ? t('vpn.disconnected') : t('vpn.connected');
   msg.className = isConnected ? 'settings-msg err' : 'settings-msg ok';
   _vpnUpdateToggleBtn(!isConnected);
   pollVpnStatus();
@@ -2806,7 +2861,7 @@ async function vpnDisconnect() { /* legacy — nicht mehr verwendet */ }
 
 async function testTelegram() {
   const msgEl = document.getElementById('telegram-test-msg');
-  msgEl.textContent = '⏳ Sende…'; msgEl.className = 'settings-msg info';
+  msgEl.textContent = t('telegram.sending'); msgEl.className = 'settings-msg info';
   const cfg = collectConfig();
   const d = await apiPost('telegram_test', {
     bot_token: cfg.telegram_bot_token,
@@ -2815,7 +2870,7 @@ async function testTelegram() {
   if (d.error) {
     msgEl.textContent = '❌ ' + d.error; msgEl.className = 'settings-msg err';
   } else {
-    msgEl.textContent = '✅ Testnachricht gesendet'; msgEl.className = 'settings-msg ok';
+    msgEl.textContent = t('telegram.ok'); msgEl.className = 'settings-msg ok';
   }
 }
 
@@ -2825,7 +2880,7 @@ async function testRclone() {
   const cfg = collectConfig();
   const r = await fetch(`${API}?action=rclone_test`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({rclone_bin: cfg.rclone_bin, rclone_remote: cfg.rclone_remote})
+    body: JSON.stringify({...({rclone_bin: cfg.rclone_bin, rclone_remote: cfg.rclone_remote}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) {
@@ -2841,7 +2896,7 @@ async function testConnection() {
   const r = await fetch(`${API}?action=save_config`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({...cfg, test_connection: true})
+    body: JSON.stringify({...({...cfg, test_connection: true}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) {
@@ -2859,7 +2914,7 @@ async function saveConfig() {
   const r = await fetch(`${API}?action=save_config`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({...cfg, save: true})
+    body: JSON.stringify({...({...cfg, save: true}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   btn.disabled = false;
@@ -2981,11 +3036,11 @@ async function openTmdbModal(title, type, year, queueData) {
     } else if (_downloadedIds.has(sid) && canQueueRemove) {
       actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();resetDownload('${sid}','movie',null)">↺ Reset</button>`;
     } else if (_downloadedIds.has(sid)) {
-      actionHtml = `<button class="btn-secondary" disabled>✓ Heruntergeladen</button>`;
+      actionHtml = `<button class="btn-secondary" disabled>${t('btn.done')}</button>`;
     } else if (_queuedIds.has(sid) && (canQueueRemove || canQueueRemoveOwn)) {
-      actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();removeFromQueue('${sid}',null)">✕ Aus Queue entfernen</button>`;
+      actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();removeFromQueue('${sid}',null)">${t('btn.remove_queue')}</button>`;
     } else if (_queuedIds.has(sid)) {
-      actionHtml = `<button class="btn-secondary" disabled>⏳ In Queue</button>`;
+      actionHtml = `<button class="btn-secondary" disabled>${t('btn.queued')}</button>`;
     } else if (canQueueAdd) {
       const qd = JSON.stringify(queueData).replace(/"/g,'&quot;');
       actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();addMovieToQueue(${qd},null)">+ Queue</button>`;
@@ -3195,7 +3250,7 @@ async function createApiKey() {
   const name = document.getElementById('apikey-name-input').value.trim() || 'API Key';
   const r = await fetch(`${API}?action=create_api_key`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name})
+    body: JSON.stringify({...({name}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -3211,9 +3266,9 @@ async function revokeApiKey(id) {
   if (!confirm('API-Key widerrufen? Er kann danach nicht mehr verwendet werden.')) return;
   await fetch(`${API}?action=revoke_api_key`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id})
+    body: JSON.stringify({...({id}), _csrf: CSRF_TOKEN})
   });
-  showToast('API-Key widerrufen', 'info');
+  showToast(t('apikey.revoked'), 'info');
   loadApiKeys();
 }
 
@@ -3221,7 +3276,7 @@ async function deleteApiKey(id) {
   if (!confirm('API-Key endgültig löschen?')) return;
   await fetch(`${API}?action=delete_api_key`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id})
+    body: JSON.stringify({...({id}), _csrf: CSRF_TOKEN})
   });
   showToast('API-Key gelöscht', 'success');
   loadApiKeys();
@@ -3271,14 +3326,14 @@ async function loadDashboardData() {
       <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">PHP</span><span>${esc(s.php_version)}</span></div>
       <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">RAM</span><span>${fmtBytes(s.mem_used)}</span></div>
       ${s.uptime ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Uptime</span><span>${esc(s.uptime)}</span></div>` : ''}
-      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Downloads</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">${t('stats.downloads')}</span><span style="color:var(--green)">${d.total_downloaded ?? 0}</span></div>`;
   }
 
   // Letzte Downloads
   const recent = document.getElementById('dash-recent');
   if (recent) {
     if (!d.recent_downloads?.length) {
-      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">Noch keine Downloads</div>`;
+      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">${t('dash.no_recent')}</div>`;
     } else {
       recent.innerHTML = d.recent_downloads.map(item => {
         const icon = item.type === 'episode' ? '📺' : '🎬';
@@ -3301,11 +3356,15 @@ async function loadDashboardData() {
 
 // ── Dashboard Schnellzugriff ──────────────────────────────────
 async function cancelDownload() {
-  if (!confirm('Laufenden Download wirklich abbrechen?')) return;
-  const d = await fetch(`${API}?action=queue_cancel`, {method:'POST'});
+  if (!confirm(t('queue.cancel_confirm'))) return;
+  const d = await fetch(`${API}?action=queue_cancel`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({_csrf: CSRF_TOKEN}),
+  });
   const r = await d.json();
   if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
-  showToast('Abbruch-Signal gesendet — Download wird gestoppt…', 'info');
+  showToast(t('queue.cancel_sent'), 'info');
 }
 
 async function startQueue(btn) {
@@ -3332,7 +3391,7 @@ async function dashClearDone() {
 async function dashClearAll() {
   if (!confirm('Wirklich die gesamte Queue löschen?')) return;
   const r = await fetch(`${API}?action=queue_clear_all`, {method:'POST'});
-  showToast('Queue geleert', 'info');
+  showToast(t('queue.cleared'), 'info');
   loadDashboardData();
 }
 // ── Xtream Server Info ────────────────────────────────────────
@@ -3435,7 +3494,7 @@ async function loadStatsView() {
     _statsChartCnt = new Chart(ctxCnt, {
       type: 'bar',
       data: { labels, datasets: [{
-        label: 'Downloads', data: cntVals, borderWidth: 1, borderRadius: 4,
+        label: t('stats.downloads'), data: cntVals, borderWidth: 1, borderRadius: 4,
         backgroundColor: mkColors('rgba(255,159,67,.2)', 'rgba(255,159,67,.5)'),
         borderColor:     mkColors('rgba(255,159,67,.6)', 'rgba(255,159,67,1)'),
       }]},
@@ -3453,14 +3512,14 @@ async function loadStatsView() {
   // ── Wochentag-Verteilung ──────────────────────────────────────
   const ctxWd = document.getElementById('stats-chart-weekday')?.getContext('2d');
   if (ctxWd && d.by_weekday) {
-    const wdLabels = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+    const wdLabels = t('stats.weekdays').split(',');
     const wdCounts = d.by_weekday.map(w => w.count);
     const maxWd = Math.max(...wdCounts, 1);
     if (_statsChartWd) _statsChartWd.destroy();
     _statsChartWd = new Chart(ctxWd, {
       type: 'bar',
       data: { labels: wdLabels, datasets: [{
-        label: 'Downloads', data: wdCounts, borderWidth: 1, borderRadius: 6,
+        label: t('stats.downloads'), data: wdCounts, borderWidth: 1, borderRadius: 6,
         backgroundColor: wdCounts.map(v => `rgba(155,100,255,${0.15 + 0.55 * v / maxWd})`),
         borderColor:     wdCounts.map(v => `rgba(155,100,255,${0.4 + 0.6 * v / maxWd})`),
       }]},
@@ -3480,7 +3539,7 @@ async function loadStatsView() {
   if (topEl && d.top_users) {
     const entries = Object.entries(d.top_users);
     if (!entries.length) {
-      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Noch keine Daten</div>`;
+      topEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem">${t('stats.no_data')}</div>`;
     } else {
       const maxCount = entries[0]?.[1]?.count ?? 1;
       topEl.innerHTML = entries.map(([user, data], i) => {
@@ -3508,14 +3567,14 @@ async function loadStatsView() {
   if (catsEl && d.top_categories) {
     const entries = Object.entries(d.top_categories);
     if (!entries.length) {
-      catsEl.innerHTML = `<div style="color:var(--muted)">Noch keine Daten</div>`;
+      catsEl.innerHTML = `<div style="color:var(--muted)">${t('stats.no_data')}</div>`;
     } else {
       const maxCnt = entries[0]?.[1]?.count ?? 1;
       catsEl.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-family:'DM Mono',monospace;font-size:.72rem">
-          <div style="color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)">Kategorie</div>
-          <div style="color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">Downloads</div>
-          <div style="color:var(--muted);padding:6px 0 6px 8px;border-bottom:1px solid var(--border);text-align:right">Volumen</div>
+          <div style="color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)">${t('stats.category')}</div>
+          <div style="color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">${t('stats.downloads')}</div>
+          <div style="color:var(--muted);padding:6px 0 6px 8px;border-bottom:1px solid var(--border);text-align:right">${t('stats.volume_col')}</div>
           ${entries.map(([cat, data]) => {
             const pct = Math.round((data.count / maxCnt) * 100);
             return `
@@ -3661,7 +3720,7 @@ async function refreshDashboardQueue() {
     sorted.forEach(item => {
       const el = document.getElementById(`dqi-${item.stream_id}`);
       if (!el) return;
-      const statusLabel = {pending:'Ausstehend', downloading:'Lädt…', done:'Fertig', error:'Fehler'}[item.status] ?? item.status;
+      const statusLabel = {pending:t('status.pending'), downloading:t('status.downloading'), done:t('status.done'), error:t('status.error')}[item.status] ?? item.status;
       el.className = `queue-item status-${item.status}`;
       const statusEl = el.querySelector('.qi-status');
       if (statusEl) { statusEl.textContent = statusLabel; statusEl.className = `qi-status ${item.status}`; }
@@ -3670,7 +3729,7 @@ async function refreshDashboardQueue() {
 }
 
 function dashQueueItemHTML(item) {
-  const statusLabel = {pending:'Ausstehend', downloading:'Lädt…', done:'Fertig', error:'Fehler'}[item.status] ?? item.status;
+  const statusLabel = {pending:t('status.pending'), downloading:t('status.downloading'), done:t('status.done'), error:t('status.error')}[item.status] ?? item.status;
   const thumb = item.cover
     ? `<img class="qi-thumb" src="${item.cover}" alt="" onerror="this.style.display='none'">`
     : `<div class="qi-thumb" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem">🎬</div>`;
@@ -3725,7 +3784,7 @@ async function apiPost(action, body) {
   const r = await fetch(`${API}?action=${action}`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body)
+    body: JSON.stringify({...body, _csrf: CSRF_TOKEN})
   });
   return r.json();
 }
@@ -3752,6 +3811,22 @@ function lazyLoadImages() {
   if (typeof _viewMode !== 'undefined') applyViewMode(_viewMode);
 }
 let toastTimer;
+let _dupPendingItem = null;
+function showDuplicateToast(matchTitle, item) {
+  _dupPendingItem = item;
+  document.getElementById('dup-match-title').textContent = matchTitle;
+  document.getElementById('dup-toast').style.display = '';
+}
+function closeDupToast() {
+  document.getElementById('dup-toast').style.display = 'none';
+  _dupPendingItem = null;
+}
+async function forceQueueAdd() {
+  closeDupToast();
+  if (!_dupPendingItem) return;
+  await queueItem({..._dupPendingItem, force_add: true});
+}
+
 function showToast(msg, type = '') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = `toast ${type} show`;
@@ -3781,7 +3856,7 @@ async function loadUserDashboard() {
   if (nrEl) {
     const items = [...(nr?.movies ?? []), ...(nr?.series ?? [])].slice(0, 12);
     if (!items.length) {
-      nrEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem;padding:8px">Keine neuen Releases</div>`;
+      nrEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem;padding:8px">${t('dash.no_new')}</div>`;
     } else {
       nrEl.innerHTML = items.map(item => `
         <div style="flex-shrink:0;width:100px;cursor:pointer" onclick="openTmdbModal('${esc(item.name??item.title??'')}','${item.stream_id?'movie':'series'}','',null)">
@@ -3799,7 +3874,7 @@ async function loadUserDashboard() {
   const recentEl = document.getElementById('ue-recent');
   if (recentEl) {
     if (!h?.items?.length) {
-      recentEl.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>Noch keine Downloads</p></div>`;
+      recentEl.innerHTML = `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>${t('dash.no_recent')}</p></div>`;
     } else {
       recentEl.innerHTML = h.items.map(item => `
         <div class="card downloaded">
@@ -3878,7 +3953,7 @@ async function loadUsers() {
       ? `<button class="btn-icon" onclick="toggleSuspend('${esc(u.id)}',false,'${esc(u.username)}')">✅ Entsperren</button>`
       : `<button class="btn-icon danger" onclick="toggleSuspend('${esc(u.id)}',true,'${esc(u.username)}')">🚫 Sperren</button>`;
     const limitVal = u.queue_limit !== undefined ? u.queue_limit : '';
-    const limitDisplay = limitVal === '' ? '<span style="color:var(--muted)">Standard</span>'
+    const limitDisplay = limitVal === '' ? '<span style="color:var(--muted)"><?= t('sort.default') ?></span>'
       : limitVal == 0 ? '<span style="color:var(--red)">Gesperrt</span>'
       : `<span style="color:var(--orange)">${limitVal}/h</span>`;
     return `
@@ -3925,7 +4000,7 @@ async function toggleSuspend(id, suspend, username) {
   if (!confirm(action)) return;
   const r = await fetch(`${API}?action=suspend_user`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id, suspended: suspend})
+    body: JSON.stringify({...({id, suspended: suspend}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -3954,9 +4029,9 @@ async function loadActivityLog() {
     reset_password: '🔑', change_role: '🎭', change_own_password: '🔑',
   };
   const labels = {
-    queue_add: 'Film zur Queue', queue_add_bulk: 'Mehrere zur Queue', queue_remove: 'Aus Queue entfernt',
-    create_user: 'Benutzer angelegt', delete_user: 'Benutzer gelöscht',
-    suspend_user: 'Benutzer gesperrt', unsuspend_user: 'Benutzer entsperrt',
+    queue_add: 'Film zur Queue', queue_add_bulk: 'Mehrere zur Queue', queue_remove: t('queue.removed'),
+    create_user: t('users.created'), delete_user: 'Benutzer gelöscht',
+    suspend_user: t('users.suspended'), unsuspend_user: t('users.unsuspended'),
     reset_password: 'Passwort zurückgesetzt', change_role: 'Rolle geändert', change_own_password: 'Eigenes Passwort geändert',
   };
 
@@ -4020,7 +4095,7 @@ async function addSelectionToQueue() {
 
   const r = await fetch(`${API}?action=queue_add_bulk`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(items)
+    body: JSON.stringify({items, _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -4082,32 +4157,32 @@ async function submitUModal() {
     const r = await fetch(`${API}?action=create_user`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+      body: JSON.stringify({...({
         username: document.getElementById('umodal-username').value.trim(),
         password: document.getElementById('umodal-password').value,
         role:     document.getElementById('umodal-role').value,
-      })
+      }), _csrf: CSRF_TOKEN})
     });
     const d = await r.json();
     btn.disabled = false;
     if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
-    showToast('Benutzer angelegt', 'success');
+    showToast(t('users.created'), 'success');
     closeUModal(); loadUsers();
   } else {
     const id = document.getElementById('umodal-id').value;
     const r = await fetch(`${API}?action=update_user`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+      body: JSON.stringify({...({
         id,
         password: document.getElementById('umodal-password').value || undefined,
         role:     document.getElementById('umodal-role').value,
-      })
+      }), _csrf: CSRF_TOKEN})
     });
     const d = await r.json();
     btn.disabled = false;
     if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
-    showToast('Gespeichert', 'success');
+    showToast(t('users.saved'), 'success');
     closeUModal(); loadUsers();
   }
 }
@@ -4117,7 +4192,7 @@ async function deleteUser(id, username) {
   const r = await fetch(`${API}?action=delete_user`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({id})
+    body: JSON.stringify({...({id}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -4161,7 +4236,7 @@ async function openUserHistoryModal(username) {
   document.getElementById('user-history-modal').style.display = 'flex';
   document.getElementById('user-history-meta').textContent = username;
   document.getElementById('user-history-list').innerHTML =
-    `<div style="color:var(--muted);text-align:center;padding:24px">⏳ Lade…</div>`;
+    `<div style="color:var(--muted);text-align:center;padding:24px">${t('status.loading')}</div>`;
 
   const d = await api('user_download_history', {username});
   if (d.error) {
@@ -4175,7 +4250,7 @@ async function openUserHistoryModal(username) {
 
   if (!d.items?.length) {
     document.getElementById('user-history-list').innerHTML =
-      `<div style="color:var(--muted);text-align:center;padding:24px">Noch keine Downloads</div>`;
+      `<div style="color:var(--muted);text-align:center;padding:24px">${t('dash.no_recent')}</div>`;
     return;
   }
 
@@ -4239,7 +4314,7 @@ async function loadInvites() {
   if (!el) return;
   const invites = await api('list_invites');
   if (!invites?.length) {
-    el.innerHTML = `<div style="color:var(--muted);font-size:.8rem">Keine aktiven Einladungslinks</div>`;
+    el.innerHTML = `<div style="color:var(--muted);font-size:.8rem">${t('cfg.invite_none')}</div>`;
     return;
   }
   const roleColors = {viewer:'var(--muted)', editor:'var(--accent2)', admin:'var(--red)'};
@@ -4272,12 +4347,26 @@ async function deleteInvite(token, btn) {
   btn.disabled = true;
   const d = await apiPost('delete_invite', {token});
   if (d.error) { showToast('❌ ' + d.error, 'error'); btn.disabled = false; return; }
-  showToast('Einladung gelöscht', 'info');
+  showToast(t('invite.deleted'), 'info');
   loadInvites();
 }
 <?php endif; ?>
 
 // ── Profile / Change own password ─────────────────────────────
+async function setLanguage(lang, btn) {
+  const msg = document.getElementById('lang-msg');
+  const d = await apiPost('set_language', {lang});
+  if (d.error) { if (msg) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; } return; }
+  // Buttons aktualisieren
+  document.querySelectorAll('.lang-btn').forEach(b => {
+    b.style.borderColor = b.dataset.lang === lang ? 'var(--accent)' : '';
+    b.style.color = b.dataset.lang === lang ? 'var(--accent)' : '';
+  });
+  if (msg) { msg.textContent = '✓'; msg.className = 'settings-msg ok'; }
+  // Seite neu laden damit neue Sprache wirksam wird
+  setTimeout(() => location.reload(), 600);
+}
+
 async function changeOwnPassword() {
   const oldPw  = document.getElementById('prof-old-pw').value;
   const newPw  = document.getElementById('prof-new-pw').value;
@@ -4292,7 +4381,7 @@ async function changeOwnPassword() {
   const r = await fetch(`${API}?action=change_own_password`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({old_password: oldPw, new_password: newPw})
+    body: JSON.stringify({...({old_password: oldPw, new_password: newPw}), _csrf: CSRF_TOKEN})
   });
   const d = await r.json();
   if (d.error) {

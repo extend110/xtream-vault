@@ -418,7 +418,7 @@ body::before {
   .search-wrap { flex: 1; min-width: 0; max-width: none; }
   .filter-bar { gap: 6px; }
   .filter-btn { padding: 5px 10px; font-size: .65rem; }
-  .queue-pill { font-size: .7rem; padding: 4px 8px; flex-shrink: 0; }
+  .queue-pill { font-size: .7rem; padding: 4px 8px; flex-shrink: 0; display: none !important; }
   #limit-indicator { display: none !important; }
   #theme-toggle { flex-shrink: 0; }
 
@@ -724,7 +724,7 @@ body::before {
   box-shadow: 0 0 0 2px rgba(232,255,71,.25);
 }
 .card .select-check {
-  position: absolute; top: 8px; left: 8px;
+  position: absolute; bottom: 8px; left: 8px;
   width: 20px; height: 20px; border-radius: 50%;
   background: var(--bg3); border: 2px solid var(--border);
   display: flex; align-items: center; justify-content: center;

@@ -5,6 +5,8 @@
  * URL: /invite.php?token=<token>
  */
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
+session_start_safe();
 
 $token   = trim($_GET['token'] ?? '');
 $error   = '';
@@ -38,8 +40,9 @@ if ($token === '') {
 
 // Formular verarbeiten
 if ($invite && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    require_once __DIR__ . '/auth.php';
-
+    if (!csrf_verify()) {
+        $error = 'Ungültige Anfrage — bitte Seite neu laden.';
+    } else {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password']  ?? '';
     $password2 = $_POST['password2'] ?? '';
@@ -72,6 +75,7 @@ if ($invite && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $invite  = null;
         }
     }
+    } // end csrf else
 }
 
 $roleLabels = ['viewer' => 'Viewer', 'editor' => 'Editor', 'admin' => 'Admin'];
@@ -184,6 +188,7 @@ $roleLabels = ['viewer' => 'Viewer', 'editor' => 'Editor', 'admin' => 'Admin'];
   <?php endif; ?>
 
   <form method="post" action="invite.php?token=<?= htmlspecialchars($token) ?>">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
     <div class="field">
       <label>Benutzername</label>
       <input type="text" name="username" autocomplete="username" required

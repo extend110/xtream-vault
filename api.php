@@ -2,6 +2,11 @@
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/config.php';
+
+// ── Request-Body einmalig lesen und cachen (php://input nur einmal lesbar) ────
+$_RAW_BODY  = file_get_contents('php://input');
+$_JSON_BODY = json_decode($_RAW_BODY ?: '{}', true) ?? [];
+
 require_once __DIR__ . '/auth.php';
 
 // ── Einmalige Migration: alte Dateinamen → server-spezifische Namen ───────────
@@ -62,6 +67,16 @@ if (!$api_key_auth && !in_array($action, $public_actions)) {
     $current_user = require_login();
 }
 
+// ─── CSRF-Schutz für alle POST-Requests (außer API-Key-Auth und öffentliche Endpoints) ──
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$api_key_auth && !in_array($action, $public_actions)) {
+    session_start_safe();
+    if (!csrf_verify($_JSON_BODY)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'CSRF token invalid or missing']);
+        exit;
+    }
+}
+
 // ─── Nicht konfiguriert → Fehler außer bei Config-Aktionen ───────────────────
 $config_actions = ['get_config', 'save_config',
     'external_create_user', 'external_list_users', 'external_suspend_user',
@@ -73,6 +88,14 @@ if (!is_configured() && !in_array($action, $config_actions) && !in_array($action
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function clean_title_for_dedup(string $t): string {
+    $t = mb_strtolower($t);
+    $t = preg_replace('/\b(19|20)\d{2}\b/', '', $t); // Jahr entfernen
+    $t = preg_replace('/[^a-z0-9\s]/', '', $t);       // Sonderzeichen
+    $t = preg_replace('/\s+/', ' ', trim($t));
+    return $t;
+}
+
 function xtream(string $action, array $extra = []): mixed {
     $params = array_merge(['username' => USERNAME, 'password' => PASSWORD, 'action' => $action], $extra);
     $url    = 'http://' . SERVER_IP . ':' . PORT . '/player_api.php?' . http_build_query($params);
@@ -165,7 +188,7 @@ switch ($action) {
 
     case 'dismiss_new_release':
         require_permission('browse');
-        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d    = json_decode($_RAW_BODY, true) ?? [];
         $id   = (string)($d['id']   ?? '');
         $type = $d['type'] ?? 'movie'; // 'movie' or 'series'
         if ($id === '') { echo json_encode(['error' => 'Missing id']); break; }
@@ -210,7 +233,7 @@ switch ($action) {
 
     case 'stream_info':
         require_permission('browse');
-        $d   = $_GET + (json_decode(file_get_contents('php://input'), true) ?? []);
+        $d   = $_GET + (json_decode($_RAW_BODY, true) ?? []);
         $sid = (string)($d['stream_id'] ?? '');
         $type = $d['type'] ?? 'movie';
         $ext  = $d['ext']  ?? 'mp4';
@@ -341,7 +364,7 @@ switch ($action) {
 
     case 'tmdb_info':
         require_permission('browse');
-        $d     = $_GET + (json_decode(file_get_contents('php://input'), true) ?? []);
+        $d     = $_GET + (json_decode($_RAW_BODY, true) ?? []);
         $title = trim($d['title'] ?? '');
         $type  = $d['type'] ?? 'movie';
         $year  = trim($d['year']  ?? '');
@@ -487,7 +510,7 @@ switch ($action) {
         break;
 
     case 'login':
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d      = json_decode($_RAW_BODY, true) ?? [];
         $result = attempt_login(trim($d['username'] ?? ''), $d['password'] ?? '');
         if ($result === 'suspended') {
             http_response_code(403);
@@ -530,7 +553,7 @@ switch ($action) {
 
     case 'create_user':
         require_permission('users');
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d      = json_decode($_RAW_BODY, true) ?? [];
         $result = create_user(trim($d['username'] ?? ''), $d['password'] ?? '', $d['role'] ?? 'viewer');
         if (is_string($result)) {
             http_response_code(400);
@@ -559,7 +582,7 @@ switch ($action) {
 
     case 'update_user':
         require_permission('users');
-        $d  = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d  = json_decode($_RAW_BODY, true) ?? [];
         $id = $d['id'] ?? '';
         if (!empty($d['password'])) {
             $r = admin_reset_password($id, $d['password']);
@@ -578,7 +601,7 @@ switch ($action) {
 
     case 'set_user_limit':
         require_permission('users');
-        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d     = json_decode($_RAW_BODY, true) ?? [];
         $id    = $d['id'] ?? '';
         $limit = $d['queue_limit'] ?? ''; // '' = Rollen-Standard, '0' = gesperrt, '5' = 5/h
         $users = load_users();
@@ -597,7 +620,7 @@ switch ($action) {
 
     case 'suspend_user':
         require_permission('users');
-        $d         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d         = json_decode($_RAW_BODY, true) ?? [];
         $id        = $d['id'] ?? '';
         $suspended = (bool)($d['suspended'] ?? true);
         if ($id === $current_user['id']) {
@@ -612,7 +635,7 @@ switch ($action) {
 
     case 'delete_user':
         require_permission('users');
-        $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
+        $id = json_decode($_RAW_BODY, true)['id'] ?? '';
         if ($id === $current_user['id']) {
             http_response_code(400); echo json_encode(['error' => 'Du kannst dich nicht selbst löschen']); break;
         }
@@ -623,8 +646,23 @@ switch ($action) {
         echo json_encode(['ok' => true]);
         break;
 
+    case 'set_language':
+        require_permission('browse');
+        $lang = preg_replace('/[^a-z]/', '', trim($_JSON_BODY['lang'] ?? 'de'));
+        $allowed = ['de', 'en'];
+        if (!in_array($lang, $allowed)) { echo json_encode(['error' => 'Invalid language']); break; }
+        $_SESSION['lang'] = $lang;
+        // In users.json speichern
+        $users = load_users();
+        foreach ($users as &$u) {
+            if ($u['id'] === $current_user['id']) { $u['lang'] = $lang; break; }
+        }
+        save_users($users);
+        echo json_encode(['ok' => true, 'lang' => $lang]);
+        break;
+
     case 'change_own_password':
-        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d   = json_decode($_RAW_BODY, true) ?? [];
         $old = $d['old_password'] ?? '';
         $new = $d['new_password'] ?? '';
         if (!password_verify($old, $current_user['password'])) {
@@ -671,7 +709,7 @@ switch ($action) {
 
     case 'save_config':
         require_permission('settings');
-        $d = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d = json_decode($_RAW_BODY, true) ?? [];
         $current = load_config();
 
         $new = [
@@ -764,7 +802,7 @@ switch ($action) {
     // ── Einladungslinks ───────────────────────────────────────────────────────
     case 'create_invite':
         require_permission('users');
-        $d       = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d       = json_decode($_RAW_BODY, true) ?? [];
         $role    = in_array($d['role'] ?? '', ['viewer','editor','admin']) ? $d['role'] : 'viewer';
         $hours   = max(1, min(168, (int)($d['expires_hours'] ?? 24))); // 1h–7d, default 24h
         $note    = trim($d['note'] ?? '');
@@ -803,7 +841,7 @@ switch ($action) {
 
     case 'delete_invite':
         require_permission('users');
-        $d     = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d     = json_decode($_RAW_BODY, true) ?? [];
         $token = $d['token'] ?? '';
         $invites = file_exists(INVITES_FILE)
             ? (json_decode(file_get_contents(INVITES_FILE), true) ?? [])
@@ -829,7 +867,7 @@ switch ($action) {
 
     case 'save_server':
         require_permission('settings');
-        $d       = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d       = json_decode($_RAW_BODY, true) ?? [];
         $sid     = trim($d['server_id'] ?? '');
         $name    = trim($d['name']      ?? '');
         if ($sid === '' || $name === '') {
@@ -860,7 +898,7 @@ switch ($action) {
 
     case 'delete_server':
         require_permission('settings');
-        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d   = json_decode($_RAW_BODY, true) ?? [];
         $sid = trim($d['server_id'] ?? '');
         if ($sid === '') { echo json_encode(['error' => 'server_id fehlt']); break; }
         if ($sid === SERVER_ID) { echo json_encode(['error' => 'Aktiver Server kann nicht gelöscht werden']); break; }
@@ -874,7 +912,7 @@ switch ($action) {
 
     case 'switch_server':
         require_permission('settings');
-        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d   = json_decode($_RAW_BODY, true) ?? [];
         $sid = trim($d['server_id'] ?? '');
         $servers = file_exists(SERVERS_FILE)
             ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
@@ -902,7 +940,7 @@ switch ($action) {
     case 'webhook_test':
         require_permission('settings');
         require_once __DIR__ . '/notify.php';
-        $d = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d = json_decode($_RAW_BODY, true) ?? [];
         // Temporär mit den gesendeten Werten testen (noch nicht gespeichert)
         $testUrl  = trim($d['webhook_url']  ?? WEBHOOK_URL);
         $testType = trim($d['webhook_type'] ?? WEBHOOK_TYPE);
@@ -1130,7 +1168,7 @@ switch ($action) {
 
     case 'telegram_test':
         require_permission('settings');
-        $d         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d         = json_decode($_RAW_BODY, true) ?? [];
         $sentToken = trim($d['bot_token'] ?? '');
         $sentChat  = trim($d['chat_id']  ?? '');
         // Leerer oder maskierter Token → direkt aus config.json lesen
@@ -1155,7 +1193,7 @@ switch ($action) {
 
     case 'rclone_test':
         require_permission('settings');
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d      = json_decode($_RAW_BODY, true) ?? [];
         $bin    = trim($d['rclone_bin']    ?? 'rclone');
         $remote = trim($d['rclone_remote'] ?? '');
         if ($remote === '') { echo json_encode(['error' => 'Remote-Name fehlt']); break; }
@@ -1324,7 +1362,8 @@ switch ($action) {
     case 'queue_add_bulk':
         // Mehrere Items auf einmal zur Queue hinzufügen
         require_permission('queue_add');
-        $items = json_decode(file_get_contents('php://input'), true) ?? [];
+        $body  = json_decode($_RAW_BODY, true) ?? [];
+        $items = $body['items'] ?? $body; // Fallback: alter Format war direkt ein Array
         if (!is_array($items) || empty($items)) { echo json_encode(['error' => 'No items']); break; }
 
         $queue      = load_queue();
@@ -1420,7 +1459,7 @@ switch ($action) {
             ]);
             break;
         }
-        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d    = json_decode($_RAW_BODY, true) ?? [];
         $sid  = (string)($d['stream_id'] ?? '');
         $type = $d['type'] ?? 'movie';
         $ext  = $d['container_extension'] ?? 'mp4';
@@ -1468,6 +1507,52 @@ switch ($action) {
 
         // stream_url immer serverseitig berechnen – Client-Angabe wird ignoriert
         $server_stream_url = stream_url($type === 'episode' ? 'series' : 'movie', $sid, $ext);
+
+        // ── Dubletten-Erkennung (nur Movies, nur wenn nicht force_add) ─────────
+        if ($type === 'movie' && empty($_JSON_BODY['force_add'])) {
+            $incomingTitle = clean_title_for_dedup($d['title'] ?? '');
+
+            if ($incomingTitle !== '') {
+                $indexFile = DOWNLOADED_INDEX_FILE;
+                $index = file_exists($indexFile)
+                    ? (json_decode(file_get_contents($indexFile), true) ?? [])
+                    : [];
+
+                $dupFound = null;
+                foreach ($index as $entry) {
+                    $indexTitle = clean_title_for_dedup($entry['title'] ?? '');
+                    if ($indexTitle === '') continue;
+
+                    // Exakter Treffer nach Bereinigung
+                    if ($indexTitle === $incomingTitle) {
+                        $dupFound = $entry['title'];
+                        break;
+                    }
+
+                    // Fuzzy: Levenshtein ≤ 2 (nur bei Titeln ≥ 5 Zeichen)
+                    if (mb_strlen($incomingTitle) >= 5 && mb_strlen($indexTitle) >= 5) {
+                        $lev = levenshtein(
+                            mb_substr($incomingTitle, 0, 255),
+                            mb_substr($indexTitle, 0, 255)
+                        );
+                        if ($lev <= 2) {
+                            $dupFound = $entry['title'];
+                            break;
+                        }
+                    }
+                }
+
+                if ($dupFound !== null) {
+                    echo json_encode([
+                        'ok'          => true,
+                        'already'     => true,
+                        'reason'      => 'duplicate',
+                        'match_title' => $dupFound,
+                    ]);
+                    break;
+                }
+            }
+        }
 
         $queue[] = [
             'stream_id'           => $sid,
@@ -1530,7 +1615,7 @@ switch ($action) {
 
     case 'favourite_toggle':
         // Favorit hinzufügen oder entfernen
-        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d    = json_decode($_RAW_BODY, true) ?? [];
         $sid  = (string)($d['stream_id'] ?? '');
         $type = $d['type'] ?? 'movie'; // 'movie' oder 'series'
         if ($sid === '') { echo json_encode(['error' => 'Missing stream_id']); break; }
@@ -1579,7 +1664,7 @@ switch ($action) {
     case 'set_priority':
         // Admin-only: Priorität eines Queue-Eintrags ändern
         require_permission('queue_remove');
-        $d   = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d   = json_decode($_RAW_BODY, true) ?? [];
         $sid = (string)($d['stream_id'] ?? '');
         $prio = (int)($d['priority'] ?? 2);
         if (!in_array($prio, [1, 2, 3])) { echo json_encode(['error' => 'Ungültige Priorität (1/2/3)']); break; }
@@ -1601,7 +1686,7 @@ switch ($action) {
     case 'queue_retry':
         // Admin-only: fehlgeschlagenes Item sofort neu einreihen
         require_permission('queue_remove');
-        $sid   = (string)(json_decode(file_get_contents('php://input'), true)['stream_id'] ?? '');
+        $sid   = (string)(json_decode($_RAW_BODY, true)['stream_id'] ?? '');
         $queue = load_queue();
         $found = false;
         foreach ($queue as &$qi) {
@@ -1627,7 +1712,7 @@ switch ($action) {
             echo json_encode(['error' => 'forbidden']);
             break;
         }
-        $sid   = (string)(json_decode(file_get_contents('php://input'), true)['stream_id'] ?? '');
+        $sid   = (string)(json_decode($_RAW_BODY, true)['stream_id'] ?? '');
         $queue = load_queue();
         $found = null;
         foreach ($queue as $qi) {
@@ -1659,7 +1744,7 @@ switch ($action) {
         // Entfernt ein Item aus downloaded.json und downloaded_index.json
         // damit es erneut zur Queue hinzugefügt werden kann
         require_permission('settings');
-        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d    = json_decode($_RAW_BODY, true) ?? [];
         $sid  = (string)($d['stream_id'] ?? '');
         $type = $d['type'] ?? 'movie'; // 'movie' oder 'episode'
         if ($sid === '') { http_response_code(400); echo json_encode(['error' => 'Missing stream_id']); break; }
@@ -1910,7 +1995,7 @@ switch ($action) {
 
     case 'backup_restore':
         require_permission('settings');
-        $name = basename(json_decode(file_get_contents('php://input'), true)['name'] ?? '');
+        $name = basename(json_decode($_RAW_BODY, true)['name'] ?? '');
         if (!preg_match('/^backup_[\d_-]+\.zip$/', $name)) { echo json_encode(['error' => 'Ungültiger Dateiname']); break; }
         $path = DATA_DIR . '/backups/' . $name;
         if (!file_exists($path)) { echo json_encode(['error' => 'Backup nicht gefunden']); break; }
@@ -1950,7 +2035,7 @@ switch ($action) {
 
     case 'backup_delete':
         require_permission('settings');
-        $name = basename(json_decode(file_get_contents('php://input'), true)['name'] ?? '');
+        $name = basename(json_decode($_RAW_BODY, true)['name'] ?? '');
         if (!preg_match('/^backup_[\d_-]+\.zip$/', $name)) { echo json_encode(['error' => 'Ungültiger Dateiname']); break; }
         $path = DATA_DIR . '/backups/' . $name;
         if (!file_exists($path)) { echo json_encode(['error' => 'Datei nicht gefunden']); break; }
@@ -2254,7 +2339,7 @@ switch ($action) {
     case 'external_create_user':
         // Nur via API-Key erreichbar (geprüft oben)
         // Parameter aus POST-Body (JSON) oder GET-Query-String
-        $d = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d = json_decode($_RAW_BODY, true) ?? [];
         $username = trim($d['username'] ?? $_GET['username'] ?? '');
         $password = $d['password']      ?? $_GET['password'] ?? '';
         $role     = $d['role']          ?? $_GET['role']     ?? 'viewer';
@@ -2285,7 +2370,7 @@ switch ($action) {
         break;
 
     case 'external_suspend_user':
-        $d         = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d         = json_decode($_RAW_BODY, true) ?? [];
         $target    = trim($d['username'] ?? $_GET['username'] ?? '');
         $suspended = isset($d['suspended']) ? (bool)$d['suspended']
                    : (isset($_GET['suspended']) ? filter_var($_GET['suspended'], FILTER_VALIDATE_BOOLEAN) : true);
@@ -2311,7 +2396,7 @@ switch ($action) {
         break;
 
     case 'external_delete_user':
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d      = json_decode($_RAW_BODY, true) ?? [];
         $target = trim($d['username'] ?? $_GET['username'] ?? '');
         if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
         $users  = load_users();
@@ -2324,7 +2409,7 @@ switch ($action) {
 
     case 'external_update_user':
         // Passwort oder Rolle eines Users ändern
-        $d      = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d      = json_decode($_RAW_BODY, true) ?? [];
         $target = trim($d['username'] ?? $_GET['username'] ?? '');
         if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
         $users = load_users();
@@ -2387,7 +2472,7 @@ switch ($action) {
 
     case 'create_api_key':
         require_permission('settings');
-        $d    = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d    = json_decode($_RAW_BODY, true) ?? [];
         $name = trim($d['name'] ?? 'API Key');
         $key  = create_api_key($name, $current_user['username']);
         // Einzige Gelegenheit den vollen Key zu sehen
@@ -2396,13 +2481,13 @@ switch ($action) {
 
     case 'revoke_api_key':
         require_permission('settings');
-        $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
+        $id = json_decode($_RAW_BODY, true)['id'] ?? '';
         echo json_encode(['ok' => revoke_api_key($id)]);
         break;
 
     case 'reveal_api_key':
         require_permission('settings');
-        $d        = json_decode(file_get_contents('php://input'), true) ?? [];
+        $d        = json_decode($_RAW_BODY, true) ?? [];
         $id       = trim($d['id']       ?? '');
         $password = $d['password'] ?? '';
         if ($id === '' || $password === '') { echo json_encode(['error' => 'Fehlende Parameter']); break; }
@@ -2432,7 +2517,7 @@ switch ($action) {
 
     case 'delete_api_key':
         require_permission('settings');
-        $id = json_decode(file_get_contents('php://input'), true)['id'] ?? '';
+        $id = json_decode($_RAW_BODY, true)['id'] ?? '';
         echo json_encode(['ok' => delete_api_key($id)]);
         break;
 

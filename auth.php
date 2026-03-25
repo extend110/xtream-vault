@@ -249,6 +249,35 @@ function session_start_safe(): void {
     }
 }
 
+function csrf_token(): string {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrf_verify(array $jsonBody = []): bool {
+    $token = '';
+
+    // 1. JSON-Body (_csrf Feld)
+    if (isset($jsonBody['_csrf'])) {
+        $token = $jsonBody['_csrf'];
+    }
+
+    // 2. POST-Feld (HTML-Formulare)
+    if ($token === '') $token = $_POST['csrf_token'] ?? '';
+
+    // 3. Header-Fallback
+    if ($token === '') {
+        foreach (getallheaders() as $k => $v) {
+            if (strtolower($k) === 'x-csrf-token') { $token = $v; break; }
+        }
+    }
+
+    return !empty($_SESSION['csrf_token'])
+        && hash_equals($_SESSION['csrf_token'], $token);
+}
+
 function attempt_login(string $username, string $password): array|false|string {
     $user = find_user($username);
     if (!$user) return false;
@@ -267,6 +296,7 @@ function attempt_login(string $username, string $password): array|false|string {
     $_SESSION['username']  = $user['username'];
     $_SESSION['role']      = $user['role'];
     $_SESSION['logged_in'] = true;
+    $_SESSION['lang']      = $user['lang'] ?? 'de';
     return $user;
 }
 
@@ -312,6 +342,7 @@ function current_user(): ?array {
     if (!$user) { logout(); return null; }
     // Session aktuell halten
     $_SESSION['role'] = $user['role'];
+    $_SESSION['lang'] = $user['lang'] ?? 'de';
     return $user;
 }
 

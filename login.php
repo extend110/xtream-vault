@@ -27,6 +27,11 @@ $error = '';
 // ── POST-Handler ──────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
+    // CSRF-Prüfung für alle Formular-Posts außer logout
+    if ($action !== 'logout' && !csrf_verify()) {
+        $error = 'Ungültige Anfrage — bitte Seite neu laden.';
+        $action = ''; // Kein weiteres Processing
+    }
 
     if ($action === 'login') {
         $result = attempt_login(trim($_POST['username'] ?? ''), $_POST['password'] ?? '');
@@ -210,6 +215,7 @@ body::before {
     <div class="error-msg"><?= htmlspecialchars($error) ?></div>
     <form method="post">
       <input type="hidden" name="action" value="setup">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
       <div class="field">
         <label>Benutzername</label>
         <input type="text" name="username" autocomplete="username" autofocus required
@@ -231,6 +237,7 @@ body::before {
     <div class="error-msg"><?= htmlspecialchars($error) ?></div>
     <form method="post">
       <input type="hidden" name="action" value="login">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
       <div class="field">
         <label>Benutzername</label>
         <input type="text" name="username" autocomplete="username" autofocus required
