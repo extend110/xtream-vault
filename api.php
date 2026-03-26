@@ -966,7 +966,6 @@ switch ($action) {
         $d   = json_decode($_RAW_BODY, true) ?? [];
         $sid = trim($d['server_id'] ?? '');
         if ($sid === '') { echo json_encode(['error' => 'server_id fehlt']); break; }
-        if ($sid === SERVER_ID) { echo json_encode(['error' => 'Aktiver Server kann nicht gelöscht werden']); break; }
 
         // Prüfen ob ein Download auf diesem Server gerade läuft
         $srvQueueFile = DATA_DIR . '/queue_' . $sid . '.json';
