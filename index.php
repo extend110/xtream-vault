@@ -170,8 +170,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
       <!-- 1. Schnellzugriff-Buttons -->
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
-        <button class="btn-secondary" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)">▶ <?= t('queue.start') ?></button>
-        <button class="btn-secondary" onclick="dashRebuildCache()">🔄 <?= t('cfg.cache_build') ?></button>
+        <button class="btn-secondary" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)"><?= t('queue.start') ?></button>
+        <button class="btn-secondary" onclick="dashRebuildCache()"><?= t('cfg.cache_build') ?></button>
         <button class="btn-secondary" onclick="dashClearDone()">🗑 Erledigte leeren</button>
         <button class="btn-secondary danger" onclick="dashClearAll()">✕ <?= t('queue.clear') ?></button>
         <button class="btn-secondary" onclick="showView('settings')">⚙️ <?= t('nav.settings') ?></button>
@@ -897,7 +897,6 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-actions">
-          <button class="btn-secondary" onclick="testConnection()"><?= t('cfg.test_connection') ?></button>
           <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()"><?= t('cfg.save') ?></button>
         </div>
         <div class="settings-msg" id="settings-msg"></div>
