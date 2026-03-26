@@ -378,4 +378,6 @@ return [
     'nav.updates' => 'Updates',
 
     'search.all_servers' => 'Alle Server',
+
+    'cfg.server_add' => 'Server hinzufügen',
 ];

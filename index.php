@@ -2704,12 +2704,7 @@ async function deleteServer(serverId, name) {
 
 async function loadConfig() {
   const c = await api('get_config');
-  document.getElementById('cfg-server-ip').value    = c.server_ip     ?? '';
-  document.getElementById('cfg-port').value          = c.port          ?? '80';
-  document.getElementById('cfg-username').value      = c.username      ?? '';
-  document.getElementById('cfg-password').value      = '';
-  document.getElementById('cfg-dest-path').value     = c.dest_path     ?? '';
-  document.getElementById('cfg-password').placeholder = c.password ? t('cfg.pw_set') : 'Xtream Passwort';
+  document.getElementById('cfg-dest-path').value = c.dest_path ?? '';
   // rclone
   const rcloneEnabled = c.rclone_enabled ?? false;
   document.getElementById('cfg-rclone-enabled').checked = rcloneEnabled;
@@ -2722,8 +2717,6 @@ async function loadConfig() {
   document.getElementById('cfg-editor-series').checked = c.editor_series_enabled ?? true;
   document.getElementById('cfg-tmdb-api-key').value    = c.tmdb_api_key ?? '';
   document.getElementById('cfg-tmdb-api-key').placeholder = c.tmdb_api_key === '••••••••' ? t('cfg.pw_saved') : t('cfg.tmdb_placeholder');
-  const sidEl = document.getElementById('cfg-server-id-display');
-  if (sidEl && c.server_id) sidEl.textContent = c.server_id;
   const tgToken = document.getElementById('cfg-telegram-bot-token');
   const tgChat  = document.getElementById('cfg-telegram-chat-id');
   if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? t('cfg.pw_saved') : t('cfg.telegram_placeholder'); }
@@ -2795,10 +2788,6 @@ async function refreshRcloneCache(btn) {
 
 function collectConfig() {
   return {
-    server_ip:      document.getElementById('cfg-server-ip').value.trim(),
-    port:           document.getElementById('cfg-port').value.trim() || '80',
-    username:       document.getElementById('cfg-username').value.trim(),
-    password:       document.getElementById('cfg-password').value,
     dest_path:      document.getElementById('cfg-dest-path').value.trim(),
     rclone_enabled: document.getElementById('cfg-rclone-enabled').checked,
     rclone_remote:  document.getElementById('cfg-rclone-remote').value.trim(),
@@ -3122,12 +3111,7 @@ async function saveConfig() {
   if (d.error) {
     setSettingsMsg('❌ ' + d.error, 'err');
   } else {
-    if (d.server_changed) {
-      setSettingsMsg('✅ Gespeichert — Server gewechselt, neue Datenbasis aktiv', 'ok');
-      showToast('🔄 Server gewechselt — Downloads, Queue und Cache sind jetzt server-spezifisch', 'info');
-    } else {
-      setSettingsMsg('✅ Einstellungen gespeichert', 'ok');
-    }
+    setSettingsMsg('✅ Einstellungen gespeichert', 'ok');
     loadStats();
     refreshDashboard();
     loadServers();

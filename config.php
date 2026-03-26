@@ -210,7 +210,14 @@ function send_telegram(string $text): bool|string {
 
 // ── Prüfen ob Grundkonfiguration vorhanden ────────────────────────────────────
 function is_configured(): bool {
-    return SERVER_IP !== '' && USERNAME !== '' && PASSWORD !== '';
+    // Primär: config.json hat Server-Zugangsdaten (Rückwärtskompatibilität)
+    if (SERVER_IP !== '' && USERNAME !== '' && PASSWORD !== '') return true;
+    // Alternativ: mindestens ein Server in servers.json
+    if (defined('SERVERS_FILE') && file_exists(SERVERS_FILE)) {
+        $servers = json_decode(file_get_contents(SERVERS_FILE), true) ?? [];
+        return count($servers) > 0;
+    }
+    return false;
 }
 
 // ── Titel-Bereinigung ─────────────────────────────────────────────────────────
