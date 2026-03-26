@@ -79,6 +79,11 @@ define('NEW_RELEASES_FILE',  DATA_DIR . '/new_releases.json');
 define('TELEGRAM_BOT_TOKEN', $_cfg['telegram_bot_token'] ?? '');
 define('TELEGRAM_CHAT_ID',   $_cfg['telegram_chat_id']   ?? '');
 define('TELEGRAM_ENABLED',   (bool)($_cfg['telegram_enabled'] ?? false));
+define('TG_NOTIFY_SUCCESS',  (bool)($_cfg['tg_notify_success']  ?? true));
+define('TG_NOTIFY_ERROR',    (bool)($_cfg['tg_notify_error']    ?? true));
+define('TG_NOTIFY_QUEUE_DONE',(bool)($_cfg['tg_notify_queue_done'] ?? false));
+define('TG_NOTIFY_DISK_LOW', (bool)($_cfg['tg_notify_disk_low'] ?? false));
+define('TG_DISK_LOW_GB',     (float)($_cfg['tg_disk_low_gb']    ?? 10));
 
 // ── VPN (WireGuard) ───────────────────────────────────────────────────────────
 define('VPN_ENABLED',    (bool)($_cfg['vpn_enabled']    ?? false));

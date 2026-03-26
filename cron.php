@@ -86,6 +86,40 @@ function clog(string $msg): void {
     }
 }
 
+/**
+ * Telegram-Nachricht via live-geladener Config senden.
+ * Liest config.json neu — so sind Änderungen während des Runs wirksam.
+ */
+function tg_notify(string $msg, string $type = 'success'): void {
+    $cfg      = load_config();
+    $enabled  = (bool)($cfg['telegram_enabled']    ?? false);
+    $token    = $cfg['telegram_bot_token'] ?? '';
+    $chatId   = $cfg['telegram_chat_id']   ?? '';
+    if (!$enabled || $token === '' || $chatId === '') return;
+
+    // Typ-spezifische Einstellung prüfen
+    $typeKey = [
+        'success'    => 'tg_notify_success',
+        'error'      => 'tg_notify_error',
+        'queue_done' => 'tg_notify_queue_done',
+        'disk_low'   => 'tg_notify_disk_low',
+    ][$type] ?? null;
+    if ($typeKey && !((bool)($cfg[$typeKey] ?? true))) return;
+
+    $url  = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+    $body = json_encode(['chat_id' => $chatId, 'text' => $msg, 'parse_mode' => 'HTML']);
+    $ctx  = stream_context_create(['http' => [
+        'method'  => 'POST',
+        'header'  => "Content-Type: application/json\r\nUser-Agent: XtreamVault/1.0\r\n",
+        'content' => $body,
+        'timeout' => 8,
+    ]]);
+    $raw  = @file_get_contents($url, false, $ctx);
+    if ($raw === false) { clog("WARN: Telegram nicht erreichbar"); return; }
+    $resp = json_decode($raw, true);
+    if (!($resp['ok'] ?? false)) clog("WARN: Telegram-Fehler — " . ($resp['description'] ?? 'unbekannt'));
+}
+
 function list_rclone_files(string $remote, string $path): array {
     $cmd = escapeshellcmd(RCLONE_BIN) . ' lsf -R ' . escapeshellarg($remote . ':' . $path) . ' 2>&1';
     exec($cmd, $out, $ret);
@@ -754,30 +788,10 @@ foreach ($queue as &$item) {
             @file_put_contents(DATA_DIR . '/new_releases.json', json_encode($nr, JSON_UNESCAPED_UNICODE));
         }
 
-        // Telegram-Benachrichtigung — live aus config lesen (Einstellungen können sich während des Runs ändern)
-        $liveConfig  = load_config();
-        $tgEnabled   = (bool)($liveConfig['telegram_enabled']   ?? false);
-        $tgToken     = $liveConfig['telegram_bot_token'] ?? '';
-        $tgChatId    = $liveConfig['telegram_chat_id']   ?? '';
-        if ($tgEnabled && $tgToken !== '' && $tgChatId !== '') {
-            // Dateigröße: tatsächlich übertragene Bytes
-            $reportSize = $downloadedBytes;
-            $typeLabel  = $type === 'movie' ? '🎬 Film' : '📺 Episode';
-            $sizeStr    = $reportSize > 0 ? "\n📦 " . round($reportSize / 1048576) . ' MB' : '';
-            $msg = "✅ <b>Download abgeschlossen</b>\n{$typeLabel}: <b>" . htmlspecialchars($title, ENT_XML1) . "</b>{$sizeStr}";
-            // Temporär define-Werte mit Live-Werten überschreiben geht nicht —
-            // send_telegram() direkt aufrufen mit lokalen Variablen
-            $tgUrl  = 'https://api.telegram.org/bot' . $tgToken . '/sendMessage';
-            $tgBody = json_encode(['chat_id' => $tgChatId, 'text' => $msg, 'parse_mode' => 'HTML']);
-            $tgCtx  = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $tgBody, 'timeout' => 8]]);
-            $tgRaw  = @file_get_contents($tgUrl, false, $tgCtx);
-            if ($tgRaw === false) {
-                clog("WARN: Telegram nicht erreichbar");
-            } else {
-                $tgResp = json_decode($tgRaw, true);
-                if (!($tgResp['ok'] ?? false)) clog("WARN: Telegram-Fehler — " . ($tgResp['description'] ?? 'unbekannt'));
-            }
-        }
+        // Telegram: Download abgeschlossen
+        $typeLabel = $type === 'movie' ? '🎬 Film' : '📺 Episode';
+        $sizeStr   = $downloadedBytes > 0 ? "\n📦 " . round($downloadedBytes / 1048576) . ' MB' : '';
+        tg_notify("✅ <b>Download abgeschlossen</b>\n{$typeLabel}: <b>" . htmlspecialchars($title, ENT_XML1) . "</b>{$sizeStr}", 'success');
         // rclone-Cache aktualisieren: neu hochgeladene Datei eintragen
         if (RCLONE_ENABLED && isset($rcloneFileCache, $rcloneCacheFile)) {
             $uploadedFilename = basename($relPath);
@@ -791,6 +805,9 @@ foreach ($queue as &$item) {
         $item['error']  = 'Download fehlgeschlagen (' . date('Y-m-d H:i:s') . ')';
         clog("ERROR: $title");
         $errors++;
+        // Telegram: Fehler-Benachrichtigung
+        $typeLabel = $type === 'movie' ? '🎬 Film' : '📺 Episode';
+        tg_notify("❌ <b>Download fehlgeschlagen</b>\n{$typeLabel}: <b>" . htmlspecialchars($title, ENT_XML1) . "</b>", 'error');
     }
     save_queue_item_status($sid, $item);
 }
@@ -851,8 +868,34 @@ if ($processed > 0) {
     $totalBytes = 0;
     if (file_exists(DOWNLOAD_HISTORY_FILE)) {
         $hist = json_decode(@file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [];
-        // Bytes der letzten $processed Einträge summieren
         $totalBytes = array_sum(array_column(array_slice($hist, 0, $processed), 'bytes'));
+    }
+    // Telegram: Queue abgeschlossen
+    $sizeStr  = $totalBytes > 0 ? "\n📦 " . round($totalBytes / 1073741824, 2) . ' GB' : '';
+    $errStr   = $errors > 0 ? "\n⚠️ {$errors} Fehler" : '';
+    $queueNow = load_queue();
+    $pending  = count(array_filter($queueNow, fn($q) => in_array($q['status'] ?? '', ['pending'])));
+    $moreStr  = $pending > 0 ? "\n⏳ {$pending} weitere in Queue" : '';
+    tg_notify(
+        "🏁 <b>Queue-Run abgeschlossen</b>\n✅ {$processed} heruntergeladen{$sizeStr}{$errStr}{$moreStr}",
+        'queue_done'
+    );
+}
+
+// Telegram: Speicherplatz-Warnung
+if (!RCLONE_ENABLED && DEST_PATH !== '') {
+    $cfg = load_config();
+    $lowGb = (float)($cfg['tg_disk_low_gb'] ?? 10);
+    $path  = is_dir(DEST_PATH) ? DEST_PATH : dirname(DEST_PATH);
+    if (is_dir($path)) {
+        $freeBytes = disk_free_space($path);
+        if ($freeBytes !== false && ($freeBytes / 1073741824) < $lowGb) {
+            $freeGb = round($freeBytes / 1073741824, 1);
+            tg_notify(
+                "⚠️ <b>Speicherplatz niedrig</b>\nNoch <b>{$freeGb} GB</b> frei auf " . htmlspecialchars(DEST_PATH, ENT_XML1),
+                'disk_low'
+            );
+        }
     }
 }
 

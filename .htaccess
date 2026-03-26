@@ -3,8 +3,11 @@ Options -Indexes
 # ── Rewrite ──────────────────────────────────────────────────────
 RewriteEngine On
 
-# Nicht eingeloggt → login.php (außer bei login.php, api.php, assets)
-# (Wird durch PHP-Session gehandelt; Apache leitet nur weiter wenn nötig)
+# Custom Headers durchlassen (für CSRF-Token)
+RewriteRule .* - [E=HTTP_X_CSRF_TOKEN:%{HTTP:X-CSRF-Token}]
+
+# lang/-Verzeichnis sperren
+RewriteRule ^lang/ - [F,L]
 
 # data/-Verzeichnis komplett sperren
 RewriteRule ^data/ - [F,L]
@@ -26,3 +29,8 @@ RewriteRule ^data/ - [F,L]
     Header always set X-XSS-Protection "1; mode=block"
     Header always set Referrer-Policy "no-referrer"
 </IfModule>
+
+# lang/-Verzeichnis sperren (nur PHP-include, kein direkter Zugriff)
+<FilesMatch "^(de|en|fr|es|it)\.php$">
+    Require all denied
+</FilesMatch>

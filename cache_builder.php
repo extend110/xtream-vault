@@ -161,11 +161,25 @@ foreach ($allMovieCaches as $srvId => $cache) {
     }
 }
 
+// previousMovieIds: IDs aus dem letzten Run (global)
 $hasAllIds        = isset($prev['all_ids']) && is_array($prev['all_ids']) && count($prev['all_ids']) > 0;
 $isFirstRun       = empty($prev) || !$hasAllIds;
 $previousMovieIds = $isFirstRun
     ? array_flip(array_map('strval', array_keys($allCurrentIds)))
     : array_flip(array_map('strval', $prev['all_ids'] ?? []));
+
+// Neu hinzugefügte Server erkennen: Server deren IDs komplett fehlen in previousMovieIds
+// → deren Filme direkt als bekannt markieren (kein False-Positive)
+$knownServerIds = array_flip($prev['known_server_ids'] ?? []);
+foreach ($allMovieCaches as $srvId => $cache) {
+    if (!isset($knownServerIds[$srvId]) && !$isFirstRun) {
+        // Neuer Server — alle seine IDs als bekannt markieren
+        blog("  Neuer Server erkannt: {$srvId} — IDs als bekannt markiert");
+        foreach ($cache as $id => $m) {
+            $previousMovieIds[(string)$id] = true;
+        }
+    }
+}
 
 // Akkumulierte Liste aus vorherigem Run (ohne heruntergeladene)
 $accMovies = [];
@@ -190,10 +204,11 @@ if (!$isFirstRun) {
 }
 
 $newReleasesData = [
-    'generated_at' => date('Y-m-d H:i:s'),
-    'all_ids'      => array_map('strval', array_keys($allCurrentIds)),
-    'movies'       => array_values($accMovies),
-    'series'       => [],
+    'generated_at'     => date('Y-m-d H:i:s'),
+    'all_ids'          => array_map('strval', array_keys($allCurrentIds)),
+    'known_server_ids' => array_keys($allMovieCaches), // alle bekannten Server-IDs
+    'movies'           => array_values($accMovies),
+    'series'           => [],
 ];
 file_put_contents($newReleasesFile, json_encode($newReleasesData, JSON_UNESCAPED_UNICODE));
 blog(sprintf('Neue Releases: %d Filme → %s', count($accMovies), $newReleasesFile));

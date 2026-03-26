@@ -198,6 +198,7 @@ body::before {
 .search-wrap input:focus { border-color: var(--accent); }
 .search-wrap input::placeholder { color: var(--muted); }
 .search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; pointer-events: none; }
+#view-search .search-wrap { max-width: 100%; }
 .filter-bar { display: flex; gap: 8px; margin-left: auto; }
 .filter-btn {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;

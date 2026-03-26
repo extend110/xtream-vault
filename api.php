@@ -196,7 +196,7 @@ switch ($action) {
         break;
 
     case 'dismiss_all_new_releases':
-        require_permission('browse');
+        require_permission('settings');
         $nr = file_exists(NEW_RELEASES_FILE)
             ? (json_decode(file_get_contents(NEW_RELEASES_FILE), true) ?? [])
             : [];
@@ -207,7 +207,7 @@ switch ($action) {
         break;
 
     case 'dismiss_new_release':
-        require_permission('browse');
+        require_permission('settings');
         $d    = json_decode($_RAW_BODY, true) ?? [];
         $id   = (string)($d['id']   ?? '');
         $type = $d['type'] ?? 'movie'; // 'movie' or 'series'
@@ -727,6 +727,31 @@ switch ($action) {
         ]);
         break;
 
+    case 'test_server':
+        require_permission('settings');
+        $srvId = trim($_JSON_BODY['server_id'] ?? '');
+        // Zugangsdaten ermitteln
+        if ($srvId === SERVER_ID || $srvId === '') {
+            $testIp   = SERVER_IP; $testPort = PORT;
+            $testUser = USERNAME;  $testPass = PASSWORD;
+        } else {
+            $allSrv = file_exists(SERVERS_FILE) ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? []) : [];
+            $srv = null;
+            foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+            if (!$srv) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
+            $testIp   = $srv['server_ip']; $testPort = $srv['port'];
+            $testUser = $srv['username'];  $testPass = $srv['password'] ?? '';
+        }
+        $params  = http_build_query(['username' => $testUser, 'password' => $testPass, 'action' => 'get_vod_categories']);
+        $testUrl = 'http://' . $testIp . ':' . $testPort . '/player_api.php?' . $params;
+        $ctx     = stream_context_create(['http' => ['timeout' => 10, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+        $raw     = @file_get_contents($testUrl, false, $ctx);
+        if ($raw === false) { echo json_encode(['ok' => false, 'error' => 'Nicht erreichbar']); break; }
+        $json = json_decode($raw, true);
+        if (!is_array($json)) { echo json_encode(['ok' => false, 'error' => 'Falsche Zugangsdaten']); break; }
+        echo json_encode(['ok' => true, 'categories' => count($json)]);
+        break;
+
     case 'save_config':
         require_permission('settings');
         $d = json_decode($_RAW_BODY, true) ?? [];
@@ -877,9 +902,11 @@ switch ($action) {
         $servers = file_exists(SERVERS_FILE)
             ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
             : [];
-        // Aktiven Server markieren
         foreach ($servers as &$s) {
-            $s['active'] = ($s['id'] === SERVER_ID);
+            $s['active']    = ($s['id'] === SERVER_ID);
+            $s['has_cache'] = file_exists(DATA_DIR . '/library_cache_' . $s['id'] . '.json');
+            // Passwort nicht zurückgeben
+            unset($s['password']);
         }
         unset($s);
         echo json_encode(array_values($servers));
@@ -887,11 +914,21 @@ switch ($action) {
 
     case 'save_server':
         require_permission('settings');
-        $d       = json_decode($_RAW_BODY, true) ?? [];
-        $sid     = trim($d['server_id'] ?? '');
-        $name    = trim($d['name']      ?? '');
-        if ($sid === '' || $name === '') {
-            echo json_encode(['error' => 'server_id und name sind Pflichtfelder']); break;
+        $d    = json_decode($_RAW_BODY, true) ?? [];
+        $name = trim($d['name'] ?? '');
+        if ($name === '') {
+            echo json_encode(['error' => 'Name ist ein Pflichtfeld']); break;
+        }
+        // Server-ID: aus gesendeter ID oder automatisch aus IP+Port+Username berechnen
+        $sid = trim($d['server_id'] ?? '');
+        if ($sid === '') {
+            $ip   = trim($d['server_ip'] ?? '');
+            $port = trim($d['port']      ?? '80');
+            $user = trim($d['username']  ?? '');
+            $sid  = substr(md5($ip . ':' . $port . ':' . $user), 0, 8);
+        }
+        if ($sid === '') {
+            echo json_encode(['error' => 'server_id konnte nicht ermittelt werden']); break;
         }
         $servers = file_exists(SERVERS_FILE)
             ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
@@ -930,12 +967,40 @@ switch ($action) {
         $sid = trim($d['server_id'] ?? '');
         if ($sid === '') { echo json_encode(['error' => 'server_id fehlt']); break; }
         if ($sid === SERVER_ID) { echo json_encode(['error' => 'Aktiver Server kann nicht gelöscht werden']); break; }
+
+        // Prüfen ob ein Download auf diesem Server gerade läuft
+        $srvQueueFile = DATA_DIR . '/queue_' . $sid . '.json';
+        if (file_exists($srvQueueFile)) {
+            $srvQueue = json_decode(file_get_contents($srvQueueFile), true) ?? [];
+            foreach ($srvQueue as $qi) {
+                if (($qi['status'] ?? '') === 'downloading') {
+                    echo json_encode(['error' => 'Ein Download auf diesem Server läuft gerade noch. Bitte warte bis er abgeschlossen ist.']);
+                    break 2;
+                }
+            }
+        }
+
         $servers = file_exists(SERVERS_FILE)
             ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
             : [];
         $servers = array_values(array_filter($servers, fn($s) => $s['id'] !== $sid));
         file_put_contents(SERVERS_FILE, json_encode($servers, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        echo json_encode(['ok' => true]);
+
+        // Server-spezifische Dateien löschen
+        $filesToDelete = [
+            DATA_DIR . '/queue_'            . $sid . '.json',
+            DATA_DIR . '/downloaded_'       . $sid . '.json',
+            DATA_DIR . '/downloaded_index_' . $sid . '.json',
+            DATA_DIR . '/download_history_' . $sid . '.json',
+            DATA_DIR . '/library_cache_'    . $sid . '.json',
+            DATA_DIR . '/series_cache_'     . $sid . '.json',
+        ];
+        $deleted = [];
+        foreach ($filesToDelete as $f) {
+            if (file_exists($f)) { @unlink($f); $deleted[] = basename($f); }
+        }
+
+        echo json_encode(['ok' => true, 'deleted_files' => $deleted]);
         break;
 
     case 'switch_server':

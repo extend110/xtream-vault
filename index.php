@@ -88,10 +88,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   <header class="topbar">
     <div class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
     <div class="page-title" id="page-title">Dashboard</div>
-    <div class="search-wrap" id="search-bar" style="display:none">
-      <input type="text" id="search-input" placeholder="<?= t('search.placeholder') ?>">
-      <span class="search-icon">🔍</span>
-    </div>
+    <div class="search-wrap" id="search-bar" style="display:none"></div>
     <div class="filter-bar" id="filter-bar" style="display:none">
       <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
       <button class="filter-btn" onclick="setFilter('new',this)"><?= t('filter.new') ?></button>
@@ -101,7 +98,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_queue_view): ?>
     <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
     <?php endif; ?>
-    <?php if ($can_queue_view): ?>
+    <?php if ($can_settings): ?>
     <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log" style="display:none;align-items:center;gap:8px;
          background:var(--bg3);border:1px solid var(--border);border-radius:20px;
          padding:3px 12px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.65rem;
@@ -171,7 +168,20 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div><strong><?= t('cfg.not_configured') ?></strong></div>
       </div>
 
-      <!-- KPI-Zeile: Queue-Status + Speicher -->
+      <!-- 1. Schnellzugriff-Buttons -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <button class="btn-secondary" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)">▶ <?= t('queue.start') ?></button>
+        <button class="btn-secondary" onclick="dashRebuildCache()">🔄 <?= t('cfg.cache_build') ?></button>
+        <button class="btn-secondary" onclick="dashClearDone()">🗑 Erledigte leeren</button>
+        <button class="btn-secondary danger" onclick="dashClearAll()">✕ <?= t('queue.clear') ?></button>
+        <button class="btn-secondary" onclick="showView('settings')">⚙️ <?= t('nav.settings') ?></button>
+        <button class="btn-secondary" onclick="showView('log')">🖥 <?= t('nav.log') ?></button>
+      </div>
+
+      <!-- 2. Server-Status -->
+      <div id="dash-servers" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px"></div>
+
+      <!-- 3. KPI-Kacheln: Queue-Status + Speicher + System -->
       <div class="dash-kpi-grid" id="dash-stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:14px">
         <div class="dkpi">
           <div class="dkpi-l"><?= t('status.pending') ?></div>
@@ -189,17 +199,17 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="dkpi-l"><?= t('status.error') ?></div>
           <div class="dkpi-n" style="color:var(--red)" id="dqs-error">–</div>
         </div>
-        <div class="dkpi" style="grid-column:span 2">
+        <div class="dkpi">
           <div class="dkpi-l"><?= t('cfg.dest') ?></div>
           <div id="dash-disk" style="margin-top:4px"><div style="color:var(--muted);font-size:.75rem"><?= t('status.loading') ?></div></div>
         </div>
-        <div class="dkpi" style="grid-column:span 2">
+        <div class="dkpi">
           <div class="dkpi-l">System</div>
           <div id="dash-system" style="font-size:.78rem;line-height:1.75;margin-top:4px"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div>
         </div>
       </div>
 
-      <!-- Laufender Download -->
+      <!-- 4. Laufender Download -->
       <div class="progress-card" id="dash-progress-card" style="margin-bottom:14px">
         <div class="pc-header">
           <div class="pc-dot"></div>
@@ -219,37 +229,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
       </div>
 
-      <!-- Hauptbereich: 3 Spalten -->
-      <div id="dash-main-grid" style="display:grid;grid-template-columns:200px 1fr 1fr;gap:14px;align-items:start">
+      <!-- 5. Queue-Vorschau + Letzte Downloads (untereinander) -->
+      <div style="display:flex;flex-direction:column;gap:14px">
 
-        <!-- Spalte 1: Server + Schnellzugriff -->
-        <div style="display:flex;flex-direction:column;gap:10px">
-
-          <!-- Server-Status -->
-          <div class="settings-card" style="padding:12px">
-            <div class="dkpi-l" style="margin-bottom:8px">🌐 <?= t('cfg.servers') ?></div>
-            <div id="dash-servers" style="display:flex;flex-direction:column;gap:5px">
-              <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
-            </div>
-          </div>
-
-          <!-- Schnellzugriff -->
-          <div class="settings-card" style="padding:12px">
-            <div class="dkpi-l" style="margin-bottom:8px">⚡ Aktionen</div>
-            <div style="display:flex;flex-direction:column;gap:5px">
-              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)">▶ <?= t('queue.start') ?></button>
-              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="dashRebuildCache()">🔄 <?= t('cfg.cache_build') ?></button>
-              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="dashClearDone()">🗑 Erledigte leeren</button>
-              <button class="btn-secondary danger" style="width:100%;text-align:left;font-size:.78rem" onclick="dashClearAll()">✕ <?= t('queue.clear') ?></button>
-              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="showView('settings')">⚙️ <?= t('nav.settings') ?></button>
-              <button class="btn-secondary" style="width:100%;text-align:left;font-size:.78rem" onclick="showView('log')">🖥 <?= t('nav.log') ?></button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Spalte 2: Queue-Vorschau -->
-        <div class="settings-card" style="padding:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <!-- Queue-Vorschau -->
+        <div class="settings-card" style="padding:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <div class="dkpi-l">📋 <?= t('nav.queue') ?></div>
             <button class="btn-sm" onclick="showView('queue')"><?= t('dash.all') ?></button>
           </div>
@@ -258,9 +243,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
         </div>
 
-        <!-- Spalte 3: Letzte Downloads -->
-        <div class="settings-card" style="padding:12px">
-          <div class="dkpi-l" style="margin-bottom:8px">📥 <?= t('dash.recent') ?></div>
+        <!-- Letzte Downloads -->
+        <div class="settings-card" style="padding:14px">
+          <div class="dkpi-l" style="margin-bottom:10px">📥 <?= t('dash.recent') ?></div>
           <div id="dash-recent">
             <div style="padding:24px;text-align:center"><div class="spinner" style="margin:auto"></div></div>
           </div>
@@ -345,6 +330,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php endif; ?>
     <!-- Search -->
     <div id="view-search" style="display:none">
+      <!-- Suchfeld -->
+      <div class="search-wrap" style="margin-bottom:16px;display:flex">
+        <input type="text" id="search-input" placeholder="<?= t('search.placeholder') ?>" style="flex:1">
+        <span class="search-icon">🔍</span>
+      </div>
       <div id="search-history-box" style="margin-bottom:16px"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
         <button class="filter-btn active" id="search-tab-movies"  onclick="switchSearchTab('movies',this)"><?= t('search.movies_tab') ?></button>
@@ -365,7 +355,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_queue_view): ?>
     <!-- Queue -->
     <div id="view-queue" style="display:none">
-      <!-- Live Progress Card -->
+      <!-- Live Progress Card (nur für Admins) -->
+      <?php if ($can_settings): ?>
       <div class="progress-card" id="progress-card">
         <div class="pc-header">
           <div class="pc-dot"></div>
@@ -384,6 +375,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-stat"><span class="val" id="pc-eta">–</span><span class="lbl">verbleibend</span></div>
         </div>
       </div>
+      <?php endif; ?>
       <div class="queue-toolbar">
         <div class="queue-toolbar-title">Download Queue</div>
         <button class="btn-sm" onclick="refreshQueue()">↻ Refresh</button>
@@ -432,7 +424,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px" id="new-releases-meta">–</div>
         </div>
         <div style="display:flex;gap:8px">
+          <?php if ($can_settings): ?>
           <button class="btn-sm" onclick="dismissAllNewReleases(this)" style="margin-left:4px"><?= t('new.all_seen') ?></button>
+          <?php endif; ?>
         </div>
       </div>
       <div class="grid" id="new-releases-grid"></div>
@@ -622,36 +616,42 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div>
 
         <div class="settings-card">
-          <h3><?= t('cfg.server') ?></h3>
-          <div style="font-size:.75rem;color:var(--muted);margin-bottom:14px;font-family:'DM Mono',monospace">
-            Server-ID: <span id="cfg-server-id-display" style="color:var(--accent2)">–</span>
-            <span style="margin-left:8px;font-size:.65rem;opacity:.6">Downloads und Queue sind pro Server getrennt</span>
-          </div>
-
-          <!-- Gespeicherte Server -->
-          <div id="saved-servers-box" style="margin-bottom:18px">
-            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px"><?= t('cfg.servers') ?></div>
-            <div id="saved-servers-list" style="display:flex;flex-direction:column;gap:6px">
-              <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+            <h3 style="margin:0"><?= t('cfg.servers') ?></h3>
+            <div style="display:flex;gap:6px">
+              <button class="btn-sm" onclick="testAllServers()" id="btn-test-all-servers">🔌 Alle testen</button>
+              <button class="btn-sm" onclick="openAddServerForm()" id="btn-add-server">+ <?= t('cfg.server_add') ?></button>
             </div>
           </div>
-          <div class="field">
-            <label><?= t('cfg.server_ip') ?></label>
-            <input type="text" id="cfg-server-ip" placeholder="<?= t('cfg.server_ip') ?>">
+
+          <!-- Inline-Formular: Server hinzufügen -->
+          <div id="add-server-form" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px">Neuer Server</div>
+            <div class="field"><label><?= t('cfg.server') ?> Name</label><input type="text" id="add-srv-name" placeholder="z.B. Mein Server"></div>
+            <div class="field"><label><?= t('cfg.server_ip') ?></label><input type="text" id="add-srv-ip" placeholder="line.example.com" autocomplete="off"></div>
+            <div style="display:flex;gap:10px">
+              <div class="field" style="flex:1"><label><?= t('cfg.port') ?></label><input type="text" id="add-srv-port" placeholder="80" value="80"></div>
+            </div>
+            <div class="field"><label><?= t('cfg.username') ?></label><input type="text" id="add-srv-username" autocomplete="off"></div>
+            <div class="field"><label><?= t('cfg.password') ?></label><input type="password" id="add-srv-password" autocomplete="new-password"></div>
+            <div class="settings-msg" id="add-srv-msg"></div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+              <button class="btn-secondary" onclick="closeAddServerForm()"><?= t('btn.cancel') ?></button>
+              <button class="btn-primary" onclick="addServer()">💾 Hinzufügen</button>
+            </div>
           </div>
-          <div class="field">
-            <label><?= t('cfg.port') ?></label>
-            <input type="text" id="cfg-port" placeholder="80" value="80" style="max-width:120px">
+
+          <!-- Server-Liste -->
+          <div id="saved-servers-list" style="display:flex;flex-direction:column;gap:8px">
+            <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
           </div>
-          <div class="field">
-            <label><?= t('cfg.username') ?></label>
-            <input type="text" id="cfg-username" placeholder="<?= t('cfg.username') ?>" autocomplete="off">
-          </div>
-          <div class="field">
-            <label><?= t('cfg.password') ?></label>
-            <input type="password" id="cfg-password" placeholder="<?= t('cfg.password') ?>" autocomplete="new-password">
-            <span class="hint"><?= t('cfg.pw_keep') ?></span>
-          </div>
+
+          <!-- Aktuelle Konfiguration (versteckt, für Kompatibilität) -->
+          <input type="hidden" id="cfg-server-ip">
+          <input type="hidden" id="cfg-port">
+          <input type="hidden" id="cfg-username">
+          <input type="hidden" id="cfg-password">
+          <span style="display:none" id="cfg-server-id-display"></span>
         </div>
 
         <div class="settings-card">
@@ -800,9 +800,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3>📨 Telegram-Benachrichtigungen</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Benachrichtigung bei abgeschlossenem Download via Telegram Bot.<br>
-            Bot erstellen: <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent2)">@BotFather</a> →
-            Chat-ID ermitteln: <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent2)">@userinfobot</a>
+            Benachrichtigung via Telegram Bot.<br>
+            Bot erstellen: <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent2)">@BotFather</a> ·
+            Chat-ID: <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent2)">@userinfobot</a>
           </div>
           <div class="field">
             <label>Bot Token</label>
@@ -812,10 +812,37 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <label>Chat ID</label>
             <input type="text" id="cfg-telegram-chat-id" placeholder="z.B. 123456789 oder -100123456789 (Gruppe)">
           </div>
-          <label class="settings-toggle" style="margin-bottom:14px">
-            <input type="checkbox" id="cfg-telegram-enabled">
+          <label class="settings-toggle" style="margin-bottom:10px">
+            <input type="checkbox" id="cfg-telegram-enabled" onchange="toggleTelegramOptions(this.checked)">
             <span>Benachrichtigungen aktivieren</span>
           </label>
+
+          <!-- Benachrichtigungstypen -->
+          <div id="telegram-notify-options" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Benachrichtigen bei</div>
+            <label class="settings-toggle" style="margin-bottom:6px">
+              <input type="checkbox" id="cfg-tg-notify-success">
+              <span>✅ Download abgeschlossen</span>
+            </label>
+            <label class="settings-toggle" style="margin-bottom:6px">
+              <input type="checkbox" id="cfg-tg-notify-error">
+              <span>❌ Download fehlgeschlagen</span>
+            </label>
+            <label class="settings-toggle" style="margin-bottom:6px">
+              <input type="checkbox" id="cfg-tg-notify-queue-done">
+              <span>🏁 Queue-Run abgeschlossen</span>
+            </label>
+            <label class="settings-toggle" style="margin-bottom:10px">
+              <input type="checkbox" id="cfg-tg-notify-disk-low" onchange="toggleDiskLowField(this.checked)">
+              <span>⚠️ Speicherplatz niedrig</span>
+            </label>
+            <div class="field" id="tg-disk-low-field" style="display:none">
+              <label>Warnschwelle (GB)</label>
+              <input type="number" id="cfg-tg-disk-low-gb" min="1" max="500" value="10" style="max-width:120px">
+              <span class="hint">Warnung wenn freier Speicher unter diesen Wert fällt</span>
+            </div>
+          </div>
+
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button class="btn-secondary" onclick="testTelegram()">📨 Testnachricht senden</button>
             <div class="settings-msg" id="telegram-test-msg" style="margin:0"></div>
@@ -1277,7 +1304,7 @@ let queueRefreshInterval;
   initTheme();
   startBadgePolling();
   <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
-  <?php if ($can_queue_view): ?>startProgressPolling();<?php endif; ?>
+  <?php if ($can_queue_view && $can_settings): ?>startProgressPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
   api('get_new_releases').then(d => {
     const total = d.movies?.length ?? 0;
@@ -2122,9 +2149,9 @@ function renderNewReleases() {
 
   grid.innerHTML = items.map(item => {
     const itemId     = String(item.stream_id ?? item.id);
-    const dismissBtn = `<button class="btn-icon" title="Entfernen"
+    const dismissBtn = <?= $can_settings ? 'true' : 'false' ?> ? `<button class="btn-icon" title="Entfernen"
       onclick="dismissNewRelease('${itemId}','movie',this)"
-      style="position:absolute;top:4px;left:4px;z-index:10;background:rgba(0,0,0,.7);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.65rem;padding:0;border:none;cursor:pointer;color:#fff">✕</button>`;
+      style="position:absolute;top:4px;left:4px;z-index:10;background:rgba(0,0,0,.7);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.65rem;padding:0;border:none;cursor:pointer;color:#fff">✕</button>` : '';
     const sid  = String(item.stream_id ?? item.id);
     const card = movieCard({
       stream_id:           sid,
@@ -2304,7 +2331,9 @@ function switchSearchTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById('search-movies-grid').style.display = tab === 'movies' ? '' : 'none';
   document.getElementById('search-series-grid').style.display = tab === 'series' ? '' : 'none';
-  const q = document.getElementById('search-input').value.trim();
+  const input = document.getElementById('search-input');
+  if (input) input.placeholder = tab === 'series' ? t('search.placeholder_s') : t('search.placeholder');
+  const q = input?.value.trim();
   if (q) doSearch(q);
 }
 
@@ -2411,11 +2440,11 @@ function showView(v) {
   if (topbarDl && (v === 'dashboard' || v === 'queue')) topbarDl.style.display = 'none';
   const sb = document.getElementById('search-bar');
   const fb = document.getElementById('filter-bar');
-  sb.style.display = v === 'search'  ? '' : 'none';
+  if (sb) sb.style.display = 'none'; // Topbar-Suchfeld nicht mehr verwendet
   fb.style.display = v === 'movies'  ? '' : 'none';
   if (v === 'search')       { document.getElementById('page-title').textContent = t('nav.search'); initSearch(); document.getElementById('search-input').focus(); renderSearchHistory(); }
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = t('nav.dashboard'); <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
-  if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); startProgressPolling(); }
+  if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); <?php if ($can_settings): ?>startProgressPolling();<?php endif; ?> }
   if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
   if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
@@ -2536,6 +2565,66 @@ async function toggleMaintenance() {
 }
 
 // ── Server-Verwaltung ─────────────────────────────────────────
+function openAddServerForm() {
+  document.getElementById('add-server-form').style.display = '';
+  document.getElementById('btn-add-server').style.display = 'none';
+  document.getElementById('add-srv-name').focus();
+}
+function closeAddServerForm() {
+  document.getElementById('add-server-form').style.display = 'none';
+  document.getElementById('btn-add-server').style.display = '';
+  ['add-srv-name','add-srv-ip','add-srv-port','add-srv-username','add-srv-password'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = id === 'add-srv-port' ? '80' : '';
+  });
+  const msg = document.getElementById('add-srv-msg');
+  if (msg) { msg.textContent = ''; msg.className = 'settings-msg'; }
+}
+async function addServer() {
+  const msg      = document.getElementById('add-srv-msg');
+  const name     = document.getElementById('add-srv-name').value.trim();
+  const ip       = document.getElementById('add-srv-ip').value.trim();
+  const port     = document.getElementById('add-srv-port').value.trim() || '80';
+  const username = document.getElementById('add-srv-username').value.trim();
+  const password = document.getElementById('add-srv-password').value;
+  if (!name || !ip || !username || !password) {
+    msg.textContent = '❌ Alle Felder außer Port sind Pflichtfelder';
+    msg.className = 'settings-msg err'; return;
+  }
+  // Server-ID wird serverseitig aus IP+Port+Username berechnet
+  const d = await apiPost('save_server', {name, server_ip: ip, port, username, password});
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  closeAddServerForm();
+  loadServers();
+  showToast('✓ Server hinzugefügt', 'success');
+}
+async function testServer(serverId, name, btn) {
+  const statusEl = document.getElementById('srv-test-' + serverId);
+  const card = document.getElementById('srv-card-' + serverId);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  if (statusEl) statusEl.innerHTML = `<span style="color:var(--muted)">⏳ Teste…</span>`;
+  const d = await apiPost('test_server', {server_id: serverId});
+  if (btn) { btn.disabled = false; btn.textContent = '🔌'; }
+  if (d.ok) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ OK (${d.categories} Kategorien)</span>`;
+    if (card) card.style.borderColor = 'var(--green)';
+    setTimeout(() => { if (card) card.style.borderColor = ''; if (statusEl) statusEl.innerHTML = ''; }, 4000);
+  } else {
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">✕ ${esc(d.error ?? 'Fehler')}</span>`;
+    if (card) card.style.borderColor = 'var(--red)';
+    setTimeout(() => { if (card) card.style.borderColor = ''; }, 6000);
+  }
+}
+async function testAllServers() {
+  const btn = document.getElementById('btn-test-all-servers');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Teste…'; }
+  const servers = await api('list_servers');
+  if (servers?.length) {
+    await Promise.all(servers.map(s => testServer(s.id, s.name, null)));
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔌 Alle testen'; }
+}
+
 async function loadServers() {
   const list = document.getElementById('saved-servers-list');
   if (!list) return;
@@ -2545,14 +2634,20 @@ async function loadServers() {
     return;
   }
   list.innerHTML = servers.map(s => `
-    <div style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:.85rem;font-weight:500">${esc(s.name)}</div>
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">${esc(s.server_ip)}:${esc(s.port)} · ${esc(s.username)}</div>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px" id="srv-card-${esc(s.id)}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:.9rem;font-weight:600;flex:1">${esc(s.name)}</span>
+        <button class="btn-icon" title="Verbindung testen" onclick="testServer('${esc(s.id)}','${esc(s.name)}',this)">🔌</button>
+        <button class="btn-icon" title="Bearbeiten" onclick="openEditServerModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
+        <button class="btn-icon danger" title="Löschen" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>
       </div>
-      <div style="display:flex;gap:4px;flex-shrink:0">
-        <button class="btn-icon" onclick="openEditServerModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
-        <button class="btn-icon danger" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>
+      <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:10px">
+        <span>🌐 ${esc(s.server_ip)}:${esc(s.port)}</span>
+        <span>👤 ${esc(s.username)}</span>
+        <span id="srv-cache-${esc(s.id)}" style="color:${s.has_cache !== false ? 'var(--green)' : 'var(--orange)'}">
+          ${s.has_cache !== false ? '✓ Cache' : '⚠ Kein Cache'}
+        </span>
+        <span id="srv-test-${esc(s.id)}"></span>
       </div>
     </div>`).join('');
 }
@@ -2601,7 +2696,7 @@ async function saveEditServer() {
 }
 
 async function deleteServer(serverId, name) {
-  if (!confirm(`Server "${name}" wirklich löschen?\n\nDownloads und Queue dieses Servers bleiben erhalten.`)) return;
+  if (!confirm(`Server "${name}" wirklich löschen?\n\nQueue, Cache und Download-Verlauf dieses Servers werden ebenfalls gelöscht.`)) return;
   const d = await apiPost('delete_server', {server_id: serverId});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast('🗑 Server entfernt', 'info');
@@ -2635,7 +2730,18 @@ async function loadConfig() {
   if (tgToken) { tgToken.value = c.telegram_bot_token ?? ''; tgToken.placeholder = c.telegram_bot_token === '••••••••' ? t('cfg.pw_saved') : t('cfg.telegram_placeholder'); }
   if (tgChat)  tgChat.value = c.telegram_chat_id ?? '';
   const tgEnabled = document.getElementById('cfg-telegram-enabled');
-  if (tgEnabled) tgEnabled.checked = c.telegram_enabled ?? false;
+  if (tgEnabled) {
+    tgEnabled.checked = c.telegram_enabled ?? false;
+    toggleTelegramOptions(tgEnabled.checked);
+  }
+  const setChk = (id, val, def = false) => { const el = document.getElementById(id); if (el) el.checked = val ?? def; };
+  setChk('cfg-tg-notify-success',    c.tg_notify_success,    true);
+  setChk('cfg-tg-notify-error',      c.tg_notify_error,      true);
+  setChk('cfg-tg-notify-queue-done', c.tg_notify_queue_done, false);
+  setChk('cfg-tg-notify-disk-low',   c.tg_notify_disk_low,   false);
+  const diskGbEl = document.getElementById('cfg-tg-disk-low-gb');
+  if (diskGbEl) diskGbEl.value = c.tg_disk_low_gb ?? 10;
+  toggleDiskLowField(c.tg_notify_disk_low ?? false);
   const vpnEnabled = document.getElementById('cfg-vpn-enabled');
   const vpnIface   = document.getElementById('cfg-vpn-interface');
   if (vpnEnabled) vpnEnabled.checked  = c.vpn_enabled    ?? false;
@@ -2647,6 +2753,16 @@ function toggleRcloneFields(enabled) {
   const fields = document.getElementById('rclone-fields');
   if (fields) fields.style.display = enabled ? '' : 'none';
   if (enabled) loadRcloneCacheStatus();
+}
+
+function toggleTelegramOptions(enabled) {
+  const opts = document.getElementById('telegram-notify-options');
+  if (opts) opts.style.display = enabled ? '' : 'none';
+}
+
+function toggleDiskLowField(enabled) {
+  const field = document.getElementById('tg-disk-low-field');
+  if (field) field.style.display = enabled ? '' : 'none';
 }
 
 async function loadRcloneCacheStatus() {
@@ -2695,6 +2811,11 @@ function collectConfig() {
     telegram_bot_token:    (function() { const el = document.getElementById('cfg-telegram-bot-token'); const v = el?.value.trim() ?? ''; return (v === '••••••••' || v === '') ? '' : v; })(),
     telegram_chat_id:      document.getElementById('cfg-telegram-chat-id')?.value.trim() ?? '',
     telegram_enabled:      document.getElementById('cfg-telegram-enabled')?.checked ?? false,
+    tg_notify_success:     document.getElementById('cfg-tg-notify-success')?.checked  ?? true,
+    tg_notify_error:       document.getElementById('cfg-tg-notify-error')?.checked    ?? true,
+    tg_notify_queue_done:  document.getElementById('cfg-tg-notify-queue-done')?.checked ?? false,
+    tg_notify_disk_low:    document.getElementById('cfg-tg-notify-disk-low')?.checked  ?? false,
+    tg_disk_low_gb:        parseFloat(document.getElementById('cfg-tg-disk-low-gb')?.value ?? '10'),
     vpn_enabled:           document.getElementById('cfg-vpn-enabled')?.checked  ?? false,
     vpn_interface:         document.getElementById('cfg-vpn-interface')?.value.trim() ?? 'wg0',
   };
@@ -3411,14 +3532,15 @@ async function loadDashboardData() {
   const srvEl = document.getElementById('dash-servers');
   if (srvEl) {
     if (d.servers?.length) {
+      srvEl.style.display = 'flex';
       srvEl.innerHTML = d.servers.map(s => `
-        <div style="display:flex;align-items:center;gap:6px;font-size:.78rem;padding:4px 0;border-bottom:1px solid var(--border)">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:.78rem">
           <span style="color:${s.has_cache ? 'var(--green)' : 'var(--orange)'}">●</span>
-          <span style="flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</span>
-          ${!s.has_cache ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--orange)">NO CACHE</span>` : `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted)">✓</span>`}
+          <span style="font-weight:500">${esc(s.name)}</span>
+          ${!s.has_cache ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--orange)">NO CACHE</span>` : ''}
         </div>`).join('');
     } else {
-      srvEl.innerHTML = `<div style="color:var(--muted);font-size:.78rem">–</div>`;
+      srvEl.style.display = 'none';
     }
   }
 
