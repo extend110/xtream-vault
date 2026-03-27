@@ -140,14 +140,70 @@ function list_rclone_files(string $remote, string $path): array {
     return $files;
 }
 
+/**
+ * Lädt alle Server aus servers.json (Fallback auf config.json).
+ */
+function cron_load_all_servers(): array {
+    $servers = file_exists(SERVERS_FILE)
+        ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+        : [];
+    if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
+        $servers = [[
+            'id'        => SERVER_ID,
+            'name'      => SERVER_IP . ':' . PORT,
+            'server_ip' => SERVER_IP,
+            'port'      => PORT,
+            'username'  => USERNAME,
+            'password'  => PASSWORD,
+        ]];
+    }
+    return $servers;
+}
+
+/**
+ * Lädt alle Queue-Items über alle Server zusammen.
+ * Jedes Item bekommt '_queue_file' damit save_queue_item_status
+ * die richtige Datei beschreiben kann.
+ */
 function load_queue(): array {
-    if (!file_exists(QUEUE_FILE)) return [];
-    return json_decode(file_get_contents(QUEUE_FILE), true) ?? [];
+    $servers = cron_load_all_servers();
+    $all = [];
+    foreach ($servers as $srv) {
+        $file = DATA_DIR . '/queue_' . $srv['id'] . '.json';
+        if (!file_exists($file)) continue;
+        $items = json_decode(file_get_contents($file), true) ?? [];
+        foreach ($items as &$item) {
+            $item['_queue_file']  = $file;
+            $item['_server_id']   = $srv['id'];
+        }
+        unset($item);
+        $all = array_merge($all, $items);
+    }
+    // Fallback: alte QUEUE_FILE ohne Server-ID
+    if (empty($all) && file_exists(QUEUE_FILE)) {
+        $items = json_decode(file_get_contents(QUEUE_FILE), true) ?? [];
+        foreach ($items as &$item) {
+            $item['_queue_file'] = QUEUE_FILE;
+            $item['_server_id']  = SERVER_ID;
+        }
+        unset($item);
+        $all = $items;
+    }
+    return $all;
 }
 
 function save_queue(array $q): void {
-    @mkdir(DEST_PATH, 0777, true);
-    file_put_contents(QUEUE_FILE, json_encode($q, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    // Gruppiert nach _queue_file speichern
+    $byFile = [];
+    foreach ($q as $item) {
+        $file = $item['_queue_file'] ?? QUEUE_FILE;
+        unset($item['_queue_file'], $item['_server_id']);
+        $byFile[$file][] = $item;
+    }
+    foreach ($byFile as $file => $items) {
+        @mkdir(dirname($file), 0777, true);
+        file_put_contents($file, json_encode(array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
 }
 
 function load_db(): array {
@@ -821,14 +877,15 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
     $found   = false;
     foreach ($current as &$qi) {
         if ((string)$qi['stream_id'] === $sid) {
-            $qi['status'] = $updatedItem['status'];
-            $qi['error']  = $updatedItem['error'] ?? null;
+            $qi['status']  = $updatedItem['status'];
+            $qi['error']   = $updatedItem['error']   ?? null;
+            $qi['done_at'] = $updatedItem['done_at'] ?? $qi['done_at'] ?? null;
+            // _queue_file und _server_id aus $qi behalten (wurde von load_queue gesetzt)
             $found = true;
             break;
         }
     }
     unset($qi);
-    // Falls Item nicht mehr vorhanden (z.B. manuell entfernt) — nicht neu hinzufügen
     if ($found) save_queue($current);
 }
 

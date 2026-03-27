@@ -60,22 +60,16 @@ $servers = file_exists(SERVERS_FILE)
     ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
     : [];
 
-// Aktiven Server sicherstellen und Credentials aktuell halten
-$hasActive = false;
-foreach ($servers as &$s) {
-    if ($s['id'] === SERVER_ID) {
-        $s['server_ip'] = SERVER_IP; $s['port'] = PORT;
-        $s['username']  = USERNAME;  $s['password'] = PASSWORD;
-        $hasActive = true; break;
-    }
-}
-unset($s);
-if (!$hasActive) {
-    array_unshift($servers, [
-        'id' => SERVER_ID, 'name' => SERVER_IP . ':' . PORT,
-        'server_ip' => SERVER_IP, 'port' => PORT,
-        'username' => USERNAME, 'password' => PASSWORD,
-    ]);
+// Fallback auf config.json wenn servers.json leer (Rückwärtskompatibilität)
+if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
+    $servers = [[
+        'id'        => SERVER_ID,
+        'name'      => SERVER_IP . ':' . PORT,
+        'server_ip' => SERVER_IP,
+        'port'      => PORT,
+        'username'  => USERNAME,
+        'password'  => PASSWORD,
+    ]];
 }
 
 blog(sprintf('=== Cache für %d Server ===', count($servers)));
