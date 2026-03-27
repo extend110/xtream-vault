@@ -1792,12 +1792,15 @@ async function addMovieToQueue(m, card) {
     if (btn) {
       if (canQueueRemove) {
         btn.textContent = t('btn.remove_queue');
-        btn.className = 'btn-q remove';
+        btn.className   = 'btn-q remove';
+        btn.disabled    = false;
+        btn.removeAttribute('onclick');
         btn.onclick = () => removeFromQueue(m.stream_id, card);
       } else {
         btn.textContent = t('btn.queued');
-        btn.className = 'btn-q done';
-        btn.disabled = true;
+        btn.className   = 'btn-q done';
+        btn.disabled    = true;
+        btn.removeAttribute('onclick');
         btn.onclick = null;
       }
     }
@@ -1815,13 +1818,20 @@ async function removeFromQueue(sid, card) {
     if (badge) badge.remove();
     const btn = card.querySelector('.btn-q');
     if (btn) {
-      const m = allMovies.find(x => String(x.stream_id) === String(sid));
-      btn.textContent = t('btn.add_queue'); btn.className = 'btn-q add';
-      if (m) btn.onclick = () => addMovieToQueue(m, card);
+      // Film-Objekt aus allMovies oder _lastMovies holen
+      const m = allMovies.find(x => String(x.stream_id) === String(sid))
+             || _lastMovies.find(x => String(x.stream_id) === String(sid));
+      btn.textContent = t('btn.add_queue');
+      btn.className   = 'btn-q add';
+      btn.disabled    = false;
+      btn.removeAttribute('onclick');
+      btn.onclick = m ? () => addMovieToQueue(m, card) : null;
     }
   }
   const idx = allMovies.findIndex(x => String(x.stream_id) === String(sid));
   if (idx >= 0) allMovies[idx].queued = false;
+  const idx2 = _lastMovies.findIndex(x => String(x.stream_id) === String(sid));
+  if (idx2 >= 0) _lastMovies[idx2].queued = false;
   updateQueueBadge(); loadStats();
   showToast(t('queue.removed'), 'info');
 }

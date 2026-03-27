@@ -1690,7 +1690,8 @@ switch ($action) {
         if ($sid === '') { echo json_encode(['error'=>'Missing stream_id']); break; }
         $queue = load_queue();
         foreach ($queue as $qi) {
-            if ((string)$qi['stream_id'] === $sid) {
+            if ((string)$qi['stream_id'] === $sid
+                && in_array($qi['status'] ?? 'pending', ['pending', 'downloading'])) {
                 echo json_encode(['ok' => true, 'already' => true, 'reason' => 'in_queue']); break 2;
             }
             // Gleicher Titel (anderer Stream-ID) — nur bei pending/downloading prüfen
