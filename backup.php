@@ -56,14 +56,12 @@ if ($zip->open($backupFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true
 $files = [
     'config.json',
     'users.json',
-    'queue.json',
-    'downloaded.json',
-    'downloaded_index.json',
-    'download_history.json',
-    'library_cache.json',
+    'servers.json',
+    'new_releases.json',
     'activity.json',
     'rate_limits.json',
     'api_keys.json',
+    'invites.json',
 ];
 
 $added   = 0;
@@ -76,6 +74,19 @@ foreach ($files as $file) {
         $added++;
     } else {
         $skipped++;
+    }
+}
+
+// Multi-Server-Dateien dynamisch hinzufügen (queue_*, downloaded_*, etc.)
+$patterns = [
+    'queue_*.json', 'downloaded_*.json', 'downloaded_index_*.json',
+    'download_history_*.json', 'library_cache_*.json', 'series_cache_*.json',
+];
+foreach ($patterns as $pattern) {
+    foreach (glob(DATA_DIR . '/' . $pattern) as $path) {
+        $file = basename($path);
+        $zip->addFile($path, 'data/' . $file);
+        $added++;
     }
 }
 

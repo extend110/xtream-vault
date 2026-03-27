@@ -1093,20 +1093,34 @@ switch ($action) {
         $dir    = __DIR__;
         $tmpDir = sys_get_temp_dir() . '/xtream_update_' . time();
 
-        // ── Backup von data/ ──────────────────────────────────────────────────
+        // ── Backup von data/ (ohne backups/ selbst) ───────────────────────────
         $backupDir = $dir . '/data/backups';
         @mkdir($backupDir, 0775, true);
 
         exec('which zip 2>/dev/null', $zw, $zc);
         if ($zc === 0) {
             $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.zip';
-            exec('zip -r ' . escapeshellarg($backupFile) . ' ' . escapeshellarg($dir . '/data') . ' 2>&1', $bkpOut, $bkpRet);
+            // -x um backups/ auszuschließen
+            exec('zip -r ' . escapeshellarg($backupFile)
+                . ' ' . escapeshellarg($dir . '/data')
+                . ' -x "' . $dir . '/data/backups/*"'
+                . ' 2>&1', $bkpOut, $bkpRet);
         } else {
             $backupFile = $backupDir . '/pre_update_' . date('Y-m-d_H-i-s') . '.tar.gz';
-            exec('tar -czf ' . escapeshellarg($backupFile) . ' -C ' . escapeshellarg($dir) . ' data 2>&1', $bkpOut, $bkpRet);
+            exec('tar -czf ' . escapeshellarg($backupFile)
+                . ' -C ' . escapeshellarg($dir)
+                . ' --exclude=data/backups data 2>&1', $bkpOut, $bkpRet);
         }
         if ($bkpRet !== 0) {
             echo json_encode(['error' => 'Backup fehlgeschlagen: ' . implode(' ', $bkpOut)]); break;
+        }
+
+        // Alte pre_update-Backups aufräumen — max. 3 behalten
+        $oldBackups = glob($backupDir . '/pre_update_*');
+        if ($oldBackups && count($oldBackups) > 3) {
+            usort($oldBackups, fn($a, $b) => filemtime($a) - filemtime($b)); // älteste zuerst
+            $toDelete = array_slice($oldBackups, 0, count($oldBackups) - 3);
+            foreach ($toDelete as $f) { @unlink($f); }
         }
 
         // ── ZIP von GitHub herunterladen ──────────────────────────────────────
