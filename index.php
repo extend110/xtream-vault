@@ -1667,7 +1667,7 @@ function seriesCard(s, showServer = false) {
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
   const isFav = favourites.has('series:' + s.series_id);
   const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this,'${esc(s._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
-  const queueData = {series_id: s.series_id, clean_title: s.clean_title, cover: s.cover || ''};
+  const queueData = {series_id: s.series_id, clean_title: s.clean_title, cover: s.cover || '', category: s.category || '', _server_id: s._server_id || ''};
   const serverBadge = (showServer && s._server_name)
     ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s._server_name)}">🌐 ${esc(s._server_name)}</div>`
     : '';
@@ -1678,18 +1678,18 @@ function seriesCard(s, showServer = false) {
     onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
     <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div>${serverBadge}</div>
-    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}')">📋 Episodes</button></div>
+    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','${esc(s._server_id||'')}')">📋 Episodes</button></div>
   </div>`;
 }
 
 // ── Series Modal ──────────────────────────────────────────────
-async function openSeriesModal(id, title, cover, category) {
+async function openSeriesModal(id, title, cover, category, serverId) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-meta').textContent  = t('modal.loading');
   document.getElementById('modal-img').src           = cover || '';
   document.getElementById('modal-body').innerHTML    = `<div class="state-box"><div class="spinner"></div></div>`;
   document.getElementById('series-modal').classList.add('open');
-  const data    = await api('get_series_info', {series_id: id});
+  const data    = await api('get_series_info', {series_id: id, server_id: serverId || ''});
   const episodes = data.episodes ?? {};
   const seasons  = Object.keys(episodes).sort();
   document.getElementById('modal-meta').textContent = `${seasons.length} Season(s)`;
@@ -2093,7 +2093,7 @@ function renderFavourites() {
         actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
       }
     } else if (f.type === 'series') {
-      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}')">📋 Episodes</button>`;
+      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}','${esc(f.server_id||'')}')">📋 Episodes</button>`;
     }
 
     return `
@@ -3210,7 +3210,7 @@ async function openTmdbModal(title, type, year, queueData) {
     const sid = String(queueData.stream_id ?? queueData.series_id ?? '');
     let actionHtml = '';
     if (type === 'series') {
-      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}','${esc(queueData.category||'')}')">📋 Episodes</button>`;
+      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}','${esc(queueData.category||'')}','${esc(queueData._server_id||'')}')">📋 Episodes</button>`;
     } else if (_downloadedIds.has(sid) && canQueueRemove) {
       actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();resetDownload('${sid}','movie',null)">↺ Reset</button>`;
     } else if (_downloadedIds.has(sid)) {

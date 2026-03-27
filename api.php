@@ -78,10 +78,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$api_key_auth && !in_array($action
 }
 
 // ─── Nicht konfiguriert → Fehler außer bei Config-Aktionen ───────────────────
-$config_actions = ['get_config', 'save_config',
+$config_actions = [
+    // Server-Verwaltung
+    'get_config', 'save_config',
     'save_server', 'list_servers', 'delete_server', 'test_server',
+    // Benutzer & Rollen (funktionieren ohne Server)
+    'list_users', 'create_user', 'update_user', 'delete_user',
+    'change_own_password', 'set_language', 'get_activity_log',
+    'create_invite', 'list_invites', 'delete_invite',
+    'create_api_key', 'list_api_keys', 'delete_api_key',
+    // Dashboard & UI (zeigen leere Daten statt Fehler)
+    'dashboard_data', 'stats', 'get_queue',
+    'backup_list', 'get_maintenance', 'maintenance_enable', 'maintenance_disable',
+    'get_cache_status',
+    // Externe API
     'external_create_user', 'external_list_users', 'external_suspend_user',
-    'external_delete_user', 'external_update_user'];
+    'external_delete_user', 'external_update_user',
+];
 if (!is_configured() && !in_array($action, $config_actions) && !in_array($action, $public_actions)) {
     http_response_code(503);
     echo json_encode(['error' => 'not_configured']);
@@ -2325,7 +2338,13 @@ switch ($action) {
         break;
 
     case 'cache_status':
-        $movieReady  = file_exists(LIBRARY_CACHE_FILE);
+        // Prüfen ob mindestens eine server-spezifische Cache-Datei existiert
+        $serverCacheFiles = glob(DATA_DIR . '/library_cache_*.json') ?: [];
+        // Fallback: alter fester Pfad für Rückwärtskompatibilität
+        $movieReady  = !empty($serverCacheFiles) || file_exists(LIBRARY_CACHE_FILE);
+        $newestCache = $movieReady
+            ? max(array_map('filemtime', !empty($serverCacheFiles) ? $serverCacheFiles : [LIBRARY_CACHE_FILE]))
+            : null;
         $indexReady  = file_exists(DOWNLOADED_INDEX_FILE);
         $buildLog    = DATA_PATH . '/cache_build.log';
         $lockFile    = sys_get_temp_dir() . '/xtream_cache.lock';
@@ -2347,7 +2366,6 @@ switch ($action) {
 
         if (file_exists($buildLog)) {
             $lines    = file($buildLog, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            // Letzte relevante Zeile ohne PHP-Fehlermeldungen
             $filtered = array_filter($lines, fn($l) => !str_contains($l, 'PHP') && !str_contains($l, 'thrown'));
             $lastLine = end($filtered) ?: end($lines) ?: '';
         }
@@ -2355,9 +2373,8 @@ switch ($action) {
         echo json_encode([
             'movie_cache_ready'  => $movieReady,
             'index_ready'        => $indexReady,
-            // series_cache_ready nicht mehr relevant — Serien werden via cron.php indexiert
             'series_cache_ready' => true,
-            'cache_age_min'      => $movieReady ? round((time() - filemtime(LIBRARY_CACHE_FILE)) / 60) : null,
+            'cache_age_min'      => $newestCache ? round((time() - $newestCache) / 60) : null,
             'building'           => $building,
             'last_message'       => $lastLine,
         ]);
