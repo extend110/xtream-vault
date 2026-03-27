@@ -96,11 +96,6 @@ Das Installationsskript richtet folgende Cronjobs ein:
 0 3 * * * /usr/bin/php /var/www/html/xtream/backup.php >> /dev/null 2>&1
 ```
 
-Empfohlen: `cron.php` mit `flock` aufrufen um parallele Runs zu verhindern:
-
-```bash
-*/30 * * * * flock -n /tmp/xtream_cron.lock /usr/bin/php /var/www/html/xtream/cron.php
-```
 
 ---
 
