@@ -697,7 +697,8 @@ foreach ($queue as &$item) {
         }
     }
 
-    clog("START: $title  →  $destDisplay");
+    clog("START: [$position/$totalPending] $title  →  $destDisplay");
+    clog(sprintf("  Typ: %s | Ext: %s | Server: %s", strtoupper($type), strtoupper($ext), $item['_server_id'] ?? 'default'));
 
     // Speicherplatz-Prüfung (nur im lokalen Modus)
     $fileSize = 0;
@@ -760,6 +761,7 @@ foreach ($queue as &$item) {
         'updated_at'  => date('Y-m-d H:i:s'),
     ]);
 
+    $downloadStartTime = time();
     $ok = RCLONE_ENABLED
         ? rclone_stream($url, $remotePath, $title, $position, $totalPending)
         : download_file($url, $destFile, $title, $position, $totalPending);
@@ -832,7 +834,24 @@ foreach ($queue as &$item) {
         @file_put_contents(DOWNLOAD_HISTORY_FILE, json_encode($history, JSON_UNESCAPED_UNICODE));
         unset($history);
 
-        clog("DONE:  $title");
+        $durationSec = time() - $downloadStartTime;
+        // Dateigröße aus lokalem File oder progress.json lesen
+        $downloadedBytes = 0;
+        if ($destFile && file_exists($destFile)) {
+            $downloadedBytes = filesize($destFile) ?: 0;
+        } elseif (file_exists(PROGRESS_FILE)) {
+            $prog = json_decode(@file_get_contents(PROGRESS_FILE), true) ?? [];
+            $downloadedBytes = (int)($prog['bytes_done'] ?? 0);
+        }
+        $sizeStr  = $downloadedBytes > 0 ? sprintf('%.1f MB', $downloadedBytes / 1048576) : '';
+        $speedStr = ($durationSec > 0 && $downloadedBytes > 0)
+            ? sprintf(' @ %.1f MB/s', $downloadedBytes / 1048576 / $durationSec) : '';
+        clog(sprintf("DONE:  %s  [%s%s%s]",
+            $title,
+            $sizeStr,
+            $speedStr,
+            $durationSec > 0 ? ' in ' . gmdate('H:i:s', $durationSec) : ''
+        ));
         $processed++;
 
         // Aus new_releases.json entfernen (damit es nicht mehr als "neu" erscheint)
@@ -863,7 +882,7 @@ foreach ($queue as &$item) {
     } else {
         $item['status'] = 'error';
         $item['error']  = 'Download fehlgeschlagen (' . date('Y-m-d H:i:s') . ')';
-        clog("ERROR: $title");
+        clog(sprintf("ERROR: %s — fehlgeschlagen nach %ds", $title, time() - $downloadStartTime));
         $errors++;
         // Telegram: Fehler-Benachrichtigung
         $typeLabel = $type === 'movie' ? '🎬 Film' : '📺 Episode';

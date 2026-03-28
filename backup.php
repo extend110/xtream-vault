@@ -20,9 +20,13 @@ define('BACKUP_KEEP',  7);    // Anzahl der aufzubewahrenden Backups
 define('BACKUP_LOG',   DATA_DIR . '/backup.log');
 
 function blog(string $msg): void {
-    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg;
+    $line = '[' . date('Y-m-d H:i:s') . '] [BACKUP] ' . $msg;
     echo $line . PHP_EOL;
     file_put_contents(BACKUP_LOG, $line . PHP_EOL, FILE_APPEND);
+    // Auch ins CRON_LOG schreiben
+    if (defined('CRON_LOG')) {
+        @file_put_contents(CRON_LOG, $line . PHP_EOL, FILE_APPEND);
+    }
 }
 
 // ─── Backup-Verzeichnis anlegen ───────────────────────────────────────────────
@@ -101,7 +105,8 @@ $zip->addFromString('backup_info.json', $meta);
 $zip->close();
 
 $size = filesize($backupFile);
-blog(sprintf("Backup erstellt: %d Dateien, %.1f KB", $added, $size / 1024));
+blog(sprintf("Backup erstellt: %d Dateien, %.1f KB → %s", $added, $size / 1024, basename($backupFile)));
+if ($skipped > 0) blog("  ($skipped optionale Dateien nicht vorhanden, übersprungen)");
 
 // ─── Alte Backups löschen ─────────────────────────────────────────────────────
 $allBackups = glob(BACKUP_DIR . '/backup_*.zip');

@@ -32,7 +32,12 @@ file_put_contents($lockFile, getmypid());
 register_shutdown_function(function() use ($lockFile) { @unlink($lockFile); });
 
 function blog(string $msg): void {
-    echo '[' . date('H:i:s') . '] ' . $msg . PHP_EOL;
+    $line = '[' . date('H:i:s') . '] [CACHE] ' . $msg;
+    echo $line . PHP_EOL;
+    // Auch ins CRON_LOG schreiben damit es im UI sichtbar ist
+    if (defined('CRON_LOG')) {
+        @file_put_contents(CRON_LOG, $line . PHP_EOL, FILE_APPEND);
+    }
 }
 
 function xtream_req_srv(array $server, string $action, array $extra = []): array {
@@ -54,6 +59,7 @@ function load_db_local(): array {
 }
 
 @mkdir(DATA_DIR, 0755, true);
+$_cbStartTime = microtime(true);
 
 // ── Alle Server laden ─────────────────────────────────────────────────────────
 $servers = file_exists(SERVERS_FILE)
@@ -89,53 +95,67 @@ foreach ($servers as $srv) {
     $serCacheFile = DATA_DIR . '/series_cache_'  . $srvId . '.json';
 
     // Movie-Cache
+    $t0 = microtime(true);
     blog('  Starte Movie-Cache…');
     $movieCache = [];
     $categories = xtream_req_srv($srv, 'get_vod_categories');
-    blog(sprintf('  %d Movie-Kategorien', count($categories)));
-    foreach ($categories as $cat) {
-        $streams = xtream_req_srv($srv, 'get_vod_streams', ['category_id' => $cat['category_id']]);
-        foreach ($streams as $m) {
-            $movieCache[(string)$m['stream_id']] = [
-                'id'            => (string)$m['stream_id'],
-                'title'         => display_title($m['name'] ?? ''),
-                'cover'         => $m['stream_icon'] ?? '',
-                'category'      => $cat['category_name'],
-                'category_id'   => (string)$cat['category_id'],
-                'ext'           => $m['container_extension'] ?? 'mp4',
-                'type'          => 'movie',
-                'year'          => $m['year']          ?? '',
-                'rating_5based' => $m['rating_5based'] ?? '',
-                'genre'         => $m['genre']         ?? '',
-            ];
+    if (empty($categories)) {
+        blog('  WARN: Keine Movie-Kategorien empfangen — Server erreichbar?');
+    } else {
+        blog(sprintf('  %d Movie-Kategorien gefunden', count($categories)));
+        foreach ($categories as $cat) {
+            $streams = xtream_req_srv($srv, 'get_vod_streams', ['category_id' => $cat['category_id']]);
+            if (empty($streams)) continue;
+            foreach ($streams as $m) {
+                $movieCache[(string)$m['stream_id']] = [
+                    'id'            => (string)$m['stream_id'],
+                    'title'         => display_title($m['name'] ?? ''),
+                    'cover'         => $m['stream_icon'] ?? '',
+                    'category'      => $cat['category_name'],
+                    'category_id'   => (string)$cat['category_id'],
+                    'ext'           => $m['container_extension'] ?? 'mp4',
+                    'type'          => 'movie',
+                    'year'          => $m['year']          ?? '',
+                    'rating_5based' => $m['rating_5based'] ?? '',
+                    'genre'         => $m['genre']         ?? '',
+                ];
+            }
         }
     }
     file_put_contents($libCacheFile, json_encode($movieCache, JSON_UNESCAPED_UNICODE));
-    blog(sprintf('  Movie-Cache: %d Einträge → %s', count($movieCache), basename($libCacheFile)));
+    blog(sprintf('  Movie-Cache: %d Einträge → %s (%.1fs)',
+        count($movieCache), basename($libCacheFile), microtime(true) - $t0));
     $allMovieCaches[$srvId] = $movieCache;
 
     // Serien-Cache
+    $t1 = microtime(true);
     blog('  Starte Serien-Cache…');
     $seriesCache = [];
     $seriesCats  = xtream_req_srv($srv, 'get_series_categories');
-    blog(sprintf('  %d Serien-Kategorien', count($seriesCats)));
-    foreach ($seriesCats as $cat) {
-        $series = xtream_req_srv($srv, 'get_series', ['category_id' => $cat['category_id']]);
-        foreach ($series as $s) {
-            $seriesCache[(string)$s['series_id']] = [
-                'series_id'   => (string)$s['series_id'],
-                'clean_title' => display_title($s['name'] ?? ''),
-                'cover'       => $s['cover'] ?? '',
-                'category'    => $cat['category_name'],
-                'category_id' => (string)$cat['category_id'],
-                'genre'       => $s['genre'] ?? '',
-                'type'        => 'series',
-                '_server_id'  => $srvId,
-            ];
+    if (empty($seriesCats)) {
+        blog('  WARN: Keine Serien-Kategorien empfangen');
+    } else {
+        blog(sprintf('  %d Serien-Kategorien gefunden', count($seriesCats)));
+        foreach ($seriesCats as $cat) {
+            $series = xtream_req_srv($srv, 'get_series', ['category_id' => $cat['category_id']]);
+            if (empty($series)) continue;
+            foreach ($series as $s) {
+                $seriesCache[(string)$s['series_id']] = [
+                    'series_id'   => (string)$s['series_id'],
+                    'clean_title' => display_title($s['name'] ?? ''),
+                    'cover'       => $s['cover'] ?? '',
+                    'category'    => $cat['category_name'],
+                    'category_id' => (string)$cat['category_id'],
+                    'genre'       => $s['genre'] ?? '',
+                    'type'        => 'series',
+                    '_server_id'  => $srvId,
+                ];
+            }
         }
     }
     file_put_contents($serCacheFile, json_encode(array_values($seriesCache), JSON_UNESCAPED_UNICODE));
-    blog(sprintf('  Serien-Cache: %d Einträge → %s', count($seriesCache), basename($serCacheFile)));
+    blog(sprintf('  Serien-Cache: %d Einträge → %s (%.1fs)',
+        count($seriesCache), basename($serCacheFile), microtime(true) - $t1));
 
     // Auch aktive Server cache-Dateien aktuell halten (für Kompatibilität)
     if ($srvId === SERVER_ID) {
@@ -251,4 +271,5 @@ foreach ($dlEpisodes as $id) {
 file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($index, JSON_UNESCAPED_UNICODE));
 blog(sprintf('Downloaded-Index: %d Einträge → %s', count($index), basename(DOWNLOADED_INDEX_FILE)));
 
-blog('=== Done ===');
+$totalTime = microtime(true) - $_cbStartTime;
+blog(sprintf('=== Done (%.1fs gesamt) ===', $totalTime));
