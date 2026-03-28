@@ -168,11 +168,13 @@ $previousMovieIds = $isFirstRun
 
 // Neu hinzugefügte Server erkennen: Server deren IDs komplett fehlen in previousMovieIds
 // → deren Filme direkt als bekannt markieren (kein False-Positive)
+// Wenn known_server_ids fehlt aber all_ids vorhanden ist → alle aktuellen Server als bekannt behandeln
 $knownServerIds = array_flip($prev['known_server_ids'] ?? []);
+$allIdsKnownServerFallback = !empty($prev['all_ids']) && empty($prev['known_server_ids']);
 foreach ($allMovieCaches as $srvId => $cache) {
-    if (!isset($knownServerIds[$srvId]) && !$isFirstRun) {
-        // Neuer Server — alle seine IDs als bekannt markieren
-        blog("  Neuer Server erkannt: {$srvId} — IDs als bekannt markiert");
+    if ((!isset($knownServerIds[$srvId]) || $allIdsKnownServerFallback) && !$isFirstRun) {
+        // Neuer Server oder Migration ohne known_server_ids — alle seine IDs als bekannt markieren
+        blog("  Server als bekannt markiert: {$srvId}");
         foreach ($cache as $id => $m) {
             $previousMovieIds[(string)$id] = true;
         }

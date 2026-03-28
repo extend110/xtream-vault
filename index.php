@@ -1465,12 +1465,17 @@ async function loadStats() {
   document.getElementById('stat-movies').textContent   = d.movies   ?? '–';
   document.getElementById('stat-episodes').textContent = d.episodes ?? '–';
   document.getElementById('stat-queued').textContent   = d.queued   ?? 0;
-  updateQueuePill(d.queued ?? 0);
-  // _downloadedIds aus stats befüllen (vollständig — inkl. aus Queue entfernter Items)
+  // Optimistischen Delta berücksichtigen
+  const serverQueued = d.queued ?? 0;
+  if (_optimisticDelta === 0) {
+    updateQueuePill(serverQueued);
+  } else {
+    // Server kennt neuen Stand noch nicht — Delta beibehalten
+    updateQueuePill(Math.max(0, serverQueued + _optimisticDelta));
+  }
   if (Array.isArray(d.downloaded_ids)) {
     _downloadedIds = new Set(d.downloaded_ids);
   }
-  // Favoriten neu rendern falls aktiv, damit Status sofort korrekt ist
   if (currentView === 'favourites') renderFavourites();
 }
 
@@ -1485,16 +1490,30 @@ function updateQueuePill(n) {
   if (stat)  stat.textContent = n;
 }
 
+// Optimistisch Badge anpassen ohne API-Call
+let _optimisticDelta = 0;
+function adjustQueueBadge(delta) {
+  _optimisticDelta += delta;
+  const cnt = document.getElementById('pill-count');
+  const current = parseInt(cnt?.textContent || '0');
+  updateQueuePill(Math.max(0, current + delta));
+  // Dashboard-KPI sofort anpassen
+  const dqsPending = document.getElementById('dqs-pending');
+  if (dqsPending) {
+    const cur = parseInt(dqsPending.textContent || '0');
+    dqsPending.textContent = Math.max(0, cur + delta);
+  }
+}
+
 async function updateQueueBadge() {
   <?php if ($can_queue_view): ?>
   const items = await api('get_queue');
   if (Array.isArray(items)) {
-    // _queuedIds: alle nicht-done Items
     _queuedIds    = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
-    // _downloadedIds aus Queue-done Items ergänzen (nicht überschreiben — stats ist maßgeblich)
     items.filter(i => i.status === 'done').forEach(i => _downloadedIds.add(String(i.stream_id)));
-    updateQueuePill(items.filter(i => i.status === 'pending').length);
-    // Favoriten neu rendern falls aktiv
+    const serverPending = items.filter(i => i.status === 'pending').length;
+    _optimisticDelta = 0;
+    updateQueuePill(serverPending);
     if (currentView === 'favourites') renderFavourites();
   }
   <?php endif; ?>
@@ -1504,7 +1523,7 @@ async function updateQueueBadge() {
 let _badgeInterval = null;
 function startBadgePolling() {
   if (_badgeInterval) return;
-  _badgeInterval = setInterval(updateQueueBadge, 10000);
+  _badgeInterval = setInterval(updateQueueBadge, 3000);
 }
 startBadgePolling();
 
@@ -1836,7 +1855,7 @@ async function queueEpisode(ep, season, seriesTitle, category, btn) {
 async function removeEpFromQueue(id, btn) {
   await apiPost('queue_remove', {stream_id: id});
   if (btn) { btn.textContent = '+ Q'; btn.className = 'ep-btn add'; btn.onclick = null; }
-  updateQueueBadge(); loadStats();
+  adjustQueueBadge(-1); loadStats();
 }
 async function queueAllSeason(eps, season, seriesTitle, category) {
   let count = 0;
@@ -1926,7 +1945,8 @@ async function removeFromQueue(sid, card) {
   if (idx >= 0) allMovies[idx].queued = false;
   const idx2 = _lastMovies.findIndex(x => String(x.stream_id) === String(sid));
   if (idx2 >= 0) _lastMovies[idx2].queued = false;
-  updateQueueBadge(); loadStats();
+  adjustQueueBadge(-1);
+  loadStats();
   showToast(t('queue.removed'), 'info');
 }
 
@@ -1963,7 +1983,8 @@ async function queueItem(item) {
   const suffix = remaining !== null ? ` (noch ${remaining}/${d.limit} diese Stunde)` : '';
   showToast(`"${item.title}" zur Queue hinzugefügt${suffix}`, 'success');
   updateLimitIndicator(remaining);
-  updateQueueBadge(); loadStats();
+  adjustQueueBadge(+1);
+  loadStats();
   return d;
 }
 
@@ -2315,7 +2336,7 @@ async function removeQueueItem(sid, el) {
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   if (el) el.remove();
-  updateQueueBadge(); loadStats();
+  adjustQueueBadge(-1); loadStats();
   showToast('Entfernt', 'info');
 }
 
