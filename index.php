@@ -308,8 +308,6 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <option value="default"><?= t('sort.default') ?></option>
             <option value="az"><?= t('sort.az') ?></option>
             <option value="za"><?= t('sort.za') ?></option>
-            <option value="year_desc">Jahr ↓</option>
-            <option value="year_asc">Jahr ↑</option>
             <option value="rating_desc">Bewertung ↓</option>
           </select>
         </div>
@@ -319,24 +317,16 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div id="movie-filter-panel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:14px">
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
           <div>
-            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">JAHR</div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <input type="number" id="filter-year-from" placeholder="von" min="1900" max="2030" style="width:72px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" oninput="applyMovieFilters()">
-              <span style="color:var(--muted);font-size:.8rem">–</span>
-              <input type="number" id="filter-year-to" placeholder="bis" min="1900" max="2030" style="width:72px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" oninput="applyMovieFilters()">
-            </div>
-          </div>
-          <div>
             <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">MINDESTBEWERTUNG</div>
             <div style="display:flex;align-items:center;gap:6px">
-              <input type="range" id="filter-rating" min="0" max="10" step="0.5" value="0" style="width:120px;accent-color:var(--accent)" oninput="document.getElementById('filter-rating-val').textContent=this.value>0?'★ '+this.value+'+':'Alle';applyMovieFilters()">
+              <input type="range" id="filter-rating" min="0" max="10" step="0.5" value="0" style="width:140px;accent-color:var(--accent)" oninput="document.getElementById('filter-rating-val').textContent=this.value>0?'★ '+this.value+'+':'Alle';applyMovieFilters()">
               <span id="filter-rating-val" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);min-width:48px">Alle</span>
             </div>
           </div>
           <div style="flex:1;min-width:160px">
-            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">GENRE</div>
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">KATEGORIE</div>
             <select id="filter-genre" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" onchange="applyMovieFilters()">
-              <option value="">Alle Genres</option>
+              <option value="">Alle Kategorien</option>
             </select>
           </div>
           <button class="btn-sm" onclick="resetMovieFilters()" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">✕ Zurücksetzen</button>
@@ -1588,7 +1578,7 @@ function setSortOrder(order, type) {
   else                   { _seriesSort = order; _seriesPage = 1; renderSeriesGrid(_lastSeries); }
 }
 
-let _movieFilters = { yearFrom: '', yearTo: '', rating: 0, genre: '' };
+let _movieFilters = { rating: 0, genre: '' };
 
 function toggleMovieFilters() {
   const panel = document.getElementById('movie-filter-panel');
@@ -1602,18 +1592,18 @@ function toggleMovieFilters() {
 function buildGenreOptions() {
   const sel = document.getElementById('filter-genre');
   if (!sel) return;
-  const genres = new Set();
+  const cats = new Set();
   _lastMovies.forEach(m => {
-    (m.genre || '').split(/[,\/]/).forEach(g => { const t = g.trim(); if (t) genres.add(t); });
+    const cat = (m.category || '').trim();
+    if (cat) cats.add(cat);
   });
   const current = sel.value;
-  sel.innerHTML = '<option value="">Alle Genres</option>' +
-    [...genres].sort().map(g => `<option value="${g}"${g===current?' selected':''}>${g}</option>`).join('');
+  sel.style.color = '';
+  sel.innerHTML = '<option value="">Alle Kategorien</option>' +
+    [...cats].sort().map(c => `<option value="${c}"${c===current?' selected':''}>${c}</option>`).join('');
 }
 
 function applyMovieFilters() {
-  _movieFilters.yearFrom = parseInt(document.getElementById('filter-year-from')?.value) || 0;
-  _movieFilters.yearTo   = parseInt(document.getElementById('filter-year-to')?.value)   || 0;
   _movieFilters.rating   = parseFloat(document.getElementById('filter-rating')?.value)  || 0;
   _movieFilters.genre    = document.getElementById('filter-genre')?.value || '';
   _moviePage = 1;
@@ -1621,9 +1611,7 @@ function applyMovieFilters() {
 }
 
 function resetMovieFilters() {
-  _movieFilters = { yearFrom: 0, yearTo: 0, rating: 0, genre: '' };
-  const yf = document.getElementById('filter-year-from'); if (yf) yf.value = '';
-  const yt = document.getElementById('filter-year-to');   if (yt) yt.value = '';
+  _movieFilters = { rating: 0, genre: '' };
   const rt = document.getElementById('filter-rating');    if (rt) rt.value = 0;
   const rv = document.getElementById('filter-rating-val');if (rv) rv.textContent = 'Alle';
   const gn = document.getElementById('filter-genre');     if (gn) gn.value = '';
@@ -1639,20 +1627,23 @@ function renderMovies() {
   if (currentFilter === 'new')    movies = movies.filter(m => !m.downloaded && !m.queued);
   if (currentFilter === 'queued') movies = movies.filter(m => m.queued);
   // Erweiterte Filter
-  if (_movieFilters.yearFrom) movies = movies.filter(m => parseInt(m.year) >= _movieFilters.yearFrom);
-  if (_movieFilters.yearTo)   movies = movies.filter(m => parseInt(m.year) <= _movieFilters.yearTo);
-  if (_movieFilters.rating)   movies = movies.filter(m => parseFloat(m.rating_5based ?? m.rating ?? 0) * 2 >= _movieFilters.rating);
-  if (_movieFilters.genre)    movies = movies.filter(m => (m.genre || '').toLowerCase().includes(_movieFilters.genre.toLowerCase()));
+  if (_movieFilters.rating) {
+    movies = movies.filter(m => {
+      // rating_5based ist 0-5 Skala → auf 10 normalisieren
+      const r5 = parseFloat(m.rating_5based || 0);
+      const r10 = r5 > 0 ? r5 * 2 : parseFloat(m.rating || 0);
+      return r10 >= _movieFilters.rating;
+    });
+  }
+  if (_movieFilters.genre)    movies = movies.filter(m => (m.category || '').toLowerCase().includes(_movieFilters.genre.toLowerCase()));
   // Sortierung
   if (_movieSort === 'az')          movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
   if (_movieSort === 'za')          movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
-  if (_movieSort === 'year_desc')   movies = [...movies].sort((a,b) => (parseInt(b.year)||0) - (parseInt(a.year)||0));
-  if (_movieSort === 'year_asc')    movies = [...movies].sort((a,b) => (parseInt(a.year)||0) - (parseInt(b.year)||0));
   if (_movieSort === 'rating_desc') movies = [...movies].sort((a,b) => (parseFloat(b.rating_5based??b.rating??0)) - (parseFloat(a.rating_5based??a.rating??0)));
   // Filter-Zähler
   const countEl = document.getElementById('movie-filter-count');
   if (countEl) {
-    const hasFilter = _movieFilters.yearFrom || _movieFilters.yearTo || _movieFilters.rating || _movieFilters.genre;
+    const hasFilter = _movieFilters.rating || _movieFilters.genre;
     countEl.textContent = hasFilter ? `${movies.length} von ${_lastMovies.length} Filmen` : '';
   }
   if (!movies.length) { grid.innerHTML = emptyHTML('Keine Filme'); document.getElementById('movie-pagination').innerHTML = ''; return; }
@@ -1709,10 +1700,10 @@ function movieCard(m, showServer = false) {
   const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this,'${esc(m._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
   const year = m.year ?? '';
-  const rating = m.rating_5based ? parseFloat(m.rating_5based).toFixed(1) : (m.rating ? (parseFloat(m.rating)/2).toFixed(1) : '');
+  const rating = m.rating_5based ? (parseFloat(m.rating_5based) * 2).toFixed(1) : '';
   const metaParts = [];
   if (year) metaParts.push(year);
-  if (rating) metaParts.push(`★ ${rating}`);
+  if (rating && parseFloat(rating) > 0) metaParts.push(`★ ${rating}`);
   if (!metaParts.length && m.container_extension) metaParts.push(m.container_extension.toUpperCase());
   const serverBadge = (showServer && m._server_name)
     ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m._server_name)}">🌐 ${esc(m._server_name)}</div>`
@@ -2762,14 +2753,6 @@ async function loadServers() {
         <span id="srv-test-${esc(s.id)}"></span>
       </div>
     </div>`).join('');
-}
-
-async function switchServer(serverId, name) {
-  if (!confirm(`Zu Server "${name}" wechseln?`)) return;
-  const d = await apiPost('switch_server', {server_id: serverId});
-  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast(`✅ Gewechselt zu "${name}" — Seite wird neu geladen`, 'success');
-  setTimeout(() => location.reload(), 1200);
 }
 
 let _editServerId = '';

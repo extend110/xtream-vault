@@ -750,18 +750,13 @@ switch ($action) {
     case 'test_server':
         require_permission('settings');
         $srvId = trim($_JSON_BODY['server_id'] ?? '');
-        // Zugangsdaten ermitteln
-        if ($srvId === SERVER_ID || $srvId === '') {
-            $testIp   = SERVER_IP; $testPort = PORT;
-            $testUser = USERNAME;  $testPass = PASSWORD;
-        } else {
-            $allSrv = file_exists(SERVERS_FILE) ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? []) : [];
-            $srv = null;
-            foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
-            if (!$srv) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
-            $testIp   = $srv['server_ip']; $testPort = $srv['port'];
-            $testUser = $srv['username'];  $testPass = $srv['password'] ?? '';
-        }
+        $allSrv = load_all_servers();
+        $srv = null;
+        foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+        if (!$srv && !empty($allSrv)) $srv = $allSrv[0];
+        if (!$srv) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
+        $testIp   = $srv['server_ip']; $testPort = $srv['port'];
+        $testUser = $srv['username'];  $testPass = $srv['password'] ?? '';
         $params  = http_build_query(['username' => $testUser, 'password' => $testPass, 'action' => 'get_vod_categories']);
         $testUrl = 'http://' . $testIp . ':' . $testPort . '/player_api.php?' . $params;
         $ctx     = stream_context_create(['http' => ['timeout' => 10, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
@@ -985,33 +980,6 @@ switch ($action) {
         }
 
         echo json_encode(['ok' => true, 'deleted_files' => $deleted]);
-        break;
-
-    case 'switch_server':
-        require_permission('settings');
-        $d   = json_decode($_RAW_BODY, true) ?? [];
-        $sid = trim($d['server_id'] ?? '');
-        $servers = file_exists(SERVERS_FILE)
-            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
-            : [];
-        $target = null;
-        foreach ($servers as $s) {
-            if ($s['id'] === $sid) { $target = $s; break; }
-        }
-        if (!$target) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
-        // Config mit den gespeicherten Zugangsdaten des Ziel-Servers laden
-        $current = load_config();
-        $new = array_merge($current, [
-            'server_ip' => $target['server_ip'],
-            'port'      => $target['port'],
-            'username'  => $target['username'],
-            'password'  => $target['password'] ?? $current['password'],
-        ]);
-        if (save_config($new)) {
-            echo json_encode(['ok' => true, 'server_id' => $sid, 'name' => $target['name']]);
-        } else {
-            echo json_encode(['error' => 'Konnte config.json nicht schreiben']);
-        }
         break;
 
     // ── VPN ───────────────────────────────────────────────────────────────────
