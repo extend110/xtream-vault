@@ -60,6 +60,9 @@ $servers = file_exists(SERVERS_FILE)
     ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
     : [];
 
+// Deaktivierte Server überspringen
+$servers = array_values(array_filter($servers, fn($s) => ($s['enabled'] ?? true) !== false));
+
 // Fallback auf config.json wenn servers.json leer (Rückwärtskompatibilität)
 if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
     $servers = [[
@@ -124,6 +127,7 @@ foreach ($servers as $srv) {
                 'clean_title' => display_title($s['name'] ?? ''),
                 'cover'       => $s['cover'] ?? '',
                 'category'    => $cat['category_name'],
+                'category_id' => (string)$cat['category_id'],
                 'genre'       => $s['genre'] ?? '',
                 'type'        => 'series',
                 '_server_id'  => $srvId,

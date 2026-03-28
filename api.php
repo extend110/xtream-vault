@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$api_key_auth && !in_array($action
 $config_actions = [
     // Server-Verwaltung
     'get_config', 'save_config',
-    'save_server', 'list_servers', 'delete_server', 'test_server',
+    'save_server', 'list_servers', 'delete_server', 'test_server', 'toggle_server',
     // Benutzer & Rollen (funktionieren ohne Server)
     'list_users', 'create_user', 'update_user', 'delete_user',
     'change_own_password', 'set_language', 'get_activity_log',
@@ -126,13 +126,16 @@ function xtream_for_server(array $server, string $action, array $extra = []): ar
 }
 
 /**
- * Lädt alle Server aus servers.json.
- * Fällt auf config.json zurück wenn servers.json leer ist (Rückwärtskompatibilität).
+ * Lädt alle **aktiven** Server aus servers.json.
+ * Deaktivierte Server (enabled === false) werden ausgeschlossen.
+ * Fällt auf config.json zurück wenn servers.json leer ist.
  */
 function load_all_servers(): array {
     $servers = file_exists(SERVERS_FILE)
         ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
         : [];
+    // Nur aktivierte Server zurückgeben (enabled fehlt → gilt als aktiv)
+    $servers = array_values(array_filter($servers, fn($s) => ($s['enabled'] ?? true) !== false));
     // Fallback: aktiver Server aus config.json wenn servers.json leer
     if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
         $servers = [[
@@ -142,6 +145,7 @@ function load_all_servers(): array {
             'port'      => PORT,
             'username'  => USERNAME,
             'password'  => PASSWORD,
+            'enabled'   => true,
         ]];
     }
     return $servers;
@@ -883,10 +887,9 @@ switch ($action) {
             ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
             : [];
         foreach ($servers as &$s) {
-            $s['active']    = ($s['id'] === SERVER_ID);
             $s['has_cache'] = file_exists(DATA_DIR . '/library_cache_' . $s['id'] . '.json');
-            // Passwort nicht zurückgeben
-            unset($s['password']);
+            $s['enabled']   = ($s['enabled'] ?? true) !== false;
+            unset($s['password'], $s['active']);
         }
         unset($s);
         echo json_encode(array_values($servers));
@@ -939,6 +942,27 @@ switch ($action) {
         }
         file_put_contents(SERVERS_FILE, json_encode(array_values($servers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         echo json_encode(['ok' => true]);
+        break;
+
+    case 'toggle_server':
+        require_permission('settings');
+        $d   = json_decode($_RAW_BODY, true) ?? [];
+        $sid = trim($d['server_id'] ?? '');
+        if ($sid === '') { echo json_encode(['error' => 'server_id fehlt']); break; }
+        $servers = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        $found = false;
+        foreach ($servers as &$s) {
+            if ($s['id'] === $sid) {
+                $s['enabled'] = !($s['enabled'] ?? true);
+                $found = true; break;
+            }
+        }
+        unset($s);
+        if (!$found) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
+        file_put_contents(SERVERS_FILE, json_encode(array_values($servers), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true, 'enabled' => $servers[array_search($sid, array_column($servers, 'id'))]['enabled'] ?? true]);
         break;
 
     case 'delete_server':
@@ -1242,17 +1266,41 @@ switch ($action) {
     // ── Categories ────────────────────────────────────────────────────────────
     case 'get_all_movie_categories':
     case 'get_all_series_categories': {
-        $catAction = ($action === 'get_all_movie_categories') ? 'get_vod_categories' : 'get_series_categories';
-        $servers = load_all_servers();
-        $result = [];
+        $isMovies   = ($action === 'get_all_movie_categories');
+        $catAction  = $isMovies ? 'get_vod_categories' : 'get_series_categories';
+        $servers    = load_all_servers();
+        $result     = [];
         foreach ($servers as $srv) {
+            $srvId   = $srv['id'];
+            $srvName = $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']);
+            // Cache nutzen wenn vorhanden (schnell, kein Server-Request)
+            $cacheFile = $isMovies
+                ? DATA_DIR . '/library_cache_' . $srvId . '.json'
+                : DATA_DIR . '/series_cache_'  . $srvId . '.json';
+            if (file_exists($cacheFile)) {
+                $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
+                $seen  = [];
+                $cats  = [];
+                foreach ($cache as $item) {
+                    $catId   = $item['category_id'] ?? '';
+                    $catName = $item['category']    ?? '';
+                    if ($catName === '' || $catId === '') continue;
+                    if (!isset($seen[$catId])) {
+                        $seen[$catId] = true;
+                        $cats[] = ['category_id' => $catId, 'category_name' => $catName];
+                    }
+                }
+                usort($cats, fn($a, $b) => strcmp($a['category_name'], $b['category_name']));
+                if (!empty($cats)) {
+                    $result[] = ['server_id' => $srvId, 'server_name' => $srvName, 'categories' => $cats];
+                    continue;
+                }
+                // Kein category_id im Cache (z.B. Serien-Cache) → Fallback auf Server
+            }
+            // Fallback: direkt vom Server
             $cats = xtream_for_server($srv, $catAction);
             if (!is_array($cats)) continue;
-            $result[] = [
-                'server_id'   => $srv['id'],
-                'server_name' => $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']),
-                'categories'  => $cats,
-            ];
+            $result[] = ['server_id' => $srvId, 'server_name' => $srvName, 'categories' => $cats];
         }
         echo json_encode($result);
         break;
@@ -1658,8 +1706,9 @@ switch ($action) {
             'title'               => sanitize($d['title'] ?? 'Unknown'),
             'container_extension' => $ext,
             'category'            => $d['category'] ?? '',
+            'category_original'   => $d['category_original'] ?? '',
             'season'              => isset($d['season']) ? (int)$d['season'] : null,
-            'priority'            => 2, // Standard: normal
+            'priority'            => 2,
             'stream_url'          => $server_stream_url,
             'cover'               => $d['cover'] ?? '',
             'dest_subfolder'      => $d['dest_subfolder'] ?? '',

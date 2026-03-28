@@ -141,12 +141,15 @@ function list_rclone_files(string $remote, string $path): array {
 }
 
 /**
- * Lädt alle Server aus servers.json (Fallback auf config.json).
+ * Lädt alle aktiven Server aus servers.json (Fallback auf config.json).
+ * Deaktivierte Server werden ausgeschlossen.
  */
 function cron_load_all_servers(): array {
     $servers = file_exists(SERVERS_FILE)
         ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
         : [];
+    // Deaktivierte Server überspringen
+    $servers = array_values(array_filter($servers, fn($s) => ($s['enabled'] ?? true) !== false));
     if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
         $servers = [[
             'id'        => SERVER_ID,
@@ -387,6 +390,7 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
         . ' copyurl ' . escapeshellarg($url)
         . ' ' . escapeshellarg($remoteDest)
         . ' --no-traverse'
+        . ' --http-no-head'
         . ' --stats 2s'
         . ' --stats-one-line'
         . ' --use-mmap'

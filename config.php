@@ -290,14 +290,11 @@ function build_dest_path(array $item): array {
     $season = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
     $sub    = $item['dest_subfolder'] ?? ($type === 'movie' ? 'Movies' : 'TV Shows');
 
-    // Länderkürzel
-    if ($type === 'episode') {
-        $countryPrefix = extract_country_prefix($cat);
-        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
-    } else {
-        $countryPrefix = extract_country_prefix($title);
-        if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
-    }
+    // Länderkürzel — zuerst aus Originalkategorie, dann aus Kategorie, dann aus Titel
+    $catForPrefix = !empty($item['category_original']) ? $item['category_original'] : $cat;
+    $countryPrefix = extract_country_prefix($catForPrefix);
+    if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
+    if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
 
     // Kategorie bereinigen
     $catTrimmed = preg_replace('/\xc2\xa0/', ' ', trim($cat));

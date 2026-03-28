@@ -317,6 +317,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div id="movie-filter-panel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:14px">
         <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
           <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">FORMAT</div>
+            <div style="display:flex;gap:4px">
+              <button class="filter-btn active" id="fmt-all"  onclick="setFormatFilter('',this)">Alle</button>
+              <button class="filter-btn"        id="fmt-mkv"  onclick="setFormatFilter('mkv',this)">MKV</button>
+              <button class="filter-btn"        id="fmt-mp4"  onclick="setFormatFilter('mp4',this)">MP4</button>
+            </div>
+          </div>
+          <div>
             <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">MINDESTBEWERTUNG</div>
             <div style="display:flex;align-items:center;gap:6px">
               <input type="range" id="filter-rating" min="0" max="10" step="0.5" value="0" style="width:140px;accent-color:var(--accent)" oninput="document.getElementById('filter-rating-val').textContent=this.value>0?'★ '+this.value+'+':'Alle';applyMovieFilters()">
@@ -1597,7 +1605,15 @@ function setSortOrder(order, type) {
   else                   { _seriesSort = order; _seriesPage = 1; renderSeriesGrid(_lastSeries); }
 }
 
-let _movieFilters = { rating: 0, genre: '' };
+let _movieFilters = { rating: 0, genre: '', format: '' };
+
+function setFormatFilter(fmt, btn) {
+  _movieFilters.format = fmt;
+  document.querySelectorAll('#fmt-all,#fmt-mkv,#fmt-mp4').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _moviePage = 1;
+  renderMovies();
+}
 
 function toggleMovieFilters() {
   const panel = document.getElementById('movie-filter-panel');
@@ -1630,10 +1646,12 @@ function applyMovieFilters() {
 }
 
 function resetMovieFilters() {
-  _movieFilters = { rating: 0, genre: '' };
+  _movieFilters = { rating: 0, genre: '', format: '' };
   const rt = document.getElementById('filter-rating');    if (rt) rt.value = 0;
   const rv = document.getElementById('filter-rating-val');if (rv) rv.textContent = 'Alle';
   const gn = document.getElementById('filter-genre');     if (gn) gn.value = '';
+  document.querySelectorAll('#fmt-all,#fmt-mkv,#fmt-mp4').forEach(b => b.classList.remove('active'));
+  const fmtAll = document.getElementById('fmt-all'); if (fmtAll) fmtAll.classList.add('active');
   _moviePage = 1;
   renderMovies();
 }
@@ -1654,7 +1672,8 @@ function renderMovies() {
       return r10 >= _movieFilters.rating;
     });
   }
-  if (_movieFilters.genre)    movies = movies.filter(m => (m.category || '').toLowerCase().includes(_movieFilters.genre.toLowerCase()));
+  if (_movieFilters.genre)  movies = movies.filter(m => (m.category || '').toLowerCase().includes(_movieFilters.genre.toLowerCase()));
+  if (_movieFilters.format) movies = movies.filter(m => (m.container_extension || 'mkv').toLowerCase() === _movieFilters.format);
   // Sortierung
   if (_movieSort === 'az')          movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
   if (_movieSort === 'za')          movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
@@ -1662,7 +1681,7 @@ function renderMovies() {
   // Filter-Zähler
   const countEl = document.getElementById('movie-filter-count');
   if (countEl) {
-    const hasFilter = _movieFilters.rating || _movieFilters.genre;
+    const hasFilter = _movieFilters.rating || _movieFilters.genre || _movieFilters.format;
     countEl.textContent = hasFilter ? `${movies.length} von ${_lastMovies.length} Filmen` : '';
   }
   if (!movies.length) { grid.innerHTML = emptyHTML('Keine Filme'); document.getElementById('movie-pagination').innerHTML = ''; return; }
@@ -1720,10 +1739,10 @@ function movieCard(m, showServer = false) {
 
   const year = m.year ?? '';
   const rating = m.rating_5based ? (parseFloat(m.rating_5based) * 2).toFixed(1) : '';
-  const metaParts = [];
+  const ext = (m.container_extension || 'mkv').toUpperCase();
+  const metaParts = [ext];
   if (year) metaParts.push(year);
   if (rating && parseFloat(rating) > 0) metaParts.push(`★ ${rating}`);
-  if (!metaParts.length && m.container_extension) metaParts.push(m.container_extension.toUpperCase());
   const serverBadge = (showServer && m._server_name)
     ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m._server_name)}">🌐 ${esc(m._server_name)}</div>`
     : '';
@@ -1848,6 +1867,7 @@ async function queueEpisode(ep, season, seriesTitle, category, btn) {
     cover:               '',
     dest_subfolder:      'TV Shows',
     category:            seriesTitle,
+    category_original:   category || '',
     season:              season,
   });
   if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; btn.onclick = () => removeEpFromQueue(ep.id, btn); }
@@ -1866,7 +1886,8 @@ async function queueAllSeason(eps, season, seriesTitle, category) {
         title: ep.clean_title || ep.title,
         container_extension: ep.container_extension ?? 'mp4',
         cover: '', dest_subfolder: 'TV Shows',
-        category: seriesTitle,
+        category:          seriesTitle,
+        category_original: category || '',
         season: season,
       });
       if (!result) break;
@@ -1918,9 +1939,13 @@ async function addMovieToQueue(m, card) {
       }
     }
   }
-  // Update in allMovies
+  // Update in allMovies und _lastMovies
   const idx = allMovies.findIndex(x => String(x.stream_id) === String(m.stream_id));
   if (idx >= 0) allMovies[idx].queued = true;
+  const idx2 = _lastMovies.findIndex(x => String(x.stream_id) === String(m.stream_id));
+  if (idx2 >= 0) _lastMovies[idx2].queued = true;
+  // Filter neu anwenden wenn aktiv (z.B. "Queued"-Filter oder Format-Filter)
+  if (currentFilter !== 'all' || _movieFilters.rating || _movieFilters.genre || _movieFilters.format) renderMovies();
 }
 
 async function removeFromQueue(sid, card) {
@@ -1947,6 +1972,8 @@ async function removeFromQueue(sid, card) {
   if (idx2 >= 0) _lastMovies[idx2].queued = false;
   adjustQueueBadge(-1);
   loadStats();
+  // Filter neu anwenden wenn aktiv
+  if (currentFilter !== 'all' || _movieFilters.rating || _movieFilters.genre || _movieFilters.format) renderMovies();
   showToast(t('queue.removed'), 'info');
 }
 
@@ -2757,11 +2784,14 @@ async function loadServers() {
     list.innerHTML = `<div style="color:var(--muted);font-size:.8rem">${t('cfg.server_none')}</div>`;
     return;
   }
-  list.innerHTML = servers.map(s => `
-    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px" id="srv-card-${esc(s.id)}">
+  list.innerHTML = servers.map(s => {
+    const enabled = s.enabled !== false;
+    return `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;opacity:${enabled?'1':'.5'}" id="srv-card-${esc(s.id)}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <span style="font-size:.9rem;font-weight:600;flex:1">${esc(s.name)}</span>
-        <button class="btn-icon" title="Verbindung testen" onclick="testServer('${esc(s.id)}','${esc(s.name)}',this)">🔌</button>
+        <span style="font-size:.9rem;font-weight:600;flex:1">${esc(s.name)}${!enabled?' <span style="font-family:\'DM Mono\',monospace;font-size:.6rem;color:var(--muted)">(deaktiviert)</span>':''}</span>
+        <button class="btn-icon" title="Verbindung testen" ${!enabled?'disabled':''} onclick="testServer('${esc(s.id)}','${esc(s.name)}',this)">🔌</button>
+        <button class="btn-icon" title="${enabled?'Deaktivieren':'Aktivieren'}" onclick="toggleServer('${esc(s.id)}',this)">${enabled?'⏸':'▶'}</button>
         <button class="btn-icon" title="Bearbeiten" onclick="openEditServerModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
         <button class="btn-icon danger" title="Löschen" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>
       </div>
@@ -2773,7 +2803,8 @@ async function loadServers() {
         </span>
         <span id="srv-test-${esc(s.id)}"></span>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 let _editServerId = '';
@@ -2808,6 +2839,13 @@ async function saveEditServer() {
   if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
   msg.textContent = '✓ Gespeichert'; msg.className = 'settings-msg ok';
   setTimeout(() => closeEditServerModal(), 600);
+  loadServers();
+}
+
+async function toggleServer(serverId, btn) {
+  const d = await apiPost('toggle_server', {server_id: serverId});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast(d.enabled ? '✓ Server aktiviert' : '⏸ Server deaktiviert', 'info');
   loadServers();
 }
 
@@ -4104,9 +4142,10 @@ function closeDupToast() {
   _dupPendingItem = null;
 }
 async function forceQueueAdd() {
+  const item = _dupPendingItem;
   closeDupToast();
-  if (!_dupPendingItem) return;
-  await queueItem({..._dupPendingItem, force_add: true});
+  if (!item) return;
+  await queueItem({...item, force_add: true});
 }
 
 function showToast(msg, type = '') {
