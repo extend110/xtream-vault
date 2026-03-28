@@ -172,8 +172,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
         <button class="btn-secondary" data-label="<?= t('queue.start') ?>" onclick="startQueue(this)"><?= t('queue.start') ?></button>
         <button class="btn-secondary" onclick="dashRebuildCache()"><?= t('cfg.cache_build') ?></button>
-        <button class="btn-secondary" onclick="dashClearDone()">🗑 Erledigte leeren</button>
-        <button class="btn-secondary danger" onclick="dashClearAll()">✕ <?= t('queue.clear') ?></button>
+        <button class="btn-secondary" onclick="dashClearDone()"><?= t('queue.clear_done') ?></button>
+        <button class="btn-secondary danger" onclick="dashClearAll()"><?= t('queue.clear') ?></button>
         <button class="btn-secondary" onclick="showView('settings')">⚙️ <?= t('nav.settings') ?></button>
         <button class="btn-secondary" onclick="showView('log')">🖥 <?= t('nav.log') ?></button>
       </div>
@@ -204,7 +204,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div id="dash-disk" style="margin-top:4px"><div style="color:var(--muted);font-size:.75rem"><?= t('status.loading') ?></div></div>
         </div>
         <div class="dkpi">
-          <div class="dkpi-l">System</div>
+          <div class="dkpi-l"><?= t('dash.system') ?></div>
           <div id="dash-system" style="font-size:.78rem;line-height:1.75;margin-top:4px"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div>
         </div>
       </div>
@@ -264,11 +264,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
         <?php if ($can_queue_view): ?>
         <div class="dkpi" style="flex:1;min-width:140px">
-          <div class="dkpi-l">Ausstehend</div>
+          <div class="dkpi-l"><?= t('status.pending') ?></div>
           <div class="dkpi-n" style="color:var(--accent)" id="ue-pending">–</div>
         </div>
         <div class="dkpi" style="flex:1;min-width:140px">
-          <div class="dkpi-l">Lädt gerade</div>
+          <div class="dkpi-l"><?= t('status.downloading') ?></div>
           <div class="dkpi-n" style="color:var(--orange)" id="ue-downloading">–</div>
         </div>
         <?php endif; ?>
@@ -417,8 +417,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <button class="btn-sm" data-label="▶ Starten" onclick="startQueue(this)"><?= t('queue.start') ?></button>
         <?php endif; ?>
         <?php if ($can_queue_clear): ?>
-        <button class="btn-sm" onclick="clearDone()">✕ Done entfernen</button>
-        <button class="btn-sm danger" onclick="clearAll()">🗑 Alles löschen</button>
+        <button class="btn-sm" onclick="clearDone()"><?= t('queue.clear_done') ?></button>
+        <button class="btn-sm danger" onclick="clearAll()"><?= t('queue.clear') ?></button>
         <?php endif; ?>
       </div>
       <div class="queue-list" id="queue-list"></div>
@@ -519,13 +519,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
         <!-- Intro -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-bottom:20px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px">Authentifizierung</div>
-          <p style="font-size:.85rem;color:var(--muted);line-height:1.7;margin-bottom:12px">
-            Alle externen Endpoints erfordern einen API-Key. Dieser kann als HTTP-Header oder Query-Parameter übergeben werden.
-          </p>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px"><?= t('api.auth') ?></div>
+          <p style="font-size:.85rem;color:var(--muted);line-height:1.7;margin-bottom:12px"><?= t('api.auth_desc') ?></p>
           <div class="api-code">X-API-Key: xv_xxxxxxxxxxxx</div>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:8px">oder als Query-Parameter: <code style="color:var(--accent2)">?api_key=xv_xxxxxxxxxxxx</code></div>
-          <div style="font-size:.78rem;color:var(--muted);margin-top:6px">API-Keys verwalten: <span style="color:var(--accent2);cursor:pointer" onclick="showView('settings')">Einstellungen → API-Keys</span></div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:8px"><?= t('api.auth_query') ?> <code style="color:var(--accent2)">?api_key=xv_xxxxxxxxxxxx</code></div>
+          <div style="font-size:.78rem;color:var(--muted);margin-top:6px"><?= t('api.auth_manage') ?> <span style="color:var(--accent2);cursor:pointer" onclick="showView('settings')"><?= t('api.auth_manage_link') ?></span></div>
         </div>
 
         <!-- Endpoints -->
@@ -542,15 +540,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span class="api-method get">GET</span>
             <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_create_user</code>
           </div>
-          <div class="api-desc">Legt einen neuen Benutzer an.</div>
-          <div class="api-section-label">Parameter</div>
+          <div class="api-desc"><?= t('api.create_user_desc') ?></div>
+          <div class="api-section-label"><?= t('api.parameters') ?></div>
           <table class="api-table">
-            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
-            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername (eindeutig)</td></tr>
-            <tr><td>password</td><td>string</td><td>✅</td><td>Passwort (min. 6 Zeichen)</td></tr>
-            <tr><td>role</td><td>string</td><td>–</td><td><code>viewer</code> (Standard), <code>editor</code>, <code>admin</code></td></tr>
+            <tr><th><?= t('api.param_name') ?></th><th><?= t('api.param_type') ?></th><th><?= t('api.param_required') ?></th><th><?= t('api.param_desc') ?></th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td><?= t('api.param_username') ?></td></tr>
+            <tr><td>password</td><td>string</td><td>✅</td><td><?= t('api.param_password') ?></td></tr>
+            <tr><td>role</td><td>string</td><td>–</td><td><code>viewer</code> (<?= t('api.default') ?>), <code>editor</code>, <code>admin</code></td></tr>
           </table>
-          <div class="api-section-label">Antwort</div>
+          <div class="api-section-label"><?= t('api.response') ?></div>
           <div class="api-code">{ "ok": true, "id": "abc123", "username": "max", "role": "viewer" }</div>
         </div>
 
@@ -560,8 +558,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span class="api-method get">GET</span>
             <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_list_users</code>
           </div>
-          <div class="api-desc">Gibt alle Benutzer zurück (ohne Passwörter).</div>
-          <div class="api-section-label">Antwort</div>
+          <div class="api-desc"><?= t('api.list_users_desc') ?></div>
+          <div class="api-section-label"><?= t('api.response') ?></div>
           <div class="api-code">{ "ok": true, "count": 3, "users": [<br>&nbsp;&nbsp;{ "id": "abc123", "username": "max", "role": "viewer", "suspended": false, "created_at": "2026-01-01 12:00:00" }<br>] }</div>
         </div>
 
@@ -572,14 +570,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span class="api-method get">GET</span>
             <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_suspend_user</code>
           </div>
-          <div class="api-desc">Sperrt oder entsperrt einen Benutzer. Admins können nicht gesperrt werden.</div>
-          <div class="api-section-label">Parameter</div>
+          <div class="api-desc"><?= t('api.suspend_user_desc') ?></div>
+          <div class="api-section-label"><?= t('api.parameters') ?></div>
           <table class="api-table">
-            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
-            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
-            <tr><td>suspended</td><td>bool</td><td>–</td><td><code>true</code> = sperren (Standard), <code>false</code> = entsperren</td></tr>
+            <tr><th><?= t('api.param_name') ?></th><th><?= t('api.param_type') ?></th><th><?= t('api.param_required') ?></th><th><?= t('api.param_desc') ?></th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td><?= t('api.param_username') ?></td></tr>
+            <tr><td>suspended</td><td>bool</td><td>–</td><td><code>true</code> = <?= t('api.suspend_true') ?>, <code>false</code> = <?= t('api.suspend_false') ?></td></tr>
           </table>
-          <div class="api-section-label">Antwort</div>
+          <div class="api-section-label"><?= t('api.response') ?></div>
           <div class="api-code">{ "ok": true, "username": "max", "suspended": true }</div>
         </div>
 
@@ -589,15 +587,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span class="api-method post">POST</span>
             <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_update_user</code>
           </div>
-          <div class="api-desc">Ändert Passwort oder Rolle eines Benutzers.</div>
-          <div class="api-section-label">Parameter</div>
+          <div class="api-desc"><?= t('api.update_user_desc') ?></div>
+          <div class="api-section-label"><?= t('api.parameters') ?></div>
           <table class="api-table">
-            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
-            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
-            <tr><td>password</td><td>string</td><td>–</td><td>Neues Passwort</td></tr>
+            <tr><th><?= t('api.param_name') ?></th><th><?= t('api.param_type') ?></th><th><?= t('api.param_required') ?></th><th><?= t('api.param_desc') ?></th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td><?= t('api.param_username') ?></td></tr>
+            <tr><td>password</td><td>string</td><td>–</td><td><?= t('api.param_new_password') ?></td></tr>
             <tr><td>role</td><td>string</td><td>–</td><td><code>viewer</code>, <code>editor</code>, <code>admin</code></td></tr>
           </table>
-          <div class="api-section-label">Antwort</div>
+          <div class="api-section-label"><?= t('api.response') ?></div>
           <div class="api-code">{ "ok": true, "username": "max", "updated": true }</div>
         </div>
 
@@ -608,27 +606,27 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <span class="api-method get">GET</span>
             <code class="api-endpoint"><?= htmlspecialchars($base) ?>?action=external_delete_user</code>
           </div>
-          <div class="api-desc">Löscht einen Benutzer permanent. Admins können nicht gelöscht werden.</div>
-          <div class="api-section-label">Parameter</div>
+          <div class="api-desc"><?= t('api.delete_user_desc') ?></div>
+          <div class="api-section-label"><?= t('api.parameters') ?></div>
           <table class="api-table">
-            <tr><th>Name</th><th>Typ</th><th>Pflicht</th><th>Beschreibung</th></tr>
-            <tr><td>username</td><td>string</td><td>✅</td><td>Benutzername</td></tr>
+            <tr><th><?= t('api.param_name') ?></th><th><?= t('api.param_type') ?></th><th><?= t('api.param_required') ?></th><th><?= t('api.param_desc') ?></th></tr>
+            <tr><td>username</td><td>string</td><td>✅</td><td><?= t('api.param_username') ?></td></tr>
           </table>
-          <div class="api-section-label">Antwort</div>
+          <div class="api-section-label"><?= t('api.response') ?></div>
           <div class="api-code">{ "ok": true, "username": "max", "deleted": true }</div>
         </div>
 
-        <!-- Fehler -->
+        <!-- Fehlercodes -->
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:20px 24px;margin-top:8px">
-          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px">Fehlercodes</div>
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px"><?= t('api.errors') ?></div>
           <table class="api-table">
-            <tr><th>HTTP</th><th>Bedeutung</th></tr>
-            <tr><td>400</td><td>Fehlende oder ungültige Parameter</td></tr>
-            <tr><td>401</td><td>API-Key ungültig oder widerrufen</td></tr>
-            <tr><td>403</td><td>Aktion nicht erlaubt (z.B. Admin sperren)</td></tr>
-            <tr><td>404</td><td>Benutzer nicht gefunden</td></tr>
+            <tr><th>HTTP</th><th><?= t('api.error_meaning') ?></th></tr>
+            <tr><td>400</td><td><?= t('api.error_400') ?></td></tr>
+            <tr><td>401</td><td><?= t('api.error_401') ?></td></tr>
+            <tr><td>403</td><td><?= t('api.error_403') ?></td></tr>
+            <tr><td>404</td><td><?= t('api.error_404') ?></td></tr>
           </table>
-          <div style="margin-top:12px;font-size:.78rem;color:var(--muted)">Fehlermeldungen werden als <code style="color:var(--accent2)">{ "error": "..." }</code> zurückgegeben.</div>
+          <div style="margin-top:12px;font-size:.78rem;color:var(--muted)"><?= t('api.error_format') ?> <code style="color:var(--accent2)">{ "error": "..." }</code></div>
         </div>
 
       </div>
@@ -746,6 +744,24 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <div class="settings-msg" id="rclone-test-msg" style="margin:0"></div>
             </div>
             <div id="rclone-cache-status" style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:10px"></div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>⚡ <?= t('cfg.parallel_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            <?= t('cfg.parallel_desc') ?>
+          </div>
+          <label class="settings-toggle" style="margin-bottom:14px">
+            <input type="checkbox" id="cfg-parallel-enabled" onchange="document.getElementById('parallel-fields').style.display=this.checked?'':'none'">
+            <span><?= t('cfg.parallel_enable') ?></span>
+          </label>
+          <div id="parallel-fields" style="display:none">
+            <div class="field">
+              <label><?= t('cfg.parallel_max') ?></label>
+              <input type="number" id="cfg-parallel-max" min="1" max="10" step="1" style="max-width:100px">
+              <span class="hint"><?= t('cfg.parallel_max_hint') ?></span>
+            </div>
           </div>
         </div>
 
@@ -945,36 +961,36 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-users" style="display:none">
       <?php if ($can_users): ?>
       <div class="queue-toolbar">
-        <div class="queue-toolbar-title">Benutzerverwaltung</div>
-        <button class="btn-sm" onclick="showView('activity-log')">📋 Aktivitätslog</button>
+        <div class="queue-toolbar-title"><?= t('users.title') ?></div>
+        <button class="btn-sm" onclick="showView('activity-log')">📋 <?= t('nav.activity_log') ?></button>
         <button class="btn-sm" onclick="openInviteModal()"><?= t('invite.create') ?></button>
-        <button class="btn-sm" onclick="openCreateUser()">+ Benutzer anlegen</button>
+        <button class="btn-sm" onclick="openCreateUser()">+ <?= t('users.create') ?></button>
       </div>
       <div class="user-table-wrap" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px">
         <table class="user-table" id="users-table">
           <thead>
             <tr>
-              <th>Benutzername</th>
-              <th>Rolle</th>
-              <th>Status</th>
-              <th>Erstellt</th>
-              <th>Queue-Limit</th>
+              <th><?= t('users.col_username') ?></th>
+              <th><?= t('users.col_role') ?></th>
+              <th><?= t('users.col_status') ?></th>
+              <th><?= t('users.col_created') ?></th>
+              <th><?= t('users.col_limit') ?></th>
               <th></th>
             </tr>
           </thead>
           <tbody id="users-tbody">
-            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Lade…</td></tr>
+            <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)"><?= t('status.loading') ?></td></tr>
           </tbody>
         </table>
       </div>
 
       <!-- Aktive Einladungslinks -->
       <div style="margin-top:24px">
-        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Einladungslinks</div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px"><?= t('invite.links') ?></div>
         <div id="invite-list"><div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div></div>
       </div>
       <?php else: ?>
-      <div class="state-box"><div class="icon">🔒</div><p>Keine Berechtigung</p></div>
+      <div class="state-box"><div class="icon">🔒</div><p><?= t('users.no_permission') ?></p></div>
       <?php endif; ?>
     </div>
 
@@ -982,11 +998,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-activity-log" style="display:none">
       <?php if ($can_users): ?>
       <div class="queue-toolbar">
-        <div class="queue-toolbar-title">Aktivitätslog</div>
+        <div class="queue-toolbar-title"><?= t('nav.activity_log') ?></div>
         <select id="actlog-user-filter" onchange="loadActivityLog()" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;outline:none">
-          <option value="">Alle Benutzer</option>
+          <option value=""><?= t('users.all_users') ?></option>
         </select>
-        <button class="btn-sm" onclick="showView('users')">← Zurück</button>
+        <button class="btn-sm" onclick="showView('users')">← <?= t('btn.back') ?></button>
       </div>
       <div id="activity-log-list" class="queue-list"></div>
       <?php endif; ?>
@@ -1023,7 +1039,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <input type="password" id="prof-old-pw" autocomplete="current-password">
           </div>
           <div class="field">
-            <label>Neues Passwort</label>
+            <label><?= t('profile.new_pw') ?></label>
             <input type="password" id="prof-new-pw" autocomplete="new-password">
           </div>
           <div class="field">
@@ -1036,11 +1052,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="settings-msg" id="profile-msg"></div>
         </div>
         <div class="settings-card">
-          <h3>Konto</h3>
+          <h3><?= t('profile.account') ?></h3>
           <div style="font-size:.875rem;line-height:2">
-            <div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase">Benutzername</div>
+            <div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase"><?= t('users.col_username') ?></div>
             <div><?= htmlspecialchars($user['username']) ?></div>
-            <div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;margin-top:12px">Rolle</div>
+            <div style="color:var(--muted);font-family:'DM Mono',monospace;font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;margin-top:12px"><?= t('users.col_role') ?></div>
             <div><span class="role-badge <?= $role ?>"><?= $role ?></span></div>
           </div>
         </div>
@@ -1054,14 +1070,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <!-- ── User Create/Edit Modal ─────────────────────────────────── -->
 <div class="umodal" id="umodal" onclick="if(event.target===this)closeUModal()">
   <div class="umodal-box">
-    <div class="umodal-title" id="umodal-title">Benutzer anlegen</div>
+    <div class="umodal-title" id="umodal-title"><?= t('users.create') ?></div>
     <input type="hidden" id="umodal-id">
     <div class="field" id="umodal-username-wrap">
-      <label>Benutzername</label>
+      <label><?= t('users.col_username') ?></label>
       <input type="text" id="umodal-username" autocomplete="off">
     </div>
     <div class="field">
-      <label>Passwort <span id="umodal-pw-hint" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span></label>
+      <label><?= t('cfg.password') ?> <span id="umodal-pw-hint" style="color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span></label>
       <input type="password" id="umodal-password" autocomplete="new-password">
     </div>
     <div class="field">
@@ -1075,7 +1091,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="settings-msg" id="umodal-msg"></div>
     <div class="umodal-actions">
       <button class="btn-secondary" onclick="closeUModal()"><?= t('btn.cancel') ?></button>
-      <button class="btn-primary" id="umodal-submit" onclick="submitUModal()">Anlegen</button>
+      <button class="btn-primary" id="umodal-submit" onclick="submitUModal()"><?= t('users.create') ?></button>
     </div>
   </div>
 </div>
@@ -2634,7 +2650,7 @@ function showView(v) {
   if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
   if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
-  if (v === 'activity-log') { document.getElementById('page-title').textContent = 'Aktivitätslog'; loadActivityLog(); }
+  if (v === 'activity-log') { document.getElementById('page-title').textContent = t('nav.activity_log'); loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = t('profile.title'); document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
   if (v === 'favourites')    { document.getElementById('page-title').textContent = t('nav.favourites'); renderFavourites(); loadStats(); updateQueueBadge(); }
   if (v === 'new-releases')  { document.getElementById('page-title').textContent = t('new.title'); loadNewReleases(); }
@@ -2928,6 +2944,14 @@ async function loadConfig() {
   const vpnIface   = document.getElementById('cfg-vpn-interface');
   if (vpnEnabled) vpnEnabled.checked  = c.vpn_enabled    ?? false;
   if (vpnIface)   vpnIface.value      = c.vpn_interface  ?? 'wg0';
+  // Parallel Downloads
+  const parallelEnabled = c.parallel_enabled ?? true;
+  const parallelMaxEl   = document.getElementById('cfg-parallel-max');
+  const parallelChk     = document.getElementById('cfg-parallel-enabled');
+  if (parallelChk) { parallelChk.checked = parallelEnabled; }
+  if (parallelMaxEl) parallelMaxEl.value = c.parallel_max ?? 4;
+  const pFields = document.getElementById('parallel-fields');
+  if (pFields) pFields.style.display = parallelEnabled ? '' : 'none';
   setSettingsMsg('', '');
 }
 
@@ -2996,6 +3020,8 @@ function collectConfig() {
     tg_disk_low_gb:        parseFloat(document.getElementById('cfg-tg-disk-low-gb')?.value ?? '10'),
     vpn_enabled:           document.getElementById('cfg-vpn-enabled')?.checked  ?? false,
     vpn_interface:         document.getElementById('cfg-vpn-interface')?.value.trim() ?? 'wg0',
+    parallel_enabled:      document.getElementById('cfg-parallel-enabled')?.checked ?? true,
+    parallel_max:          parseInt(document.getElementById('cfg-parallel-max')?.value ?? '4') || 4,
   };
 }
 
@@ -3481,13 +3507,14 @@ async function openTmdbModal(title, type, year, queueData) {
 
   // Stream-Info asynchron laden (nur für Filme, nicht Serien)
   if (queueData && type === 'movie') {
-    const sid = String(queueData.stream_id ?? '');
-    const ext = queueData.container_extension ?? queueData.ext ?? 'mp4';
-    if (sid) loadStreamInfo(sid, 'movie', ext);
+    const sid      = String(queueData.stream_id ?? '');
+    const ext      = queueData.container_extension ?? queueData.ext ?? 'mp4';
+    const serverId = queueData._server_id ?? '';
+    if (sid) loadStreamInfo(sid, 'movie', ext, serverId);
   }
 }
 
-async function loadStreamInfo(sid, type, ext) {
+async function loadStreamInfo(sid, type, ext, serverId = '') {
   const infoEl   = document.getElementById('tmdb-stream-info');
   const badgesEl = document.getElementById('tmdb-stream-badges');
   if (!infoEl || !badgesEl) return;
@@ -3496,7 +3523,7 @@ async function loadStreamInfo(sid, type, ext) {
   infoEl.style.display = '';
   badgesEl.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted)">⏳ Analysiere Stream…</span>`;
 
-  const d = await api('stream_info', {stream_id: sid, type, ext});
+  const d = await api('stream_info', {stream_id: sid, type, ext, server_id: serverId});
 
   if (!d || d.error) {
     infoEl.style.display = 'none';
@@ -3996,10 +4023,24 @@ function applyProgress(p, prefix, cardId) {
   const set = (id, val) => { const el = document.getElementById(prefix + id); if (el) el.textContent = val; };
   const setW = (id, val) => { const el = document.getElementById(prefix + id); if (el) el.style.width = val; };
   const setA = (id, val) => { const el = document.getElementById(prefix + id); if (el) el.style.animation = val; };
+
+  if (p.parallel > 1) {
+    // Mehrere parallele Downloads — aggregierte Anzeige
+    set('title', `${p.parallel}× ${t('status.downloading')}`);
+    set('pos',   p.downloads?.map(d => d.title ?? '').filter(Boolean).join(' · ').substring(0, 60) || '');
+    setA('bar', '');
+    setW('bar',  (p.percent ?? 0) + '%');
+    set('pct',   (p.percent ?? 0) + '%');
+    set('done',  fmtBytes(p.bytes_done  ?? 0));
+    set('total', p.bytes_total > 0 ? fmtBytes(p.bytes_total) : '?');
+    set('speed', p.speed_bps > 0 ? fmtBytes(p.speed_bps) + '/s' : '–');
+    set('eta',   '–');
+    return;
+  }
+
   set('title', p.title ?? '–');
   set('pos',   p.queue_total > 1 ? `${p.queue_pos} / ${p.queue_total}` : '');
   if (p.mode === 'rclone' && (p.percent ?? 0) === 0 && (p.bytes_done ?? 0) === 0) {
-    // Noch keine Stats vom rclone — pulsierender Balken
     setW('bar', '100%');
     setA('bar', 'pulse 1.5s ease-in-out infinite');
     set('pct',   '☁️ Verbinde…');
@@ -4008,7 +4049,6 @@ function applyProgress(p, prefix, cardId) {
     set('speed', '–');
     set('eta',   '–');
   } else {
-    // Lokaler Download oder rclone mit echten Stats
     setA('bar', '');
     setW('bar',  (p.percent ?? 0) + '%');
     set('pct',   (p.percent ?? 0) + '%');
@@ -4297,20 +4337,20 @@ async function loadUsers() {
   }
 
   if (!users.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">Keine Benutzer gefunden</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--muted)">${t('users.none_found')}</td></tr>`;
     return;
   }
   tbody.innerHTML = users.map(u => {
     const isSuspended = u.suspended ?? false;
     const statusBadge = isSuspended
-      ? `<span class="role-badge badge-inactive">Gesperrt</span>`
-      : `<span class="role-badge badge-active">Aktiv</span>`;
+      ? `<span class="role-badge badge-inactive">${t('users.status_suspended')}</span>`
+      : `<span class="role-badge badge-active">${t('users.status_active')}</span>`;
     const suspendBtn = isSuspended
-      ? `<button class="btn-icon" onclick="toggleSuspend('${esc(u.id)}',false,'${esc(u.username)}')">✅ Entsperren</button>`
-      : `<button class="btn-icon danger" onclick="toggleSuspend('${esc(u.id)}',true,'${esc(u.username)}')">🚫 Sperren</button>`;
+      ? `<button class="btn-icon" onclick="toggleSuspend('${esc(u.id)}',false,'${esc(u.username)}')">✅ ${t('users.unsuspend')}</button>`
+      : `<button class="btn-icon danger" onclick="toggleSuspend('${esc(u.id)}',true,'${esc(u.username)}')">🚫 ${t('users.suspend')}</button>`;
     const limitVal = u.queue_limit !== undefined ? u.queue_limit : '';
-    const limitDisplay = limitVal === '' ? '<span style="color:var(--muted)"><?= t('sort.default') ?></span>'
-      : limitVal == 0 ? '<span style="color:var(--red)">Gesperrt</span>'
+    const limitDisplay = limitVal === '' ? `<span style="color:var(--muted)">${t('sort.default')}</span>`
+      : limitVal == 0 ? `<span style="color:var(--red)">${t('users.status_suspended')}</span>`
       : `<span style="color:var(--orange)">${limitVal}/h</span>`;
     return `
     <tr style="${isSuspended ? 'opacity:.6' : ''}">
@@ -4329,10 +4369,10 @@ async function loadUsers() {
       </td>
       <td>
         <div class="user-actions">
-          <button class="btn-icon" onclick="openEditUser('${esc(u.id)}','${esc(u.username)}','${u.role}')">✏️ Bearbeiten</button>
-          <button class="btn-icon" onclick="openPwResetModal('${esc(u.id)}','${esc(u.username)}')">🔑 Passwort</button>
+          <button class="btn-icon" onclick="openEditUser('${esc(u.id)}','${esc(u.username)}','${u.role}')">✏️ ${t('btn.edit')}</button>
+          <button class="btn-icon" onclick="openPwResetModal('${esc(u.id)}','${esc(u.username)}')">🔑 ${t('cfg.password')}</button>
           ${suspendBtn}
-          <button class="btn-icon danger" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')">✕ Löschen</button>
+          <button class="btn-icon danger" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')">✕ ${t('btn.delete')}</button>
         </div>
       </td>
     </tr>`}).join('');
@@ -4340,19 +4380,18 @@ async function loadUsers() {
 
 async function setUserLimit(id, username, current) {
   const input = prompt(
-    `Queue-Limit für "${username}" (Anfragen/Stunde):\n` +
-    `• Leer lassen = Rollen-Standard\n• 0 = Keine Queue-Zugriffe\n• Zahl = Individuelle Grenze`,
+    `${t('users.limit_prompt')} "${username}":\n${t('users.limit_hint')}`,
     current
   );
-  if (input === null) return; // Abgebrochen
+  if (input === null) return;
   const d = await apiPost('set_user_limit', {id, queue_limit: input.trim()});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast('Limit aktualisiert', 'success');
+  showToast(t('users.limit_updated'), 'success');
   loadUsers();
 }
 
 async function toggleSuspend(id, suspend, username) {
-  const action = suspend ? `"${username}" wirklich sperren?` : `"${username}" entsperren?`;
+  const action = suspend ? t('users.suspend_confirm', {name: username}) : t('users.unsuspend_confirm', {name: username});
   if (!confirm(action)) return;
   const r = await fetch(`${API}?action=suspend_user`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -4360,7 +4399,7 @@ async function toggleSuspend(id, suspend, username) {
   });
   const d = await r.json();
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-  showToast(suspend ? `"${username}" gesperrt` : `"${username}" entsperrt`, 'success');
+  showToast(suspend ? t('users.suspended') : t('users.unsuspended'), 'success');
   loadUsers();
 }
 
@@ -4385,10 +4424,10 @@ async function loadActivityLog() {
     reset_password: '🔑', change_role: '🎭', change_own_password: '🔑',
   };
   const labels = {
-    queue_add: 'Film zur Queue', queue_add_bulk: 'Mehrere zur Queue', queue_remove: t('queue.removed'),
-    create_user: t('users.created'), delete_user: 'Benutzer gelöscht',
+    queue_add: t('actlog.queue_add'), queue_add_bulk: t('actlog.queue_add_bulk'), queue_remove: t('queue.removed'),
+    create_user: t('users.created'), delete_user: t('actlog.delete_user'),
     suspend_user: t('users.suspended'), unsuspend_user: t('users.unsuspended'),
-    reset_password: 'Passwort zurückgesetzt', change_role: 'Rolle geändert', change_own_password: 'Eigenes Passwort geändert',
+    reset_password: t('actlog.reset_password'), change_role: t('actlog.change_role'), change_own_password: t('actlog.change_own_password'),
   };
 
   list.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px">` +
@@ -4472,14 +4511,14 @@ let umodalMode = 'create';
 
 function openCreateUser() {
   umodalMode = 'create';
-  document.getElementById('umodal-title').textContent    = 'Benutzer anlegen';
+  document.getElementById('umodal-title').textContent    = t('users.create');
   document.getElementById('umodal-id').value             = '';
   document.getElementById('umodal-username').value       = '';
   document.getElementById('umodal-password').value       = '';
   document.getElementById('umodal-role').value           = 'viewer';
   document.getElementById('umodal-username-wrap').style.display = '';
   document.getElementById('umodal-pw-hint').textContent  = '';
-  document.getElementById('umodal-submit').textContent   = 'Anlegen';
+  document.getElementById('umodal-submit').textContent   = t('users.create');
   document.getElementById('umodal-msg').className        = 'settings-msg';
   document.getElementById('umodal').classList.add('open');
   setTimeout(() => document.getElementById('umodal-username').focus(), 50);
@@ -4487,14 +4526,14 @@ function openCreateUser() {
 
 function openEditUser(id, username, role) {
   umodalMode = 'edit';
-  document.getElementById('umodal-title').textContent    = `Benutzer bearbeiten: ${username}`;
+  document.getElementById('umodal-title').textContent    = `${t('users.edit')}: ${username}`;
   document.getElementById('umodal-id').value             = id;
   document.getElementById('umodal-username').value       = username;
   document.getElementById('umodal-password').value       = '';
   document.getElementById('umodal-role').value           = role;
   document.getElementById('umodal-username-wrap').style.display = 'none';
-  document.getElementById('umodal-pw-hint').textContent  = '(leer = unverändert)';
-  document.getElementById('umodal-submit').textContent   = 'Speichern';
+  document.getElementById('umodal-pw-hint').textContent  = t('users.pw_unchanged');
+  document.getElementById('umodal-submit').textContent   = t('btn.save');
   document.getElementById('umodal-msg').className        = 'settings-msg';
   document.getElementById('umodal').classList.add('open');
 }

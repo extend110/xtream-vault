@@ -161,13 +161,42 @@ function save_db(array $db): void {
     file_put_contents(DOWNLOAD_DB, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 function load_queue(): array {
-    if (file_exists(QUEUE_FILE))
-        return json_decode(file_get_contents(QUEUE_FILE), true) ?? [];
-    return [];
+    $servers = load_all_servers();
+    $all = [];
+    foreach ($servers as $srv) {
+        $file = DATA_DIR . '/queue_' . $srv['id'] . '.json';
+        if (!file_exists($file)) continue;
+        $items = json_decode(file_get_contents($file), true) ?? [];
+        foreach ($items as &$item) {
+            $item['_queue_file'] = $file;
+            $item['_server_id']  = $srv['id'];
+        }
+        unset($item);
+        $all = array_merge($all, $items);
+    }
+    // Fallback: alte QUEUE_FILE
+    if (empty($all) && file_exists(QUEUE_FILE)) {
+        $items = json_decode(file_get_contents(QUEUE_FILE), true) ?? [];
+        foreach ($items as &$item) {
+            $item['_queue_file'] = QUEUE_FILE;
+            $item['_server_id']  = SERVER_ID;
+        }
+        unset($item);
+        $all = $items;
+    }
+    return $all;
 }
 function save_queue(array $q): void {
     @mkdir(DATA_PATH, 0755, true);
-    file_put_contents(QUEUE_FILE, json_encode($q, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    $byFile = [];
+    foreach ($q as $item) {
+        $file = $item['_queue_file'] ?? QUEUE_FILE;
+        unset($item['_queue_file'], $item['_server_id']);
+        $byFile[$file][] = $item;
+    }
+    foreach ($byFile as $file => $items) {
+        file_put_contents($file, json_encode(array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
 }
 function sanitize(string $n): string {
     $n = str_replace(['/', '\\'], '-', $n);
@@ -805,6 +834,8 @@ switch ($action) {
             'tg_disk_low_gb'        => (float)($d['tg_disk_low_gb']      ?? $current['tg_disk_low_gb']       ?? 10),
             'vpn_enabled'           => (bool)($d['vpn_enabled']   ?? $current['vpn_enabled']   ?? false),
             'vpn_interface'         => preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($d['vpn_interface'] ?? $current['vpn_interface'] ?? 'wg0')),
+            'parallel_enabled'      => isset($d['parallel_enabled']) ? (bool)$d['parallel_enabled'] : (bool)($current['parallel_enabled'] ?? true),
+            'parallel_max'          => max(1, min(10, (int)($d['parallel_max'] ?? $current['parallel_max'] ?? 4))),
         ];
         if (!empty($d['password']) && $d['password'] !== '••••••••') {
             $new['password'] = $d['password'];
@@ -1528,7 +1559,9 @@ switch ($action) {
             $bulkSrv = null;
             foreach ($bulkSrvList as $s) { if ($s['id'] === $bulkSrvId) { $bulkSrv = $s; break; } }
             if (!$bulkSrv) $bulkSrv = $bulkSrvList[0] ?? null;
-            $bulkUrl = $bulkSrv ? stream_url_for_server($bulkSrv, $type === 'episode' ? 'series' : 'movie', $sid, $ext) : '';
+            $bulkUrl       = $bulkSrv ? stream_url_for_server($bulkSrv, $type === 'episode' ? 'series' : 'movie', $sid, $ext) : '';
+            $bulkQueueFile = $bulkSrv ? DATA_DIR . '/queue_' . $bulkSrv['id'] . '.json' : QUEUE_FILE;
+            $bulkServerId  = $bulkSrv['id'] ?? SERVER_ID;
 
             $queue[] = [
                 'stream_id'           => $sid,
@@ -1545,6 +1578,8 @@ switch ($action) {
                 'added_by'            => $current_user['username'],
                 'status'              => 'pending',
                 'error'               => null,
+                '_queue_file'         => $bulkQueueFile,
+                '_server_id'          => $bulkServerId,
             ];
             $qids[] = $sid;
             record_queue_add($current_user);
@@ -1714,6 +1749,9 @@ switch ($action) {
             }
         }
 
+        $queueFile = $qSrv ? DATA_DIR . '/queue_' . $qSrv['id'] . '.json' : QUEUE_FILE;
+        $qServerId = $qSrv['id'] ?? SERVER_ID;
+
         $queue[] = [
             'stream_id'           => $sid,
             'type'                => $type,
@@ -1730,6 +1768,8 @@ switch ($action) {
             'added_by'            => $current_user['username'],
             'status'              => 'pending',
             'error'               => null,
+            '_queue_file'         => $queueFile,
+            '_server_id'          => $qServerId,
         ];
         save_queue($queue);
         record_queue_add($current_user);
@@ -1938,13 +1978,24 @@ switch ($action) {
     case 'queue_clear_done':
         require_permission('queue_clear');
         $queue = array_values(array_filter(load_queue(), fn($q) => $q['status'] !== 'done'));
-        save_queue($queue);
+        // Alle bekannten Queue-Dateien leeren und dann befüllen
+        foreach (load_all_servers() as $srv) {
+            $f = DATA_DIR . '/queue_' . $srv['id'] . '.json';
+            if (file_exists($f)) file_put_contents($f, '[]');
+        }
+        if (file_exists(QUEUE_FILE)) file_put_contents(QUEUE_FILE, '[]');
+        save_queue($queue); // schreibt verbleibende Items in richtige Dateien
         echo json_encode(['ok' => true]);
         break;
 
     case 'queue_clear_all':
         require_permission('queue_clear');
-        save_queue([]);
+        // Alle server-spezifischen Queue-Dateien leeren
+        foreach (load_all_servers() as $srv) {
+            $f = DATA_DIR . '/queue_' . $srv['id'] . '.json';
+            if (file_exists($f)) file_put_contents($f, '[]');
+        }
+        if (file_exists(QUEUE_FILE)) file_put_contents(QUEUE_FILE, '[]');
         echo json_encode(['ok' => true]);
         break;
 
@@ -1990,16 +2041,43 @@ switch ($action) {
 
     case 'get_progress':
         require_permission('queue_view');
-        if (!file_exists(PROGRESS_FILE)) {
+        // Alle progress-Dateien lesen (main + pro Server)
+        $progressFiles = array_merge(
+            [PROGRESS_FILE],
+            glob(DATA_DIR . '/progress_*.json') ?: []
+        );
+        $active = [];
+        foreach ($progressFiles as $pf) {
+            if (!file_exists($pf)) continue;
+            $p = json_decode(@file_get_contents($pf), true);
+            if (!is_array($p) || empty($p)) continue;
+            if (!empty($p['updated_at'])) {
+                $age = time() - strtotime($p['updated_at']);
+                if ($age > 10) { $p['active'] = false; $p['stale'] = true; }
+            }
+            if ($p['active'] ?? false) $active[] = $p;
+        }
+        if (empty($active)) {
             echo json_encode(['active' => false]);
-            break;
+        } elseif (count($active) === 1) {
+            echo json_encode($active[0]);
+        } else {
+            // Mehrere parallele Downloads — aggregiert zurückgeben
+            $totalDone  = array_sum(array_column($active, 'bytes_done'));
+            $totalBytes = array_sum(array_column($active, 'bytes_total'));
+            $totalSpeed = array_sum(array_column($active, 'speed_bps'));
+            echo json_encode([
+                'active'       => true,
+                'parallel'     => count($active),
+                'downloads'    => $active,
+                'bytes_done'   => $totalDone,
+                'bytes_total'  => $totalBytes,
+                'speed_bps'    => $totalSpeed,
+                'percent'      => $totalBytes > 0 ? round($totalDone / $totalBytes * 100) : 0,
+                'title'        => count($active) . ' Downloads parallel',
+                'updated_at'   => date('Y-m-d H:i:s'),
+            ]);
         }
-        $p = json_decode(file_get_contents(PROGRESS_FILE), true);
-        if (!empty($p['updated_at'])) {
-            $age = time() - strtotime($p['updated_at']);
-            if ($age > 10) { $p['active'] = false; $p['stale'] = true; }
-        }
-        echo json_encode($p ?? ['active' => false]);
         break;
 
     case 'queue_start':
@@ -2007,7 +2085,7 @@ switch ($action) {
         $lockFile     = __DIR__ . '/data/cron.lock';
         $startingLock = __DIR__ . '/data/cron_starting.lock';
 
-        // Prüfen ob cron.php läuft — gleiche Lock-Datei wie cron.php intern
+        // Prüfen ob cron.php läuft — Koordinator-Lock oder Worker-Locks
         $lf = @fopen($lockFile, 'c');
         if ($lf) {
             $free = flock($lf, LOCK_EX | LOCK_NB);
@@ -2015,6 +2093,18 @@ switch ($action) {
             fclose($lf);
         } else {
             $free = true;
+        }
+        // Auch Worker-Locks prüfen (laufen Workers noch ohne Koordinator?)
+        if ($free) {
+            foreach (glob(DATA_DIR . '/cron_worker_*.lock') ?: [] as $wl) {
+                $wf = @fopen($wl, 'c');
+                if ($wf) {
+                    $wFree = flock($wf, LOCK_EX | LOCK_NB);
+                    if ($wFree) flock($wf, LOCK_UN);
+                    fclose($wf);
+                    if (!$wFree) { $free = false; break; }
+                }
+            }
         }
         if (!$free) {
             echo json_encode(['error' => 'Download-Worker läuft bereits']);

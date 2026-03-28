@@ -16,21 +16,34 @@
 // ─── Config aus config.json laden ────────────────────────────────────────────
 require_once __DIR__ . '/config.php';
 
-// ─── Lock: flock auf data/ (kein tmpfs) ──────────────────────────────────────
-// /tmp ist oft tmpfs wo flock(LOCK_NB) unzuverlässig ist.
-// data/ liegt auf dem echten Dateisystem → flock garantiert atomar.
-// Filehandle bleibt offen für gesamte Laufzeit → Lock automatisch freigegeben.
-$GLOBALS['_cron_lock_fh'] = fopen(__DIR__ . '/data/cron.lock', 'c');
+// ─── Lock ────────────────────────────────────────────────────────────────────
+// Koordinator: cron.lock — verhindert parallele Coordinator-Starts
+// Worker:      cron_worker_{id}.lock — verhindert doppelte Worker pro Server
+
+// Server-Filter aus CLI-Args lesen (wird auch für Lock-Entscheidung gebraucht)
+$serverFilter = null;
+foreach ($argv ?? [] as $arg) {
+    if (str_starts_with($arg, '--server=')) {
+        $serverFilter = substr($arg, 9);
+    }
+}
+
+$lockFile = $serverFilter !== null
+    ? __DIR__ . '/data/cron_worker_' . preg_replace('/[^a-zA-Z0-9_\-]/', '', $serverFilter) . '.lock'
+    : __DIR__ . '/data/cron.lock';
+
+$GLOBALS['_cron_lock_fh'] = fopen($lockFile, 'c');
 if (!$GLOBALS['_cron_lock_fh'] || !flock($GLOBALS['_cron_lock_fh'], LOCK_EX | LOCK_NB)) {
     if ($GLOBALS['_cron_lock_fh']) fclose($GLOBALS['_cron_lock_fh']);
-    $logLine = '[' . date('Y-m-d H:i:s') . '] Another instance of cron.php is already running. Exiting.' . PHP_EOL;
+    $label   = $serverFilter ? "Worker ($serverFilter)" : 'Coordinator';
+    $logLine = '[' . date('Y-m-d H:i:s') . "] $label already running. Exiting." . PHP_EOL;
     @file_put_contents(__DIR__ . '/data/cron.log', $logLine, FILE_APPEND);
     exit(0);
 }
 ftruncate($GLOBALS['_cron_lock_fh'], 0);
 fwrite($GLOBALS['_cron_lock_fh'], (string)getmypid());
 fflush($GLOBALS['_cron_lock_fh']);
-@unlink(__DIR__ . '/data/cron_starting.lock');
+if (!$serverFilter) @unlink(__DIR__ . '/data/cron_starting.lock');
 
 // ─── Tuning ───────────────────────────────────────────────────────────────────
 define('CHUNK_SIZE',      1024 * 256);
@@ -220,14 +233,23 @@ function save_db(array $db): void {
 }
 
 /** Schreibt den aktuellen Download-Fortschritt in progress.json */
+function get_progress_file(): string {
+    global $serverFilter;
+    if ($serverFilter !== null) {
+        return DATA_DIR . '/progress_' . $serverFilter . '.json';
+    }
+    return PROGRESS_FILE;
+}
+
 function write_progress(array $data): void {
     @mkdir(DATA_PATH, 0755, true);
-    file_put_contents(PROGRESS_FILE, json_encode($data, JSON_UNESCAPED_UNICODE));
+    file_put_contents(get_progress_file(), json_encode($data, JSON_UNESCAPED_UNICODE));
 }
 
 /** Löscht progress.json wenn kein Download mehr läuft */
 function clear_progress(): void {
-    if (file_exists(PROGRESS_FILE)) unlink(PROGRESS_FILE);
+    $file = get_progress_file();
+    if (file_exists($file)) unlink($file);
 }
 
 /**
@@ -567,11 +589,212 @@ function parse_rclone_eta(string $eta): ?int {
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
-clog("=== Xtream Vault Cron Worker started ===");
+
+// ── Parallel-Modus: pro Server ein Worker-Prozess ─────────────────────────────
+// Wenn --server=<id> übergeben: nur Items dieses Servers verarbeiten (Worker-Modus)
+// Ohne Argument: einen Worker pro Server mit pending Items starten
+
+if ($serverFilter === null) {
+    // Koordinator-Modus: prüfe welche Server pending Items haben
+    clog("=== Xtream Vault Cron Coordinator started ===");
+    $allQueue    = load_queue();
+    $pendingAll  = array_filter($allQueue, fn($i) => $i['status'] === 'pending');
+
+    if (empty($pendingAll)) {
+        clog("Queue is empty – nothing to do.");
+        clear_progress();
+        exit(0);
+    }
+
+    // Pending Items pro Server gruppieren
+    $serverIds = array_unique(array_column(array_values($pendingAll), '_server_id'));
+
+    // Parallel-Einstellungen aus config.json lesen
+    $cfg             = load_config();
+    $parallelEnabled = (bool)($cfg['parallel_enabled'] ?? true);
+    $parallelMax     = max(1, (int)($cfg['parallel_max'] ?? 4));
+
+    if (!$parallelEnabled) {
+        // Parallel deaktiviert → alle Server sequenziell nacheinander
+        if (count($serverIds) === 1) {
+            $serverFilter = $serverIds[0];
+            clog(sprintf("Found %d pending item(s) — running inline for: %s", count($pendingAll), $serverFilter));
+            goto single_server_run;
+        }
+        clog(sprintf("Found %d pending item(s) across %d server(s) — parallel disabled, running sequentially",
+            count($pendingAll), count($serverIds)));
+        $php    = PHP_BINARY ?: '/usr/bin/php';
+        $script = __FILE__;
+
+        // VPN verbinden vor sequenziellem Run
+        if (VPN_ENABLED) {
+            if (vpn_is_up()) {
+                clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
+                $vpnActiveAtStart = true;
+            } else {
+                clog("VPN: verbinde " . VPN_INTERFACE . " …");
+                $vpnResult = vpn_up();
+                if ($vpnResult !== true) {
+                    clog("VPN ERROR: " . $vpnResult);
+                } else {
+                    $vpnStartedByUs = true; $vpnActiveAtStart = true;
+                    clog("VPN: " . VPN_INTERFACE . " verbunden");
+                }
+            }
+        }
+
+        foreach ($serverIds as $srvId) {
+            clog("Starte sequenziellen Worker für Server: $srvId");
+            $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' --server=' . escapeshellarg($srvId);
+            passthru($cmd);
+            clog("Worker $srvId abgeschlossen");
+        }
+        // Nach sequenziellem Run: VPN, Cleanup, Cache
+        if (VPN_ENABLED && $vpnStartedByUs) {
+            $vpnDown = vpn_down();
+            clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
+        }
+        $queue  = load_queue();
+        $cutoff = date('Y-m-d H:i:s', strtotime('-7 days'));
+        $queue  = array_values(array_filter($queue, fn($i) => $i['status'] !== 'done' || ($i['done_at'] ?? $i['added_at'] ?? '9999') > $cutoff));
+        save_queue($queue);
+        $queueAfter = load_queue();
+        $doneRecent = array_filter($queueAfter, fn($i) => $i['status'] === 'done' && isset($i['done_at']) && $i['done_at'] >= date('Y-m-d H:i:s', time() - 3600));
+        if (!empty($doneRecent)) {
+            clog("Starte Library-Cache Rebuild im Hintergrund…");
+            shell_exec(escapeshellarg(PHP_BINARY ?: 'php') . ' ' . escapeshellarg(__DIR__ . '/cache_builder.php') . ' > ' . escapeshellarg(DATA_DIR . '/cache_build.log') . ' 2>&1 &');
+        }
+        clog("=== Coordinator done (sequential) ===");
+        exit(0);
+    }
+
+    // Auf parallel_max begrenzen
+    $serverIds = array_slice($serverIds, 0, $parallelMax);
+
+    // Nach Begrenzung: wenn nur ein Server übrig → inline ausführen
+    if (count($serverIds) === 1) {
+        $serverFilter = $serverIds[0];
+        clog(sprintf("Found %d pending item(s) — only 1 server after limit, running inline: %s",
+            count($pendingAll), $serverFilter));
+        goto single_server_run;
+    }
+
+    clog(sprintf("Found %d pending item(s) across %d server(s) (max %d parallel): %s",
+        count($pendingAll), count($serverIds), $parallelMax, implode(', ', $serverIds)));
+
+    // VPN verbinden (vor allen Downloads)
+    $vpnStartedByUs  = false;
+    $vpnActiveAtStart = false;
+    if (VPN_ENABLED) {
+        if (vpn_is_up()) {
+            clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
+            $vpnActiveAtStart = true;
+        } else {
+            clog("VPN: verbinde " . VPN_INTERFACE . " …");
+            $vpnResult = vpn_up();
+            if ($vpnResult !== true) {
+                clog("VPN ERROR: " . $vpnResult . " — Downloads werden trotzdem gestartet");
+            } else {
+                $vpnStartedByUs   = true;
+                $vpnActiveAtStart = true;
+                clog("VPN: " . VPN_INTERFACE . " verbunden");
+            }
+        }
+    }
+
+    // Mehrere Server → Worker-Prozesse starten
+    $php     = PHP_BINARY ?: '/usr/bin/php';
+    $script  = __FILE__;
+    $procs   = [];
+    foreach ($serverIds as $srvId) {
+        $cmd    = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' --server=' . escapeshellarg($srvId);
+        $proc   = proc_open($cmd, [0 => ['pipe','r'], 1 => STDOUT, 2 => STDERR], $pipes);
+        if (is_resource($proc)) {
+            fclose($pipes[0]);
+            $procs[$srvId] = $proc;
+            clog("Worker gestartet für Server: $srvId (PID " . proc_get_status($proc)['pid'] . ")");
+        } else {
+            clog("WARN: Konnte Worker für Server $srvId nicht starten");
+        }
+    }
+
+    // Warten bis alle Worker fertig sind
+    foreach ($procs as $srvId => $proc) {
+        $status = proc_close($proc);
+        clog("Worker $srvId beendet (exit $status)");
+    }
+
+    // VPN trennen wenn wir ihn gestartet haben
+    if (VPN_ENABLED && $vpnStartedByUs) {
+        clog("VPN: trenne " . VPN_INTERFACE . " …");
+        $vpnDown = vpn_down();
+        clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
+    }
+
+    // Cleanup nach allen Workern
+    $queue  = load_queue();
+    $cutoff = date('Y-m-d H:i:s', strtotime('-7 days'));
+    $before = count($queue);
+    $queue  = array_values(array_filter($queue, function($item) use ($cutoff) {
+        if (($item['status'] ?? '') !== 'done') return true;
+        return ($item['done_at'] ?? $item['added_at'] ?? '9999') > $cutoff;
+    }));
+    $removed = $before - count($queue);
+    if ($removed > 0) { save_queue($queue); clog("CLEANUP: $removed alte done-Einträge entfernt"); }
+
+    $tgPending = count(array_filter(load_queue(), fn($i) => $i['status'] === 'pending'));
+    if ($tgPending === 0) {
+        tg_notify("🏁 Alle Downloads abgeschlossen", 'queue_done');
+    }
+
+    // Cache neu aufbauen wenn in den letzten 60 Minuten neue done-Einträge entstanden sind
+    // (new_releases wird dabei ebenfalls aktualisiert)
+    $queueAfter = load_queue();
+    $doneRecent = array_filter($queueAfter, function($i) {
+        return $i['status'] === 'done'
+            && isset($i['done_at'])
+            && $i['done_at'] >= date('Y-m-d H:i:s', time() - 3600);
+    });
+    if (!empty($doneRecent)) {
+        clog("Starte Library-Cache Rebuild im Hintergrund…");
+        $script = escapeshellarg(__DIR__ . '/cache_builder.php');
+        $log    = escapeshellarg(DATA_DIR . '/cache_build.log');
+        shell_exec("php {$script} > {$log} 2>&1 &");
+    }
+
+    // Telegram: Speicherplatz-Warnung
+    if (!RCLONE_ENABLED && DEST_PATH !== '') {
+        $cfgDisk = load_config();
+        $lowGb   = (float)($cfgDisk['tg_disk_low_gb'] ?? 10);
+        $path    = is_dir(DEST_PATH) ? DEST_PATH : dirname(DEST_PATH);
+        if (is_dir($path)) {
+            $freeBytes = disk_free_space($path);
+            if ($freeBytes !== false && ($freeBytes / 1073741824) < $lowGb) {
+                $freeGb = round($freeBytes / 1073741824, 1);
+                tg_notify(
+                    "⚠️ <b>Speicherplatz niedrig</b>\nNoch <b>{$freeGb} GB</b> frei auf " . htmlspecialchars(DEST_PATH, ENT_XML1),
+                    'disk_low'
+                );
+            }
+        }
+    }
+
+    clog("=== Coordinator done ===");
+    exit(0);
+}
+
+// ── Worker-Modus: ab hier nur Items des angegebenen Servers ───────────────────
+single_server_run:
+clog("=== Xtream Vault Worker started (server: $serverFilter) ===");
 
 $queue = load_queue();
 $db    = load_db();
 $now   = time();
+
+// Im Worker-Modus: nur Items des zugewiesenen Servers
+if ($serverFilter !== null) {
+    $queue = array_values(array_filter($queue, fn($i) => ($i['_server_id'] ?? '') === $serverFilter));
+}
 
 $pending = array_filter($queue, fn($item) => $item['status'] === 'pending');
 
@@ -593,11 +816,11 @@ save_queue($queue);
 $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
-// ── VPN: vor Downloads verbinden ─────────────────────────────────────────────
+// ── VPN: nur im Single-Server-Modus (Multi-Server: Coordinator übernimmt) ─────
 $vpnStartedByUs  = false;
-$vpnActiveAtStart = false; // War VPN beim Start aktiv? Nur dann bei Wegfall abbrechen.
+$vpnActiveAtStart = false;
 
-if (VPN_ENABLED && $totalPending > 0) {
+if (VPN_ENABLED && $totalPending > 0 && count(cron_load_all_servers()) <= 1) {
     if (vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
         $vpnActiveAtStart = true;
@@ -913,7 +1136,11 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 }
 
 clear_progress();
-clog(sprintf("=== Done: %d downloaded, %d errors ===", $processed, $errors));
+clog(sprintf("=== Worker done (server: %s): %d downloaded, %d errors ===", $serverFilter ?? 'all', $processed, $errors));
+
+// Im Worker-Modus (Multi-Server): Cleanup und VPN übernimmt der Coordinator
+$isWorker = isset($serverFilter) && count(cron_load_all_servers()) > 1;
+if ($isWorker) exit(0);
 
 // ── Automatische Bereinigung: done-Einträge älter als 7 Tage entfernen ────────
 $queue = load_queue();
