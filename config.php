@@ -66,29 +66,14 @@ define('MAINTENANCE_FILE',   DATA_DIR . '/maintenance.lock');
 define('API_KEYS_FILE',      DATA_DIR . '/api_keys.json');
 define('ACTIVITY_LOG_FILE',  DATA_DIR . '/activity.json');
 define('TMDB_API_KEY',       $_cfg['tmdb_api_key']    ?? '');
-define('WEBHOOK_URL',        $_cfg['webhook_url']     ?? '');
-define('WEBHOOK_TYPE',       $_cfg['webhook_type']    ?? 'discord'); // discord | telegram | generic
-define('WEBHOOK_ON_DONE',    (bool)($_cfg['webhook_on_done']    ?? true));
-define('WEBHOOK_ON_ERROR',   (bool)($_cfg['webhook_on_error']   ?? true));
-define('WEBHOOK_ON_ALLDOWN', (bool)($_cfg['webhook_on_alldown'] ?? false));
 define('SERVERS_FILE',       DATA_DIR . '/servers.json');
 define('INVITES_FILE',       DATA_DIR . '/invites.json');
 define('NEW_RELEASES_FILE',  DATA_DIR . '/new_releases.json');
 
-// ── Telegram-Benachrichtigungen ───────────────────────────────────────────────
-define('TELEGRAM_BOT_TOKEN', $_cfg['telegram_bot_token'] ?? '');
-define('TELEGRAM_CHAT_ID',   $_cfg['telegram_chat_id']   ?? '');
-define('TELEGRAM_ENABLED',   (bool)($_cfg['telegram_enabled'] ?? false));
-define('TG_NOTIFY_SUCCESS',  (bool)($_cfg['tg_notify_success']  ?? true));
-define('TG_NOTIFY_ERROR',    (bool)($_cfg['tg_notify_error']    ?? true));
-define('TG_NOTIFY_QUEUE_DONE',(bool)($_cfg['tg_notify_queue_done'] ?? false));
-define('TG_NOTIFY_DISK_LOW', (bool)($_cfg['tg_notify_disk_low'] ?? false));
-define('TG_DISK_LOW_GB',     (float)($_cfg['tg_disk_low_gb']    ?? 10));
-
 // ── VPN (WireGuard) ───────────────────────────────────────────────────────────
 define('VPN_ENABLED',    (bool)($_cfg['vpn_enabled']    ?? false));
 define('VPN_INTERFACE',  preg_replace('/[^a-zA-Z0-9_\-]/', '', $_cfg['vpn_interface'] ?? 'wg0'));
-define('VPN_RT_TABLE',   51820); // Separate Routing-Tabelle für VPN-Traffic
+define('VPN_RT_TABLE',   51820);
 
 /**
  * Prüft ob WireGuard (wg-quick) installiert ist.
@@ -127,6 +112,8 @@ function vpn_up(): bool|string {
         exec('sudo /usr/bin/wg-quick up ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
         if ($ret !== 0) return 'wg-quick up: ' . (implode(' ', $out) ?: 'Fehler');
         sleep(1);
+        // Verbindungszeitpunkt speichern
+        @file_put_contents(DATA_DIR . '/vpn_connected_at.txt', (string)time());
     }
 
     // wg-quick setzt automatisch system-weite ip rule Einträge mit fwmark 51820.
@@ -179,35 +166,11 @@ function vpn_down(): bool|string {
         exec('sudo /usr/bin/wg-quick down ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
         if ($ret !== 0) return 'wg-quick down: ' . (implode(' ', $out) ?: 'Fehler');
     }
+    // Verbindungszeitpunkt löschen
+    @unlink(DATA_DIR . '/vpn_connected_at.txt');
 
     return true;
 }
-
-/**
- * Sendet eine Telegram-Nachricht via Bot API.
- * Gibt true bei Erfolg zurück, Fehlermeldung als String bei Fehler.
- */
-function send_telegram(string $text): bool|string {
-    if (TELEGRAM_BOT_TOKEN === '' || TELEGRAM_CHAT_ID === '') return 'Telegram nicht konfiguriert';
-    $url  = 'https://api.telegram.org/bot' . TELEGRAM_BOT_TOKEN . '/sendMessage';
-    $body = json_encode([
-        'chat_id'    => TELEGRAM_CHAT_ID,
-        'text'       => $text,
-        'parse_mode' => 'HTML',
-    ]);
-    $ctx = stream_context_create(['http' => [
-        'method'  => 'POST',
-        'header'  => "Content-Type: application/json\r\nUser-Agent: XtreamVault/1.0\r\n",
-        'content' => $body,
-        'timeout' => 8,
-    ]]);
-    $raw = @file_get_contents($url, false, $ctx);
-    if ($raw === false) return 'Telegram nicht erreichbar';
-    $resp = json_decode($raw, true);
-    if (!($resp['ok'] ?? false)) return $resp['description'] ?? 'Unbekannter Fehler';
-    return true;
-}
-
 // ── Prüfen ob Grundkonfiguration vorhanden ────────────────────────────────────
 function is_configured(): bool {
     // Primär: config.json hat Server-Zugangsdaten (Rückwärtskompatibilität)

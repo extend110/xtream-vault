@@ -298,16 +298,52 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <!-- Movies -->
     <?php if ($show_movies): ?>
     <div id="view-movies" style="display:none">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
         <div style="flex:1"></div>
+        <button class="btn-sm" id="movie-filter-toggle" onclick="toggleMovieFilters()" style="font-family:'DM Mono',monospace;font-size:.65rem">⚡ Filter</button>
         <button class="view-mode-btn" id="view-mode-btn-movies" onclick="toggleViewMode()" title="Ansicht wechseln">☰</button>
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)"><?= t('lbl.sortierung') ?></span>
           <select id="sort-movies" class="sort-select" onchange="setSortOrder(this.value,'movies')">
-            <option value="default"><?= t('sort.default') ?></option><option value="az"><?= t('sort.az') ?></option><option value="za"><?= t('sort.za') ?></option>
+            <option value="default"><?= t('sort.default') ?></option>
+            <option value="az"><?= t('sort.az') ?></option>
+            <option value="za"><?= t('sort.za') ?></option>
+            <option value="year_desc">Jahr ↓</option>
+            <option value="year_asc">Jahr ↑</option>
+            <option value="rating_desc">Bewertung ↓</option>
           </select>
         </div>
       </div>
+
+      <!-- Filter-Panel -->
+      <div id="movie-filter-panel" style="display:none;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:14px">
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">JAHR</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="number" id="filter-year-from" placeholder="von" min="1900" max="2030" style="width:72px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" oninput="applyMovieFilters()">
+              <span style="color:var(--muted);font-size:.8rem">–</span>
+              <input type="number" id="filter-year-to" placeholder="bis" min="1900" max="2030" style="width:72px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" oninput="applyMovieFilters()">
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">MINDESTBEWERTUNG</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <input type="range" id="filter-rating" min="0" max="10" step="0.5" value="0" style="width:120px;accent-color:var(--accent)" oninput="document.getElementById('filter-rating-val').textContent=this.value>0?'★ '+this.value+'+':'Alle';applyMovieFilters()">
+              <span id="filter-rating-val" style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--accent);min-width:48px">Alle</span>
+            </div>
+          </div>
+          <div style="flex:1;min-width:160px">
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-bottom:4px">GENRE</div>
+            <select id="filter-genre" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:5px 8px;color:var(--text);font-size:.8rem;outline:none" onchange="applyMovieFilters()">
+              <option value="">Alle Genres</option>
+            </select>
+          </div>
+          <button class="btn-sm" onclick="resetMovieFilters()" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)">✕ Zurücksetzen</button>
+        </div>
+        <div id="movie-filter-count" style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);margin-top:8px"></div>
+      </div>
+
       <div class="grid" id="movie-grid"></div>
       <div id="movie-pagination" style="margin-top:16px;text-align:center"></div>
     </div>
@@ -1541,7 +1577,10 @@ async function loadMovies(catId, catName, el, serverId = '') {
   _lastMovies = await api('get_movies', params);
   _lastMovies = _lastMovies.map(m => ({...m, category: m.category || catName, _server_id: serverId || m._server_id || ''}));
   _moviePage = 1;
-  renderMovies();
+  // Filter zurücksetzen bei neuer Kategorie
+  resetMovieFilters();
+  // Genre-Dropdown neu befüllen
+  buildGenreOptions();
 }
 
 function setSortOrder(order, type) {
@@ -1549,14 +1588,73 @@ function setSortOrder(order, type) {
   else                   { _seriesSort = order; _seriesPage = 1; renderSeriesGrid(_lastSeries); }
 }
 
+let _movieFilters = { yearFrom: '', yearTo: '', rating: 0, genre: '' };
+
+function toggleMovieFilters() {
+  const panel = document.getElementById('movie-filter-panel');
+  const btn   = document.getElementById('movie-filter-toggle');
+  const open  = panel.style.display === 'none';
+  panel.style.display = open ? '' : 'none';
+  btn.textContent = open ? '⚡ Filter ✓' : '⚡ Filter';
+  if (open) buildGenreOptions();
+}
+
+function buildGenreOptions() {
+  const sel = document.getElementById('filter-genre');
+  if (!sel) return;
+  const genres = new Set();
+  _lastMovies.forEach(m => {
+    (m.genre || '').split(/[,\/]/).forEach(g => { const t = g.trim(); if (t) genres.add(t); });
+  });
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Alle Genres</option>' +
+    [...genres].sort().map(g => `<option value="${g}"${g===current?' selected':''}>${g}</option>`).join('');
+}
+
+function applyMovieFilters() {
+  _movieFilters.yearFrom = parseInt(document.getElementById('filter-year-from')?.value) || 0;
+  _movieFilters.yearTo   = parseInt(document.getElementById('filter-year-to')?.value)   || 0;
+  _movieFilters.rating   = parseFloat(document.getElementById('filter-rating')?.value)  || 0;
+  _movieFilters.genre    = document.getElementById('filter-genre')?.value || '';
+  _moviePage = 1;
+  renderMovies();
+}
+
+function resetMovieFilters() {
+  _movieFilters = { yearFrom: 0, yearTo: 0, rating: 0, genre: '' };
+  const yf = document.getElementById('filter-year-from'); if (yf) yf.value = '';
+  const yt = document.getElementById('filter-year-to');   if (yt) yt.value = '';
+  const rt = document.getElementById('filter-rating');    if (rt) rt.value = 0;
+  const rv = document.getElementById('filter-rating-val');if (rv) rv.textContent = 'Alle';
+  const gn = document.getElementById('filter-genre');     if (gn) gn.value = '';
+  _moviePage = 1;
+  renderMovies();
+}
+
 function renderMovies() {
   const grid = document.getElementById('movie-grid');
   let movies = _lastMovies;
+  // Status-Filter (Topbar)
   if (currentFilter === 'done')   movies = movies.filter(m => m.downloaded);
   if (currentFilter === 'new')    movies = movies.filter(m => !m.downloaded && !m.queued);
   if (currentFilter === 'queued') movies = movies.filter(m => m.queued);
-  if (_movieSort === 'az') movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
-  if (_movieSort === 'za') movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  // Erweiterte Filter
+  if (_movieFilters.yearFrom) movies = movies.filter(m => parseInt(m.year) >= _movieFilters.yearFrom);
+  if (_movieFilters.yearTo)   movies = movies.filter(m => parseInt(m.year) <= _movieFilters.yearTo);
+  if (_movieFilters.rating)   movies = movies.filter(m => parseFloat(m.rating_5based ?? m.rating ?? 0) * 2 >= _movieFilters.rating);
+  if (_movieFilters.genre)    movies = movies.filter(m => (m.genre || '').toLowerCase().includes(_movieFilters.genre.toLowerCase()));
+  // Sortierung
+  if (_movieSort === 'az')          movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
+  if (_movieSort === 'za')          movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  if (_movieSort === 'year_desc')   movies = [...movies].sort((a,b) => (parseInt(b.year)||0) - (parseInt(a.year)||0));
+  if (_movieSort === 'year_asc')    movies = [...movies].sort((a,b) => (parseInt(a.year)||0) - (parseInt(b.year)||0));
+  if (_movieSort === 'rating_desc') movies = [...movies].sort((a,b) => (parseFloat(b.rating_5based??b.rating??0)) - (parseFloat(a.rating_5based??a.rating??0)));
+  // Filter-Zähler
+  const countEl = document.getElementById('movie-filter-count');
+  if (countEl) {
+    const hasFilter = _movieFilters.yearFrom || _movieFilters.yearTo || _movieFilters.rating || _movieFilters.genre;
+    countEl.textContent = hasFilter ? `${movies.length} von ${_lastMovies.length} Filmen` : '';
+  }
   if (!movies.length) { grid.innerHTML = emptyHTML('Keine Filme'); document.getElementById('movie-pagination').innerHTML = ''; return; }
   const total = movies.length;
   const pages = Math.ceil(total / PAGE_SIZE);
@@ -1611,6 +1709,11 @@ function movieCard(m, showServer = false) {
   const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this,'${esc(m._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
   const year = m.year ?? '';
+  const rating = m.rating_5based ? parseFloat(m.rating_5based).toFixed(1) : (m.rating ? (parseFloat(m.rating)/2).toFixed(1) : '');
+  const metaParts = [];
+  if (year) metaParts.push(year);
+  if (rating) metaParts.push(`★ ${rating}`);
+  if (!metaParts.length && m.container_extension) metaParts.push(m.container_extension.toUpperCase());
   const serverBadge = (showServer && m._server_name)
     ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(m._server_name)}">🌐 ${esc(m._server_name)}</div>`
     : '';
@@ -1626,7 +1729,7 @@ function movieCard(m, showServer = false) {
     </div>
     <div class="card-body">
       <div class="card-title">${m.clean_title}</div>
-      <div class="card-meta">${(m.container_extension??'').toUpperCase()}</div>
+      <div class="card-meta">${metaParts.join(' · ')}</div>
       ${serverBadge}
     </div>
     <div class="card-actions" onclick="event.stopPropagation()">${btn}</div>

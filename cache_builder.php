@@ -94,12 +94,16 @@ foreach ($servers as $srv) {
         $streams = xtream_req_srv($srv, 'get_vod_streams', ['category_id' => $cat['category_id']]);
         foreach ($streams as $m) {
             $movieCache[(string)$m['stream_id']] = [
-                'id'       => (string)$m['stream_id'],
-                'title'    => display_title($m['name'] ?? ''),
-                'cover'    => $m['stream_icon'] ?? '',
-                'category' => $cat['category_name'],
-                'ext'      => $m['container_extension'] ?? 'mp4',
-                'type'     => 'movie',
+                'id'            => (string)$m['stream_id'],
+                'title'         => display_title($m['name'] ?? ''),
+                'cover'         => $m['stream_icon'] ?? '',
+                'category'      => $cat['category_name'],
+                'category_id'   => (string)$cat['category_id'],
+                'ext'           => $m['container_extension'] ?? 'mp4',
+                'type'          => 'movie',
+                'year'          => $m['year']          ?? '',
+                'rating_5based' => $m['rating_5based'] ?? '',
+                'genre'         => $m['genre']         ?? '',
             ];
         }
     }
