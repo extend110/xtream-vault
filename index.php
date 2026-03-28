@@ -1539,18 +1539,21 @@ startBadgePolling();
 async function loadMovieCats() {
   const el = document.getElementById('cats-movies');
   if (!el) return;
-  // Immer multi-server Endpoint verwenden — gibt bei einem Server denselben Inhalt zurück
   const groups = await api('get_all_movie_categories');
   if (!Array.isArray(groups)) return;
   const multiServer = groups.length > 1;
   el.innerHTML = groups.map(g => {
-    const header = multiServer
-      ? `<div class="cat-server-label">🌐 ${esc(g.server_name)}</div>`
-      : '';
+    if (!multiServer) {
+      return (g.categories ?? []).map(c =>
+        `<div class="cat-item" onclick="loadMovies('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
+      ).join('');
+    }
+    const gid = 'srvgrp-m-' + esc(g.server_id);
     const items = (g.categories ?? []).map(c =>
       `<div class="cat-item" onclick="loadMovies('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
     ).join('');
-    return header + items;
+    return `<div class="cat-server-label" onclick="toggleServerGroup('${gid}',this)"><span class="srv-arrow">▾</span> 🌐 ${esc(g.server_name)}</div>
+<div class="cat-server-group" id="${gid}">${items}</div>`;
   }).join('');
 }
 
@@ -1561,17 +1564,28 @@ async function loadSeriesCats() {
   if (!Array.isArray(groups)) return;
   const multiServer = groups.length > 1;
   el.innerHTML = groups.map(g => {
-    const header = multiServer
-      ? `<div class="cat-server-label">🌐 ${esc(g.server_name)}</div>`
-      : '';
+    if (!multiServer) {
+      return (g.categories ?? []).map(c =>
+        `<div class="cat-item" onclick="loadSeriesCat('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
+      ).join('');
+    }
+    const gid = 'srvgrp-s-' + esc(g.server_id);
     const items = (g.categories ?? []).map(c =>
       `<div class="cat-item" onclick="loadSeriesCat('${c.category_id}','${esc(c.category_name)}',this,'${esc(g.server_id)}')">${esc(c.category_name)}</div>`
     ).join('');
-    return header + items;
+    return `<div class="cat-server-label" onclick="toggleServerGroup('${gid}',this)"><span class="srv-arrow">▾</span> 🌐 ${esc(g.server_name)}</div>
+<div class="cat-server-group" id="${gid}">${items}</div>`;
   }).join('');
 }
 function toggleCats(type) {
   document.getElementById('cats-' + type).classList.toggle('open');
+}
+function toggleServerGroup(id, label) {
+  const group = document.getElementById(id);
+  if (!group) return;
+  const collapsed = group.classList.toggle('collapsed');
+  const arrow = label?.querySelector('.srv-arrow');
+  if (arrow) arrow.textContent = collapsed ? '▸' : '▾';
 }
 
 // ── Movies ────────────────────────────────────────────────────
@@ -1831,19 +1845,19 @@ async function openSeriesModal(id, title, cover, category, serverId) {
     const eps = episodes[season];
     const seasonNum = parseInt(season, 10) || 1;
     html += `<div class="season-header">${t('modal.season')} ${season}
-      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}','${esc(category||'')}')">⏳ All queuen</span>
+      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ All queuen</span>
     </div>`;
     for (const ep of eps) {
       const epBtn = ep.downloaded
         ? canQueueRemove
-          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}')" title="Zurücksetzen">↺</button>`
+          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')" title="Zurücksetzen">↺</button>`
           : `<button class="ep-btn done" disabled>✓</button>`
         : ep.queued && canQueueRemove
           ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
           : ep.queued
             ? `<button class="ep-btn done" disabled>⏳</button>`
             : canQueueAdd
-              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}',this)">+ Q</button>`
+              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
               : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
@@ -1858,7 +1872,7 @@ async function openSeriesModal(id, title, cover, category, serverId) {
 }
 function closeModal() { document.getElementById('series-modal').classList.remove('open'); }
 
-async function queueEpisode(ep, season, seriesTitle, category, btn) {
+async function queueEpisode(ep, season, seriesTitle, category, serverId, btn) {
   await queueItem({
     stream_id:           ep.id,
     type:                'episode',
@@ -1869,6 +1883,7 @@ async function queueEpisode(ep, season, seriesTitle, category, btn) {
     category:            seriesTitle,
     category_original:   category || '',
     season:              season,
+    _server_id:          serverId || '',
   });
   if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; btn.onclick = () => removeEpFromQueue(ep.id, btn); }
 }
@@ -1877,7 +1892,7 @@ async function removeEpFromQueue(id, btn) {
   if (btn) { btn.textContent = '+ Q'; btn.className = 'ep-btn add'; btn.onclick = null; }
   adjustQueueBadge(-1); loadStats();
 }
-async function queueAllSeason(eps, season, seriesTitle, category) {
+async function queueAllSeason(eps, season, seriesTitle, category, serverId) {
   let count = 0;
   for (const ep of eps) {
     if (!ep.downloaded && !ep.queued) {
@@ -1888,7 +1903,8 @@ async function queueAllSeason(eps, season, seriesTitle, category) {
         cover: '', dest_subfolder: 'TV Shows',
         category:          seriesTitle,
         category_original: category || '',
-        season: season,
+        season:            season,
+        _server_id:        serverId || '',
       });
       if (!result) break;
       count++;
@@ -2378,19 +2394,18 @@ async function setPriority(sid, priority) {
   refreshQueue();
 }
 
-async function resetEpisode(sid, ep, season, seriesTitle, category) {
+async function resetEpisode(sid, ep, season, seriesTitle, category, serverId) {
   if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
   const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast(t('reset.done'), 'success');
-  const btn = document.getElementById('epbtn-' + sid);
   const epRow = document.getElementById('ep-' + sid);
   if (epRow) {
     const newBtn = document.createElement('button');
     newBtn.className = 'ep-btn add';
     newBtn.id = 'epbtn-' + sid;
     newBtn.textContent = '+ Q';
-    newBtn.onclick = () => queueEpisode(ep, season, seriesTitle, seriesTitle, newBtn);
+    newBtn.onclick = () => queueEpisode(ep, season, seriesTitle, category, serverId || '', newBtn);
     epRow.querySelector('button')?.replaceWith(newBtn);
   }
   updateQueueBadge();
