@@ -194,6 +194,18 @@ function save_queue(array $q): void {
         unset($item['_queue_file'], $item['_server_id']);
         $byFile[$file][] = $item;
     }
+    // Alle bekannten Queue-Dateien schreiben — auch leere (verhindert dass
+    // entfernte Items in nicht mehr geschriebenen Dateien verbleiben)
+    $servers = load_all_servers();
+    foreach ($servers as $srv) {
+        $f = DATA_DIR . '/queue_' . $srv['id'] . '.json';
+        if (!isset($byFile[$f]) && file_exists($f)) {
+            $byFile[$f] = []; // Explizit leeren
+        }
+    }
+    if (!isset($byFile[QUEUE_FILE]) && file_exists(QUEUE_FILE)) {
+        $byFile[QUEUE_FILE] = [];
+    }
     foreach ($byFile as $file => $items) {
         file_put_contents($file, json_encode(array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
     }

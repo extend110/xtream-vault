@@ -816,11 +816,11 @@ save_queue($queue);
 $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
-// ── VPN: nur im Single-Server-Modus (Multi-Server: Coordinator übernimmt) ─────
+// ── VPN: nur im Single-Server-Modus (Worker: Coordinator übernimmt) ───────────
 $vpnStartedByUs  = false;
 $vpnActiveAtStart = false;
 
-if (VPN_ENABLED && $totalPending > 0 && count(cron_load_all_servers()) <= 1) {
+if (VPN_ENABLED && $totalPending > 0 && $serverFilter === null) {
     if (vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
         $vpnActiveAtStart = true;
@@ -1062,8 +1062,8 @@ foreach ($queue as &$item) {
         $downloadedBytes = 0;
         if ($destFile && file_exists($destFile)) {
             $downloadedBytes = filesize($destFile) ?: 0;
-        } elseif (file_exists(PROGRESS_FILE)) {
-            $prog = json_decode(@file_get_contents(PROGRESS_FILE), true) ?? [];
+        } elseif (file_exists(get_progress_file())) {
+            $prog = json_decode(@file_get_contents(get_progress_file()), true) ?? [];
             $downloadedBytes = (int)($prog['bytes_done'] ?? 0);
         }
         $sizeStr  = $downloadedBytes > 0 ? sprintf('%.1f MB', $downloadedBytes / 1048576) : '';
@@ -1116,9 +1116,33 @@ foreach ($queue as &$item) {
 
 /**
  * Aktualisiert nur den Status eines einzelnen Queue-Items in der Datei.
- * Liest die aktuelle Queue neu ein — so gehen parallel hinzugefügte Items nicht verloren.
+ * Im Worker-Modus wird nur die server-spezifische Queue-Datei geschrieben
+ * um Race-Conditions zwischen parallelen Workern zu vermeiden.
  */
 function save_queue_item_status(string $sid, array $updatedItem): void {
+    global $serverFilter;
+
+    // Im Worker-Modus: direkt die server-spezifische Datei schreiben
+    if ($serverFilter !== null) {
+        $file = DATA_DIR . '/queue_' . $serverFilter . '.json';
+        if (!file_exists($file)) $file = QUEUE_FILE;
+        $items = json_decode(@file_get_contents($file), true) ?? [];
+        $found = false;
+        foreach ($items as &$qi) {
+            if ((string)$qi['stream_id'] === $sid) {
+                $qi['status']  = $updatedItem['status'];
+                $qi['error']   = $updatedItem['error']   ?? null;
+                $qi['done_at'] = $updatedItem['done_at'] ?? $qi['done_at'] ?? null;
+                $found = true;
+                break;
+            }
+        }
+        unset($qi);
+        if ($found) file_put_contents($file, json_encode(array_values($items), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        return;
+    }
+
+    // Single-Server-Modus: über load/save_queue (korrekt für Fallback-Dateien)
     $current = load_queue();
     $found   = false;
     foreach ($current as &$qi) {
@@ -1126,7 +1150,6 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
             $qi['status']  = $updatedItem['status'];
             $qi['error']   = $updatedItem['error']   ?? null;
             $qi['done_at'] = $updatedItem['done_at'] ?? $qi['done_at'] ?? null;
-            // _queue_file und _server_id aus $qi behalten (wurde von load_queue gesetzt)
             $found = true;
             break;
         }
@@ -1138,8 +1161,8 @@ function save_queue_item_status(string $sid, array $updatedItem): void {
 clear_progress();
 clog(sprintf("=== Worker done (server: %s): %d downloaded, %d errors ===", $serverFilter ?? 'all', $processed, $errors));
 
-// Im Worker-Modus (Multi-Server): Cleanup und VPN übernimmt der Coordinator
-$isWorker = isset($serverFilter) && count(cron_load_all_servers()) > 1;
+// Im Worker-Modus (hat --server= Argument): Cleanup übernimmt der Coordinator
+$isWorker = ($serverFilter !== null);
 if ($isWorker) exit(0);
 
 // ── Automatische Bereinigung: done-Einträge älter als 7 Tage entfernen ────────

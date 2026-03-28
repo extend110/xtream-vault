@@ -658,7 +658,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 
           <!-- Inline-Formular: Server hinzufügen -->
           <div id="add-server-form" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px">
-            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px">Neuer Server</div>
+            <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px"><?= t('cfg.server_new') ?></div>
             <div class="field"><label><?= t('cfg.server') ?> Name</label><input type="text" id="add-srv-name" placeholder="z.B. Mein Server"></div>
             <div class="field"><label><?= t('cfg.server_ip') ?></label><input type="text" id="add-srv-ip" placeholder="line.example.com" autocomplete="off"></div>
             <div style="display:flex;gap:10px">
@@ -669,7 +669,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <div class="settings-msg" id="add-srv-msg"></div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
               <button class="btn-secondary" onclick="closeAddServerForm()"><?= t('btn.cancel') ?></button>
-              <button class="btn-primary" onclick="addServer()">💾 Hinzufügen</button>
+              <button class="btn-primary" onclick="addServer()"><?= t('cfg.server_add_btn') ?></button>
             </div>
           </div>
 
@@ -692,7 +692,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <div class="field">
               <label><?= t('cfg.dest_path') ?></label>
               <input type="text" id="cfg-dest-path" placeholder="/var/www/html/xtream/downloads">
-              <span class="hint">Wird ignoriert wenn rclone aktiviert ist</span>
+              <span class="hint"><?= t('cfg.dest_rclone_hint') ?></span>
             </div>
           </div>
         </div>
@@ -700,16 +700,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3><?= t('cfg.server') ?> — <?= t('cfg.editor_movies') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-            Steuert welche Bereiche für editor- und viewer-Accounts sichtbar sind.<br>
-            Admins sehen immer alles.
+            <?= t('cfg.editor_desc') ?>
           </div>
           <label class="settings-toggle">
             <input type="checkbox" id="cfg-editor-movies">
-            <span>🎬 Movies anzeigen</span>
+            <span>🎬 <?= t('cfg.editor_movies_label') ?></span>
           </label>
           <label class="settings-toggle">
             <input type="checkbox" id="cfg-editor-series">
-            <span>📺 Series anzeigen</span>
+            <span>📺 <?= t('cfg.editor_series_label') ?></span>
           </label>
         </div>
 
@@ -726,7 +725,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <div class="field">
               <label><?= t('cfg.rclone_remote') ?></label>
               <input type="text" id="cfg-rclone-remote" placeholder="gdrive">
-              <span class="hint">Name des konfigurierten rclone-Remotes (z.B. gdrive, onedrive, dropbox)</span>
+              <span class="hint"><?= t('cfg.rclone_remote_hint') ?></span>
             </div>
             <div class="field">
               <label><?= t('cfg.rclone_path') ?></label>
@@ -736,7 +735,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <div class="field">
               <label><?= t('cfg.rclone_bin') ?></label>
               <input type="text" id="cfg-rclone-bin" placeholder="rclone">
-              <span class="hint">Vollständiger Pfad wenn nicht im PATH: z.B. /usr/bin/rclone</span>
+              <span class="hint"><?= t('cfg.rclone_bin_hint') ?></span>
             </div>
             <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
               <button class="btn-secondary" onclick="testRclone()"><?= t('cfg.rclone_test') ?></button>
@@ -768,8 +767,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3><?= t('cfg.cache_status') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Der Cache speichert Titel und Cover aller VODs lokal.<br>
-            Er wird automatisch nach jedem Download-Run aktualisiert.
+            <?= t('cfg.cache_desc') ?>
           </div>
           <div id="cache-status-box" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:14px"><?= t('status.loading') ?></div>
           <button class="btn-secondary" id="btn-rebuild-cache" onclick="rebuildCache(this)"><?= t('cfg.cache_build') ?></button>
@@ -791,7 +789,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3>🔄 <?= t('nav.updates') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Lädt die neueste Version als ZIP von
+            <?= t('cfg.update_desc') ?>
             <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--accent2)">GitHub</a>
             herunter und installiert sie. Vor dem Update wird automatisch ein Backup von <code>data/</code> erstellt.
           </div>
@@ -799,34 +797,33 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <div style="color:var(--muted)"><?= t('cfg.update_not_checked') ?></div>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn-secondary" onclick="checkUpdate(this)">🔍 Auf Updates prüfen</button>
-            <button class="btn-primary"   id="btn-run-update" onclick="runUpdate(this)" style="display:none">⬆️ Update installieren</button>
+            <button class="btn-secondary" onclick="checkUpdate(this)"><?= t('cfg.update_check') ?></button>
+            <button class="btn-primary"   id="btn-run-update" onclick="runUpdate(this)" style="display:none"><?= t('cfg.update_install') ?></button>
             <div class="settings-msg" id="update-msg" style="margin:0"></div>
           </div>
           <div id="update-log" style="display:none;margin-top:12px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);white-space:pre-wrap;max-height:160px;overflow-y:auto"></div>
         </div>
 
         <div class="settings-card">
-          <h3>🪲 PHP-Fehlerlog</h3>
+          <h3>🪲 <?= t('cfg.phplog_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px">
-            Zeigt die letzten PHP-Fehler aus dem Serverlog — gefiltert auf Einträge die das Projekt betreffen.
+            <?= t('cfg.phplog_desc') ?>
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
-            <button class="btn-secondary" onclick="loadPhpErrorLog(this)">🔍 Log laden</button>
+            <button class="btn-secondary" onclick="loadPhpErrorLog(this)"><?= t('cfg.phplog_load') ?></button>
             <span id="php-log-path" style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></span>
           </div>
           <div id="php-error-log" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:10px 14px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);white-space:pre-wrap;max-height:300px;overflow-y:auto;line-height:1.6"></div>
         </div>
 
         <div class="settings-card">
-          <h3>🔒 VPN (WireGuard)</h3>
+          <h3>🔒 <?= t('cfg.vpn_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Downloads über WireGuard-VPN leiten. VPN wird vor dem ersten Download gestartet und danach automatisch getrennt.<br>
-            Die Konfigurationsdatei muss unter <code style="color:var(--accent2)">/etc/wireguard/&lt;interface&gt;.conf</code> liegen.
+            <?= t('cfg.vpn_desc') ?>
           </div>
           <label class="settings-toggle" style="margin-bottom:14px">
             <input type="checkbox" id="cfg-vpn-enabled">
-            <span>VPN für Downloads aktivieren</span>
+            <span><?= t('cfg.vpn_enable') ?></span>
           </label>
           <div class="field">
             <label><?= t('cfg.vpn_iface_label') ?></label>
@@ -840,17 +837,17 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div id="vpn-stats-card" style="display:none;margin-top:14px;background:var(--bg3);border:1px solid rgba(46,213,115,.2);border-radius:8px;padding:14px 16px">
             <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--green);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">🔒 VPN aktiv</div>
             <div style="display:flex;gap:16px;flex-wrap:wrap">
-              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Öffentliche IP</div><div id="vpn-stat-ip" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
-              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Verbunden seit</div><div id="vpn-stat-since" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
-              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em">Interface</div><div id="vpn-stat-iface" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><?= t('cfg.vpn_pub_ip') ?></div><div id="vpn-stat-ip" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><?= t('cfg.vpn_since') ?></div><div id="vpn-stat-since" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
+              <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><?= t('cfg.vpn_iface') ?></div><div id="vpn-stat-iface" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
             </div>
           </div>
         </div>
 
         <div class="settings-card">
-          <h3>📨 Telegram-Benachrichtigungen</h3>
+          <h3>📨 <?= t('cfg.tg_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
-            Benachrichtigung via Telegram Bot.<br>
+            <?= t('cfg.tg_desc') ?>
             Bot erstellen: <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent2)">@BotFather</a> ·
             Chat-ID: <a href="https://t.me/userinfobot" target="_blank" style="color:var(--accent2)">@userinfobot</a>
           </div>
@@ -864,49 +861,48 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
           <label class="settings-toggle" style="margin-bottom:10px">
             <input type="checkbox" id="cfg-telegram-enabled" onchange="toggleTelegramOptions(this.checked)">
-            <span>Benachrichtigungen aktivieren</span>
+            <span><?= t('cfg.tg_enable') ?></span>
           </label>
 
           <!-- Benachrichtigungstypen -->
           <div id="telegram-notify-options" style="display:none;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:14px">
-            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px">Benachrichtigen bei</div>
+            <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px"><?= t('cfg.tg_notify_when') ?></div>
             <label class="settings-toggle" style="margin-bottom:6px">
               <input type="checkbox" id="cfg-tg-notify-success">
-              <span>✅ Download abgeschlossen</span>
+              <span><?= t('cfg.tg_on_success') ?></span>
             </label>
             <label class="settings-toggle" style="margin-bottom:6px">
               <input type="checkbox" id="cfg-tg-notify-error">
-              <span>❌ Download fehlgeschlagen</span>
+              <span><?= t('cfg.tg_on_error') ?></span>
             </label>
             <label class="settings-toggle" style="margin-bottom:6px">
               <input type="checkbox" id="cfg-tg-notify-queue-done">
-              <span>🏁 Queue-Run abgeschlossen</span>
+              <span><?= t('cfg.tg_on_queue_done') ?></span>
             </label>
             <label class="settings-toggle" style="margin-bottom:10px">
               <input type="checkbox" id="cfg-tg-notify-disk-low" onchange="toggleDiskLowField(this.checked)">
-              <span>⚠️ Speicherplatz niedrig</span>
+              <span><?= t('cfg.tg_on_disk_low') ?></span>
             </label>
             <div class="field" id="tg-disk-low-field" style="display:none">
-              <label>Warnschwelle (GB)</label>
+              <label><?= t('cfg.tg_disk_threshold') ?></label>
               <input type="number" id="cfg-tg-disk-low-gb" min="1" max="500" value="10" style="max-width:120px">
-              <span class="hint">Warnung wenn freier Speicher unter diesen Wert fällt</span>
+              <span class="hint"><?= t('cfg.tg_disk_threshold_hint') ?></span>
             </div>
           </div>
 
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="btn-secondary" onclick="testTelegram()">📨 Testnachricht senden</button>
+            <button class="btn-secondary" onclick="testTelegram()"><?= t('cfg.tg_test') ?></button>
             <div class="settings-msg" id="telegram-test-msg" style="margin:0"></div>
           </div>
         </div>
 
         <div class="settings-card">
-          <h3>API-Keys (Externe Benutzerverwaltung)</h3>
+          <h3><?= t('cfg.api_keys_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-            API-Keys ermöglichen externe Systeme, Benutzer anzulegen.<br>
-            Authentifizierung via Header <code style="color:var(--accent2);font-family:'DM Mono',monospace">X-API-Key: xv_...</code>
+            <?= t('cfg.api_keys_desc') ?>
           </div>
           <div id="apikey-new-reveal" style="display:none" class="key-new-reveal">
-            <strong>⚠️ Einmalig sichtbar — jetzt kopieren!</strong>
+            <strong><?= t('cfg.api_key_once') ?></strong>
             <span id="apikey-new-value"></span>
           </div>
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
@@ -915,19 +911,19 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           </div>
           <div class="apikey-table-wrap">
             <table class="apikey-table" id="apikey-table">
-              <thead><tr><th>Name</th><th>Key</th><th>Status</th><th>Erstellt</th><th>Zuletzt benutzt</th><th>Aufrufe</th><th></th></tr></thead>
+              <thead><tr><th><?= t('api.param_name') ?></th><th>Key</th><th><?= t('users.col_status') ?></th><th><?= t('users.col_created') ?></th><th><?= t('cfg.api_key_last_used') ?></th><th><?= t('cfg.api_key_calls') ?></th><th></th></tr></thead>
               <tbody id="apikey-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Lade…</td></tr></tbody>
             </table>
           </div>
         </div>
 
         <div class="settings-card">
-          <h3>💾 Datensicherung</h3>
+          <h3>💾 <?= t('cfg.backup_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-            Sichert alle Dateien im <code>data/</code>-Verzeichnis als ZIP. Automatisch täglich um 3 Uhr, maximal 7 Backups.
+            <?= t('cfg.backup_desc') ?>
           </div>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
-            <button class="btn-secondary" onclick="runBackup(this)">▶ Jetzt sichern</button>
+            <button class="btn-secondary" onclick="runBackup(this)"><?= t('cfg.backup_now') ?></button>
             <span id="backup-run-msg" style="font-size:.78rem;color:var(--muted)"></span>
           </div>
           <div id="backup-list" style="overflow-x:auto"><div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div></div>
@@ -936,7 +932,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card" style="border-color:rgba(255,71,87,.2)">
           <h3>🔧 <?= t('cfg.maintenance') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
-            Wenn aktiv, können sich nur Admins einloggen. Alle anderen sehen eine Wartungsseite.
+            <?= t('cfg.maintenance_desc') ?>
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <div id="maintenance-status" style="font-family:'DM Mono',monospace;font-size:.75rem;padding:5px 12px;border-radius:5px;background:var(--bg3);border:1px solid var(--border)">
@@ -3096,7 +3092,7 @@ async function runUpdate(btn) {
   const logEl  = document.getElementById('update-log');
   const status = document.getElementById('update-status');
 
-  if (!confirm('Update installieren?\n\nEin Backup von data/ wird automatisch erstellt.\nDie Seite wird danach neu geladen.')) return;
+  if (!confirm(t('cfg.update_confirm'))) return;
 
   btn.disabled = true;
   msgEl.textContent = t('update.installing'); msgEl.className = 'settings-msg info';
@@ -3167,7 +3163,7 @@ function updateVpnBadge(status) {
     badge.style.background   = 'rgba(255,71,87,.15)';
     badge.style.color        = 'var(--red)';
     badge.style.borderColor  = 'rgba(255,71,87,.3)';
-    badge.title = 'WireGuard nicht installiert';
+    badge.title = t('cfg.vpn_not_installed');
     if (statsCard) statsCard.style.display = 'none';
     return;
   }
@@ -3234,7 +3230,7 @@ async function checkVpnStatus() {
   if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; _vpnUpdateToggleBtn(false); return; }
   updateVpnBadge(d);
   if (!d.wg_installed) {
-    msg.textContent = '⚠️ WireGuard nicht installiert — sudo apt install wireguard';
+    msg.textContent = t('cfg.vpn_not_installed_hint');
     msg.className = 'settings-msg err'; _vpnUpdateToggleBtn(false); return;
   }
   const ipText = d.public_ip ? ` · IP: ${d.public_ip}` : '';
@@ -3619,14 +3615,14 @@ async function loadApiKeys() {
   if (!tbody) return;
   const keys = await api('list_api_keys');
   if (!keys.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Noch keine API-Keys angelegt</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">${t('cfg.api_key_none')}</td></tr>`;
     return;
   }
   tbody.innerHTML = keys.map(k => `
     <tr>
       <td><strong>${esc(k.name)}</strong></td>
       <td><span class="key-preview">${esc(k.key_preview)}</span></td>
-      <td><span class="role-badge ${k.active ? 'badge-active' : 'badge-inactive'}">${k.active ? 'Aktiv' : 'Widerrufen'}</span></td>
+      <td><span class="role-badge ${k.active ? 'badge-active' : 'badge-inactive'}">${k.active ? t('users.status_active') : t('cfg.api_key_revoked')}</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.created_at ?? '–'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.last_used ?? 'Nie'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">${k.use_count ?? 0}</td>
