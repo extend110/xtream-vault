@@ -4,6 +4,7 @@ return [
     'nav.dashboard'     => 'Dashboard',
     'nav.movies'        => 'Movies',
     'nav.series'        => 'Series',
+    'nav.navigate'      => 'Navigate',
     'nav.search'        => 'Search',
     'nav.new'           => 'New',
     'nav.favourites'    => 'Favourites',

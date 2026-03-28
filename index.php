@@ -38,14 +38,14 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="logo-sub">VOD Downloader</div>
   </div>
   <div class="sidebar-stats">
-    <div class="stat-box"><div class="stat-num" id="stat-movies">–</div><div class="stat-label">Movies</div></div>
-    <div class="stat-box"><div class="stat-num" id="stat-episodes">–</div><div class="stat-label">Episodes</div></div>
+    <div class="stat-box"><div class="stat-num" id="stat-movies">–</div><div class="stat-label"><?= t('nav.movies') ?></div></div>
+    <div class="stat-box"><div class="stat-num" id="stat-episodes">–</div><div class="stat-label"><?= t('nav.series') ?></div></div>
     <?php if ($can_queue_view): ?>
     <div class="stat-box queue-stat"><div class="stat-num" id="stat-queued">0</div><div class="stat-label"><?= t('filter.queued') ?></div></div>
     <?php endif; ?>
   </div>
   <nav class="nav">
-    <div class="nav-section-title">Navigate</div>
+    <div class="nav-section-title"><?= t('nav.navigate') ?></div>
     <div class="nav-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="nav-icon">⬛</span><?= t('nav.dashboard') ?></div>
     <?php if ($show_movies): ?>
     <div class="nav-item" data-view="movies" onclick="toggleCats('movies')"><span class="nav-icon">🎬</span><?= t('nav.movies') ?></div>
@@ -1840,24 +1840,34 @@ async function openSeriesModal(id, title, cover, category, serverId) {
   const seasons  = Object.keys(episodes).sort();
   document.getElementById('modal-meta').textContent = `${seasons.length} Season(s)`;
   if (!seasons.length) { document.getElementById('modal-body').innerHTML = emptyHTML(t('modal.no_episodes')); return; }
+
+  // Episode-Objekte in Map speichern — kein JSON in onclick nötig
+  window._epMap = {};
+  for (const season of seasons) {
+    for (const ep of episodes[season]) {
+      window._epMap[ep.id] = ep;
+    }
+  }
+
   let html = '';
   for (const season of seasons) {
     const eps = episodes[season];
     const seasonNum = parseInt(season, 10) || 1;
+    const epIds = eps.map(e => e.id).join(',');
     html += `<div class="season-header">${t('modal.season')} ${season}
-      <span class="season-queue-all" onclick="queueAllSeason(${htmlJson(eps)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ All queuen</span>
+      <span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ All queuen</span>
     </div>`;
     for (const ep of eps) {
       const epBtn = ep.downloaded
         ? canQueueRemove
-          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}',${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')" title="Zurücksetzen">↺</button>`
+          ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}','${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')" title="Zurücksetzen">↺</button>`
           : `<button class="ep-btn done" disabled>✓</button>`
         : ep.queued && canQueueRemove
           ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
           : ep.queued
             ? `<button class="ep-btn done" disabled>⏳</button>`
             : canQueueAdd
-              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisode(${htmlJson(ep)},${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
+              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
               : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
@@ -1872,6 +1882,15 @@ async function openSeriesModal(id, title, cover, category, serverId) {
 }
 function closeModal() { document.getElementById('series-modal').classList.remove('open'); }
 
+async function queueEpisodeById(epId, season, seriesTitle, category, serverId, btn) {
+  const ep = window._epMap?.[epId];
+  if (!ep) { showToast('❌ Episode nicht gefunden', 'error'); return; }
+  await queueEpisode(ep, season, seriesTitle, category, serverId, btn);
+}
+async function queueAllSeasonById(epIdsCsv, season, seriesTitle, category, serverId) {
+  const eps = (epIdsCsv || '').split(',').map(id => window._epMap?.[id]).filter(Boolean);
+  await queueAllSeason(eps, season, seriesTitle, category, serverId);
+}
 async function queueEpisode(ep, season, seriesTitle, category, serverId, btn) {
   await queueItem({
     stream_id:           ep.id,
@@ -2394,11 +2413,12 @@ async function setPriority(sid, priority) {
   refreshQueue();
 }
 
-async function resetEpisode(sid, ep, season, seriesTitle, category, serverId) {
+async function resetEpisode(sid, epId, season, seriesTitle, category, serverId) {
   if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
   const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast(t('reset.done'), 'success');
+  const ep = window._epMap?.[epId] ?? {id: epId};
   const epRow = document.getElementById('ep-' + sid);
   if (epRow) {
     const newBtn = document.createElement('button');

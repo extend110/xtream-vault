@@ -1435,21 +1435,35 @@ switch ($action) {
                 foreach ($cache as $sid => $m) {
                     $title = strtolower($m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '');
                     if (!str_contains($title, $q)) continue;
-                    $sidStr = (string)($m['stream_id'] ?? $sid);
-                    $srvResults[] = [
-                        'stream_id'           => $sidStr,
-                        'clean_title'         => $m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '',
-                        'stream_icon'         => $m['cover'] ?? $m['stream_icon'] ?? '',
-                        'category'            => $m['category'] ?? '',
-                        'container_extension' => $m['ext'] ?? $m['container_extension'] ?? 'mp4',
-                        'downloaded'          => in_array($sidStr, $db['movies'] ?? []),
-                        'queued'              => in_array($sidStr, $qids),
-                        'year'                => $m['year']          ?? '',
-                        'rating_5based'       => $m['rating_5based'] ?? '',
-                        'genre'               => $m['genre']         ?? '',
-                        '_server_id'          => $srvId,
-                        '_server_name'        => $srvName,
-                    ];
+                    if ($type === 'series') {
+                        $srvResults[] = [
+                            'series_id'   => (string)($m['series_id'] ?? $sid),
+                            'stream_id'   => (string)($m['series_id'] ?? $sid),
+                            'clean_title' => $m['clean_title'] ?? $m['title'] ?? '',
+                            'cover'       => $m['cover'] ?? '',
+                            'category'    => $m['category'] ?? '',
+                            'genre'       => $m['genre'] ?? '',
+                            'type'        => 'series',
+                            '_server_id'  => $srvId,
+                            '_server_name'=> $srvName,
+                        ];
+                    } else {
+                        $sidStr = (string)($m['stream_id'] ?? $sid);
+                        $srvResults[] = [
+                            'stream_id'           => $sidStr,
+                            'clean_title'         => $m['title'] ?? $m['clean_title'] ?? $m['name'] ?? '',
+                            'stream_icon'         => $m['cover'] ?? $m['stream_icon'] ?? '',
+                            'category'            => $m['category'] ?? '',
+                            'container_extension' => $m['ext'] ?? $m['container_extension'] ?? 'mp4',
+                            'downloaded'          => in_array($sidStr, $db['movies'] ?? []),
+                            'queued'              => in_array($sidStr, $qids),
+                            'year'                => $m['year']          ?? '',
+                            'rating_5based'       => $m['rating_5based'] ?? '',
+                            'genre'               => $m['genre']         ?? '',
+                            '_server_id'          => $srvId,
+                            '_server_name'        => $srvName,
+                        ];
+                    }
                 }
             } else {
                 // Kein Cache — direkt beim Server anfragen
