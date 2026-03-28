@@ -171,6 +171,7 @@ cat > "$PROJECT_PATH/version.json" <<EOL
   "updated_at": "$(date '+%Y-%m-%d %H:%M:%S')"
 }
 EOL
+chown www-data:www-data "$PROJECT_PATH/version.json"
 log "version.json angelegt"
 
 # ── WireGuard sudoers einrichten ──────────────────────────────

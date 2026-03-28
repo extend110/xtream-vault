@@ -1134,14 +1134,6 @@ switch ($action) {
             $copied++;
         }
 
-        // Berechtigungen setzen
-        exec('chmod -R 755 ' . escapeshellarg($dir));
-        exec('chmod -R 775 ' . escapeshellarg($dir . '/data'));
-        exec('chown -R www-data:www-data ' . escapeshellarg($dir));
-
-        // Temporäre Dateien aufräumen
-        exec('rm -rf ' . escapeshellarg($tmpDir));
-
         // ── version.json mit Remote-Commit aktualisieren ──────────────────────
         $apiUrl  = 'https://api.github.com/repos/extend110/xtream-vault/commits/main';
         $apiCtx  = stream_context_create(['http' => ['method' => 'GET', 'header' => "User-Agent: XtreamVault/1.0\r\n", 'timeout' => 8]]);
@@ -1155,6 +1147,14 @@ switch ($action) {
             'commit'     => $newHash,
             'updated_at' => date('Y-m-d H:i:s'),
         ], JSON_PRETTY_PRINT));
+
+        // Berechtigungen setzen (nach version.json damit chown es erfasst)
+        exec('chmod -R 755 ' . escapeshellarg($dir));
+        exec('chmod -R 775 ' . escapeshellarg($dir . '/data'));
+        exec('chown -R www-data:www-data ' . escapeshellarg($dir));
+
+        // Temporäre Dateien aufräumen
+        exec('rm -rf ' . escapeshellarg($tmpDir));
 
         log_activity($current_user['id'], $current_user['username'], 'run_update', ['commit' => substr($newHash, 0, 7)]);
         echo json_encode([
