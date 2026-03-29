@@ -2475,11 +2475,34 @@ switch ($action) {
 
         // ── Server-Liste ──────────────────────────────────────────────────────
         $srvList = load_all_servers();
-        $serverStatus = array_map(fn($s) => [
-            'id'        => $s['id'],
-            'name'      => $s['name'] ?? ($s['server_ip'] . ':' . $s['port']),
-            'has_cache' => file_exists(DATA_DIR . '/library_cache_' . $s['id'] . '.json'),
-        ], $srvList);
+        $queueBySrv = [];
+        foreach ($queue as $qi) {
+            $srvId = $qi['_server_id'] ?? 'default';
+            if (!isset($queueBySrv[$srvId])) $queueBySrv[$srvId] = ['pending' => 0, 'downloading' => 0, 'error' => 0];
+            $st = $qi['status'] ?? 'pending';
+            if (isset($queueBySrv[$srvId][$st])) $queueBySrv[$srvId][$st]++;
+        }
+        $serverStatus = array_map(function($s) use ($queueBySrv) {
+            $cacheFile    = DATA_DIR . '/library_cache_' . $s['id'] . '.json';
+            $serCacheFile = DATA_DIR . '/series_cache_' . $s['id'] . '.json';
+            $hasCache     = file_exists($cacheFile);
+            $cacheAgeMin  = $hasCache ? round((time() - filemtime($cacheFile)) / 60) : null;
+            $movieCount   = $hasCache ? count(json_decode(file_get_contents($cacheFile), true) ?? []) : null;
+            $seriesCount  = file_exists($serCacheFile) ? count(json_decode(file_get_contents($serCacheFile), true) ?? []) : null;
+            $q            = $queueBySrv[$s['id']] ?? ['pending' => 0, 'downloading' => 0, 'error' => 0];
+            return [
+                'id'           => $s['id'],
+                'name'         => $s['name'] ?? ($s['server_ip'] . ':' . $s['port']),
+                'server_ip'    => $s['server_ip'],
+                'port'         => $s['port'],
+                'username'     => $s['username'],
+                'has_cache'    => $hasCache,
+                'cache_age_min'=> $cacheAgeMin,
+                'movie_count'  => $movieCount,
+                'series_count' => $seriesCount,
+                'queue'        => $q,
+            ];
+        }, $srvList);
 
         // ── System-Info ───────────────────────────────────────────────────────
         $memTotal = 0; $memFree = 0;

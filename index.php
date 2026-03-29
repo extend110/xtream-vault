@@ -118,6 +118,10 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:600;
              padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
              border:1px solid transparent;transition:background .3s,color .3s,border-color .3s"></span>
+    <span id="update-badge" onclick="showView('settings')" title="Update verfügbar"
+      style="display:none;font-family:'DM Mono',monospace;font-size:.6rem;font-weight:600;
+             padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
+             background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.3)">⬆ Update</span>
     <?php endif; ?>
     <!-- Desktop: direkte Buttons -->
     <button id="theme-toggle" class="topbar-icon-btn topbar-desktop-only" onclick="showView('profile')" title="Theme wechseln" aria-label="Theme wechseln">🎨</button>
@@ -1125,6 +1129,23 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   </div>
 </div>
 
+<!-- Server Info Modal -->
+<div class="modal-overlay" id="srv-info-modal" onclick="if(event.target===this)closeSrvInfoModal()" style="display:none;z-index:1045">
+  <div class="modal-box" style="max-width:360px;width:100%">
+    <div class="modal-header">
+      <div class="modal-title" id="srv-info-title"></div>
+      <button class="modal-close" onclick="closeSrvInfoModal()">✕</button>
+    </div>
+    <div style="padding:0 16px 16px">
+      <div id="srv-info-body"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn-secondary" onclick="closeSrvInfoModal();showView('settings')"><?= t('nav.settings') ?></button>
+        <button class="btn-secondary" onclick="closeSrvInfoModal()"><?= t('btn.cancel') ?></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Invite Modal -->
 <?php if ($can_users): ?>
 
@@ -1356,6 +1377,15 @@ let queueRefreshInterval;
     const badge = document.getElementById('new-releases-badge');
     if (badge && total > 0) { badge.textContent = total; badge.style.display = ''; }
   });
+  <?php if ($can_settings): ?>
+  // Update-Check im Hintergrund (still, ohne UI-Feedback)
+  api('check_update').then(d => {
+    if (d && !d.error && !d.up_to_date) {
+      const badge = document.getElementById('update-badge');
+      if (badge) badge.style.display = '';
+    }
+  });
+  <?php endif; ?>
 })();
 
 // ── Theme Toggle ──────────────────────────────────────────────
@@ -2889,6 +2919,34 @@ async function saveEditServer() {
   loadServers();
 }
 
+function showServerInfo(s) {
+  const cacheAge = s.cache_age_min != null
+    ? (s.cache_age_min < 60 ? `${s.cache_age_min} Min.` : `${Math.floor(s.cache_age_min/60)}h ${s.cache_age_min%60}m`)
+    : '–';
+  const rows = [
+    ['🌐 Host',         `${s.server_ip}:${s.port}`],
+    ['👤 User',         s.username],
+    ['🎬 Filme',        s.movie_count != null ? s.movie_count.toLocaleString() : '–'],
+    ['📺 Serien',       s.series_count != null ? s.series_count.toLocaleString() : '–'],
+    ['🗂 Cache',        s.has_cache ? `✓ vor ${cacheAge}` : '⚠ Kein Cache'],
+    ['⏳ Pending',      s.queue?.pending ?? 0],
+    ['⬇ Lädt',         s.queue?.downloading ?? 0],
+    ['❌ Fehler',       s.queue?.error ?? 0],
+  ];
+  const body = rows.map(([k,v]) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--muted);font-size:.78rem">${k}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:.78rem">${v}</span>
+    </div>`).join('');
+  const modal = document.getElementById('srv-info-modal');
+  document.getElementById('srv-info-title').textContent = s.name;
+  document.getElementById('srv-info-body').innerHTML = body;
+  modal.style.display = 'flex';
+}
+function closeSrvInfoModal() {
+  document.getElementById('srv-info-modal').style.display = 'none';
+}
+
 async function toggleServer(serverId, btn) {
   const d = await apiPost('toggle_server', {server_id: serverId});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -3077,6 +3135,8 @@ async function checkUpdate(btn) {
       <div style="color:var(--green)">✅ Aktuell</div>
       <div style="color:var(--muted);margin-top:4px">${t('update.local')}: <span style="color:var(--text)">${esc(d.local_commit)}</span></div>
       <div style="color:var(--muted)">${t('update.remote')}: <span style="color:var(--text)">${esc(d.remote_commit)}</span>${dateStr}</div>`;
+    const badge = document.getElementById('update-badge');
+    if (badge) badge.style.display = 'none';
   } else {
     statusEl.innerHTML = `
       <div style="color:var(--orange)">🆕 Update verfügbar</div>
@@ -3084,6 +3144,8 @@ async function checkUpdate(btn) {
       <div style="color:var(--muted)">${t('update.remote')}: <span style="color:var(--accent2)">${esc(d.remote_commit)}</span>${dateStr}</div>
       ${d.remote_message ? `<div style="color:var(--muted);margin-top:4px">💬 ${esc(d.remote_message)}</div>` : ''}`;
     updateBtn.style.display = '';
+    const badge = document.getElementById('update-badge');
+    if (badge) badge.style.display = '';
   }
 }
 
@@ -3730,9 +3792,13 @@ async function loadDashboardData() {
     if (d.servers?.length) {
       srvEl.style.display = 'flex';
       srvEl.innerHTML = d.servers.map(s => `
-        <div style="display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:.78rem">
+        <div onclick="showServerInfo(${JSON.stringify(s).replace(/"/g,'&quot;')})"
+          style="display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer;transition:border-color .15s"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
           <span style="color:${s.has_cache ? 'var(--green)' : 'var(--orange)'}">●</span>
           <span style="font-weight:500">${esc(s.name)}</span>
+          ${s.queue?.downloading > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent)">⬇ ${s.queue.downloading}</span>` : ''}
+          ${s.queue?.pending > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted)">${s.queue.pending} pending</span>` : ''}
           ${!s.has_cache ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--orange)">NO CACHE</span>` : ''}
         </div>`).join('');
     } else {
