@@ -115,6 +115,7 @@ log "data/-Verzeichnis erstellt"
 
 # ── Berechtigungen setzen ─────────────────────────────────────
 section "Berechtigungen setzen"
+chown www-data:www-data /var/www /var/www/html
 chown -R www-data:www-data "$PROJECT_PATH"
 chmod -R 755 "$PROJECT_PATH"
 chmod -R 775 "$PROJECT_PATH/data"

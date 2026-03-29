@@ -1785,6 +1785,7 @@ function renderPagination(containerId, current, total, onPage) {
 }
 
 function movieCard(m, showServer = false) {
+  registerFavItem('movie', m.stream_id, m);
   const thumb = m.stream_icon ? `<img data-src="${m.stream_icon}" alt="">` : '';
   const badge = m.downloaded
     ? `<span class="card-badge badge-done">✓ Done</span>`
@@ -1808,7 +1809,7 @@ function movieCard(m, showServer = false) {
     : '';
 
   const isFav = favourites.has('movie:' + m.stream_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('movie','${m.stream_id}','${esc(m.clean_title)}','${esc(m.stream_icon||'')}','${esc(m.category||'')}','${esc(m.container_extension||'mp4')}',this,'${esc(m._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFavById('movie','${m.stream_id}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
 
   const year = m.year ?? '';
   const rating = m.rating_5based ? (parseFloat(m.rating_5based) * 2).toFixed(1) : '';
@@ -1869,9 +1870,10 @@ function renderSeriesGrid(list) {
 }
 
 function seriesCard(s, showServer = false) {
+  registerFavItem('series', s.series_id, s);
   const thumb = s.cover ? `<img data-src="${s.cover}" alt="">` : '';
   const isFav = favourites.has('series:' + s.series_id);
-  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFav('series','${s.series_id}','${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','',this,'${esc(s._server_id||'')}')" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
+  const favBtn = `<button class="btn-fav${isFav?' active':''}" onclick="event.stopPropagation();toggleFavById('series','${s.series_id}',this)" title="${isFav?'Aus Favoriten entfernen':'Zu Favoriten hinzufügen'}">♥</button>`;
   const queueData = {series_id: s.series_id, clean_title: s.clean_title, cover: s.cover || '', category: s.category || '', _server_id: s._server_id || ''};
   const serverBadge = (showServer && s._server_name)
     ? `<div style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s._server_name)}">🌐 ${esc(s._server_name)}</div>`
@@ -2272,6 +2274,23 @@ function updateFavBadge() {
   const n = favourites.size;
   badge.textContent = n;
   badge.style.display = n > 0 ? '' : 'none';
+}
+
+// Map zum schnellen Nachschlagen von Fav-Daten ohne inline-onclick-Argumente
+const _favItemMap = new Map();
+
+function registerFavItem(type, id, item) {
+  _favItemMap.set(type + ':' + id, item);
+}
+
+async function toggleFavById(type, id, btn) {
+  const item = _favItemMap.get(type + ':' + id);
+  if (!item) return;
+  if (type === 'movie') {
+    await toggleFav('movie', id, item.clean_title || item.title, item.stream_icon || item.cover || '', item.category || '', item.container_extension || 'mp4', btn, item._server_id || '');
+  } else {
+    await toggleFav('series', id, item.clean_title || item.name, item.cover || '', item.category || '', '', btn, item._server_id || '');
+  }
 }
 
 async function toggleFav(type, sid, title, cover, category, ext, btn, serverId = '') {
