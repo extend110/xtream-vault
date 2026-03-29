@@ -151,14 +151,32 @@ function load_all_servers(): array {
     return $servers;
 }
 
-function load_db(): array {
-    if (file_exists(DOWNLOAD_DB))
+function load_db(?string $serverId = null): array {
+    if ($serverId !== null) {
+        $file = DATA_DIR . '/downloaded_' . $serverId . '.json';
+        if (file_exists($file)) return json_decode(file_get_contents($file), true) ?? ['movies' => [], 'episodes' => []];
+        return ['movies' => [], 'episodes' => []];
+    }
+    // Alle Server-DBs zusammenführen
+    $servers = load_all_servers();
+    $merged  = ['movies' => [], 'episodes' => []];
+    foreach ($servers as $srv) {
+        $file = DATA_DIR . '/downloaded_' . $srv['id'] . '.json';
+        if (!file_exists($file)) continue;
+        $db = json_decode(file_get_contents($file), true) ?? [];
+        $merged['movies']   = array_unique(array_merge($merged['movies'],   array_map('strval', $db['movies']   ?? [])));
+        $merged['episodes'] = array_unique(array_merge($merged['episodes'], array_map('strval', $db['episodes'] ?? [])));
+    }
+    // Fallback: alte DOWNLOAD_DB
+    if (empty($merged['movies']) && empty($merged['episodes']) && file_exists(DOWNLOAD_DB)) {
         return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
-    return ['movies' => [], 'episodes' => []];
+    }
+    return $merged;
 }
-function save_db(array $db): void {
+function save_db(array $db, ?string $serverId = null): void {
     @mkdir(DATA_PATH, 0755, true);
-    file_put_contents(DOWNLOAD_DB, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    $file = $serverId ? DATA_DIR . '/downloaded_' . $serverId . '.json' : DOWNLOAD_DB;
+    file_put_contents($file, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 function load_queue(): array {
     $servers = load_all_servers();
@@ -184,6 +202,35 @@ function load_queue(): array {
         unset($item);
         $all = $items;
     }
+    return $all;
+}
+/** Führt alle downloaded_index_*.json zusammen → assoziativ [stream_id => entry] */
+function load_all_index(): array {
+    $merged = [];
+    foreach (glob(DATA_DIR . '/downloaded_index_*.json') ?: [] as $f) {
+        $idx = json_decode(@file_get_contents($f), true) ?? [];
+        $merged = array_merge($merged, $idx);
+    }
+    // Fallback: alte DOWNLOADED_INDEX_FILE
+    if (empty($merged) && file_exists(DOWNLOADED_INDEX_FILE)) {
+        $merged = json_decode(file_get_contents(DOWNLOADED_INDEX_FILE), true) ?? [];
+    }
+    return $merged;
+}
+
+function load_all_history(): array {
+    $all = [];
+    // Alle server-spezifischen History-Dateien
+    foreach (glob(DATA_DIR . '/download_history_*.json') ?: [] as $f) {
+        $entries = json_decode(@file_get_contents($f), true) ?? [];
+        $all = array_merge($all, $entries);
+    }
+    // Fallback: alte DOWNLOAD_HISTORY_FILE
+    if (empty($all) && file_exists(DOWNLOAD_HISTORY_FILE)) {
+        $all = json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [];
+    }
+    // Nach done_at absteigend sortieren
+    usort($all, fn($a, $b) => strcmp($b['done_at'] ?? '', $a['done_at'] ?? ''));
     return $all;
 }
 function save_queue(array $q): void {
@@ -228,20 +275,17 @@ switch ($action) {
     // ── Health Check ──────────────────────────────────────────────────────────
     case 'get_recent_downloads':
         require_permission('browse');
-        $history = file_exists(DOWNLOAD_HISTORY_FILE)
-            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
-            : [];
+        $history = load_all_history();
         // Editoren/Viewer sehen nur eigene Downloads
         if (!in_array('settings', ROLE_PERMISSIONS[$current_user['role'] ?? 'viewer'] ?? [])) {
             $history = array_values(array_filter($history, fn($h) => ($h['added_by'] ?? '') === $current_user['username']));
         }
         $items = array_slice($history, 0, 20);
         // Cover aus downloaded_index als Fallback wenn leer
-        if (file_exists(DOWNLOADED_INDEX_FILE)) {
-            $index = json_decode(file_get_contents(DOWNLOADED_INDEX_FILE), true) ?? [];
+        $index = load_all_index();
+        if (!empty($index)) {
             foreach ($items as &$h) {
                 if (empty($h['cover'])) {
-                    // Suche nach Titel im Index
                     foreach ($index as $entry) {
                         if (($entry['title'] ?? '') === ($h['title'] ?? '') && !empty($entry['cover'])) {
                             $h['cover'] = $entry['cover'];
@@ -653,10 +697,7 @@ switch ($action) {
         require_permission('users');
         $username = trim($_GET['username'] ?? '');
         if ($username === '') { echo json_encode(['error' => 'Missing username']); break; }
-        $history = file_exists(DOWNLOAD_HISTORY_FILE)
-            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
-            : [];
-        $filtered = array_values(array_filter($history, fn($h) => ($h['added_by'] ?? '') === $username));
+        $history = load_all_history();
         echo json_encode([
             'username' => $username,
             'count'    => count($filtered),
@@ -1720,10 +1761,7 @@ switch ($action) {
             $incomingTitle = clean_title_for_dedup($d['title'] ?? '');
 
             if ($incomingTitle !== '') {
-                $indexFile = DOWNLOADED_INDEX_FILE;
-                $index = file_exists($indexFile)
-                    ? (json_decode(file_get_contents($indexFile), true) ?? [])
-                    : [];
+                $index = load_all_index();
 
                 $dupFound = null;
                 foreach ($index as $entry) {
@@ -1963,18 +2001,32 @@ switch ($action) {
         $type = $d['type'] ?? 'movie'; // 'movie' oder 'episode'
         if ($sid === '') { http_response_code(400); echo json_encode(['error' => 'Missing stream_id']); break; }
 
-        // Aus downloaded.json entfernen
-        $db     = load_db();
-        $dbKey  = $type === 'movie' ? 'movies' : 'episodes';
-        $before = count($db[$dbKey]);
-        $db[$dbKey] = array_values(array_filter($db[$dbKey], fn($id) => (string)$id !== $sid));
-        save_db($db);
+        // Aus allen server-spezifischen downloaded_*.json entfernen
+        $dbKey   = $type === 'movie' ? 'movies' : 'episodes';
+        $before  = 0;
+        $removed = 0;
+        foreach (load_all_servers() as $srv) {
+            $db = load_db($srv['id']);
+            $before += count($db[$dbKey]);
+            $db[$dbKey] = array_values(array_filter($db[$dbKey], fn($id) => (string)$id !== $sid));
+            $removed += $before - count($db[$dbKey]);
+            save_db($db, $srv['id']);
+            $before = 0;
+        }
+        // Fallback: alte DOWNLOAD_DB
+        if (file_exists(DOWNLOAD_DB)) {
+            $db = json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies'=>[],'episodes'=>[]];
+            $db[$dbKey] = array_values(array_filter($db[$dbKey], fn($id) => (string)$id !== $sid));
+            file_put_contents(DOWNLOAD_DB, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        }
 
-        // Aus downloaded_index.json entfernen
-        if (file_exists(DOWNLOADED_INDEX_FILE)) {
-            $index = json_decode(file_get_contents(DOWNLOADED_INDEX_FILE), true) ?? [];
-            unset($index[$sid]);
-            file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        // Aus downloaded_index_*.json entfernen (alle Server)
+        foreach (array_merge(
+            glob(DATA_DIR . '/downloaded_index_*.json') ?: [],
+            file_exists(DOWNLOADED_INDEX_FILE) ? [DOWNLOADED_INDEX_FILE] : []
+        ) as $indexFile) {
+            $index = json_decode(@file_get_contents($indexFile), true) ?? [];
+            if (isset($index[$sid])) { unset($index[$sid]); file_put_contents($indexFile, json_encode($index, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); }
         }
 
         // Aus Queue entfernen falls noch als 'done' vorhanden
@@ -2282,7 +2334,7 @@ switch ($action) {
         $newestCache = $movieReady
             ? max(array_map('filemtime', !empty($serverCacheFiles) ? $serverCacheFiles : [LIBRARY_CACHE_FILE]))
             : null;
-        $indexReady  = file_exists(DOWNLOADED_INDEX_FILE);
+        $indexReady  = !empty(glob(DATA_DIR . '/downloaded_index_*.json') ?: []) || file_exists(DOWNLOADED_INDEX_FILE);
         $buildLog    = DATA_PATH . '/cache_build.log';
         $lockFile    = sys_get_temp_dir() . '/xtream_cache.lock';
         $lastLine    = '';
@@ -2320,9 +2372,7 @@ switch ($action) {
 
     case 'stats_data':
         require_permission('settings');
-        $history = file_exists(DOWNLOAD_HISTORY_FILE)
-            ? (json_decode(file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [])
-            : [];
+        $history = load_all_history();
 
         // ── Echte Gesamtzahlen aus downloaded.json ────────────────────────────
         $db           = load_db();
@@ -2445,12 +2495,7 @@ switch ($action) {
         }
 
         // ── Letzte 10 Downloads ───────────────────────────────────────────────
-        $history = [];
-        if (file_exists(DOWNLOAD_HISTORY_FILE)) {
-            $raw = @file_get_contents(DOWNLOAD_HISTORY_FILE);
-            if ($raw !== false) $history = json_decode($raw, true) ?? [];
-        }
-        $recentDownloads = array_slice($history, 0, 10);
+        $recentDownloads = array_slice(load_all_history(), 0, 10);
 
         // ── Speicherplatz ─────────────────────────────────────────────────────
         $diskInfo = null;

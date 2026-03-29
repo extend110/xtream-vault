@@ -222,14 +222,31 @@ function save_queue(array $q): void {
     }
 }
 
+/** Gibt den server-spezifischen Pfad zur downloaded_*.json zurück */
+function get_db_file(): string {
+    global $serverFilter;
+    return DATA_DIR . '/downloaded_' . ($serverFilter ?? SERVER_ID) . '.json';
+}
+/** Gibt den server-spezifischen Pfad zur downloaded_index_*.json zurück */
+function get_index_file(): string {
+    global $serverFilter;
+    return DATA_DIR . '/downloaded_index_' . ($serverFilter ?? SERVER_ID) . '.json';
+}
+/** Gibt den server-spezifischen Pfad zur download_history_*.json zurück */
+function get_history_file(): string {
+    global $serverFilter;
+    return DATA_DIR . '/download_history_' . ($serverFilter ?? SERVER_ID) . '.json';
+}
+
 function load_db(): array {
-    if (!file_exists(DOWNLOAD_DB)) return ['movies' => [], 'episodes' => []];
-    return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
+    $file = get_db_file();
+    if (!file_exists($file)) return ['movies' => [], 'episodes' => []];
+    return json_decode(file_get_contents($file), true) ?? ['movies' => [], 'episodes' => []];
 }
 
 function save_db(array $db): void {
     @mkdir(DEST_PATH, 0777, true);
-    file_put_contents(DOWNLOAD_DB, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    file_put_contents(get_db_file(), json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 }
 
 /** Schreibt den aktuellen Download-Fortschritt in progress.json */
@@ -1012,8 +1029,8 @@ foreach ($queue as &$item) {
         // Metadaten sofort in downloaded_index.json schreiben
         // (ersetzt den nie fertig werdenden series_cache.json Aufbau)
         $existingIndex = [];
-        if (file_exists(DOWNLOADED_INDEX_FILE)) {
-            $raw = @file_get_contents(DOWNLOADED_INDEX_FILE);
+        if (file_exists(get_index_file())) {
+            $raw = @file_get_contents(get_index_file());
             if ($raw !== false) $existingIndex = json_decode($raw, true) ?? [];
         }
         $existingIndex[(string)$sid] = [
@@ -1024,7 +1041,7 @@ foreach ($queue as &$item) {
             'ext'      => $ext,
             'type'     => $type === 'movie' ? 'movie' : 'episode',
         ];
-        @file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($existingIndex, JSON_UNESCAPED_UNICODE));
+        @file_put_contents(get_index_file(), json_encode($existingIndex, JSON_UNESCAPED_UNICODE));
         unset($existingIndex);
 
         // Dateigröße ermitteln (für Statistiken)
@@ -1048,13 +1065,13 @@ foreach ($queue as &$item) {
             'bytes'    => $downloadedBytes,
         ];
         $history = [];
-        if (file_exists(DOWNLOAD_HISTORY_FILE)) {
-            $raw = @file_get_contents(DOWNLOAD_HISTORY_FILE);
+        if (file_exists(get_history_file())) {
+            $raw = @file_get_contents(get_history_file());
             if ($raw !== false) $history = json_decode($raw, true) ?? [];
         }
         array_unshift($history, $historyEntry);          // neueste zuerst
         if (count($history) > 2000) $history = array_slice($history, 0, 2000); // max 2000
-        @file_put_contents(DOWNLOAD_HISTORY_FILE, json_encode($history, JSON_UNESCAPED_UNICODE));
+        @file_put_contents(get_history_file(), json_encode($history, JSON_UNESCAPED_UNICODE));
         unset($history);
 
         $durationSec = time() - $downloadStartTime;
@@ -1196,8 +1213,8 @@ if (VPN_ENABLED && $vpnStartedByUs) {
 // Benachrichtigung: alle Downloads abgeschlossen
 if ($processed > 0) {
     $totalBytes = 0;
-    if (file_exists(DOWNLOAD_HISTORY_FILE)) {
-        $hist = json_decode(@file_get_contents(DOWNLOAD_HISTORY_FILE), true) ?? [];
+    if (file_exists(get_history_file())) {
+        $hist = json_decode(@file_get_contents(get_history_file()), true) ?? [];
         $totalBytes = array_sum(array_column(array_slice($hist, 0, $processed), 'bytes'));
     }
     // Telegram: Queue abgeschlossen
@@ -1246,8 +1263,8 @@ if (in_array('--migrate-index', $argv ?? [])) {
     $queue = load_queue();
     $done  = array_filter($queue, fn($q) => $q['status'] === 'done');
     $existingIndex = [];
-    if (file_exists(DOWNLOADED_INDEX_FILE)) {
-        $raw = @file_get_contents(DOWNLOADED_INDEX_FILE);
+    if (file_exists(get_index_file())) {
+        $raw = @file_get_contents(get_index_file());
         if ($raw !== false) $existingIndex = json_decode($raw, true) ?? [];
     }
     $added = 0;
@@ -1265,7 +1282,7 @@ if (in_array('--migrate-index', $argv ?? [])) {
             $added++;
         }
     }
-    @file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($existingIndex, JSON_UNESCAPED_UNICODE));
+    @file_put_contents(get_index_file(), json_encode($existingIndex, JSON_UNESCAPED_UNICODE));
     clog("Migration abgeschlossen: $added neue Einträge hinzugefügt.");
     exit(0);
 }

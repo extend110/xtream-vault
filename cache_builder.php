@@ -157,10 +157,9 @@ foreach ($servers as $srv) {
     blog(sprintf('  Serien-Cache: %d Einträge → %s (%.1fs)',
         count($seriesCache), basename($serCacheFile), microtime(true) - $t1));
 
-    // Auch aktive Server cache-Dateien aktuell halten (für Kompatibilität)
+    // Fallback-Kopie für LIBRARY_CACHE_FILE (Rückwärtskompatibilität)
     if ($srvId === SERVER_ID) {
         file_put_contents(LIBRARY_CACHE_FILE, json_encode($movieCache, JSON_UNESCAPED_UNICODE));
-        file_put_contents(DATA_DIR . '/series_cache.json', json_encode(array_values($seriesCache), JSON_UNESCAPED_UNICODE));
     }
 }
 
