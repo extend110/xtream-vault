@@ -273,7 +273,7 @@ function clear_progress(): void {
  * Datei herunterladen mit Live-Fortschritt in progress.json.
  * Gibt true bei Erfolg zurück, false bei Fehler.
  */
-function download_file(string $url, string $destPath, string $title, int $queuePos, int $queueTotal): bool {
+function download_file(string $url, string $destPath, string $title, int $queuePos, int $queueTotal, string $streamId = ''): bool {
     $dir = dirname($destPath);
     if (!is_dir($dir)) {
         if (!mkdir($dir, 0755, true)) {
@@ -419,7 +419,7 @@ function format_bytes(int $bytes): string {
  * Kein lokaler Zwischenspeicher — Stream geht direkt URL → rclone → Cloud.
  * Gibt true bei Erfolg zurück, false bei Fehler.
  */
-function rclone_stream(string $url, string $remotePath, string $title, int $queuePos, int $queueTotal): bool {
+function rclone_stream(string $url, string $remotePath, string $title, int $queuePos, int $queueTotal, string $streamId = ''): bool {
     $rcloneBin  = RCLONE_BIN;
     $remoteDest = RCLONE_REMOTE . ':' . $remotePath;
 
@@ -442,6 +442,7 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
 
     write_progress([
         'active'      => true,
+        'stream_id'   => $streamId,
         'title'       => $title,
         'queue_pos'   => $queuePos,
         'queue_total' => $queueTotal,
@@ -505,6 +506,7 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
         if ($now - $lastWrite >= 2) {
             write_progress([
                 'active'      => true,
+        'stream_id'   => $streamId,
                 'title'       => $title,
                 'queue_pos'   => $queuePos,
                 'queue_total' => $queueTotal,
@@ -988,6 +990,7 @@ foreach ($queue as &$item) {
 
     write_progress([
         'active'      => true,
+        'stream_id'   => (string)$sid,
         'title'       => $title,
         'queue_pos'   => $position,
         'queue_total' => $totalPending,
@@ -1003,8 +1006,8 @@ foreach ($queue as &$item) {
 
     $downloadStartTime = time();
     $ok = RCLONE_ENABLED
-        ? rclone_stream($url, $remotePath, $title, $position, $totalPending)
-        : download_file($url, $destFile, $title, $position, $totalPending);
+        ? rclone_stream($url, $remotePath, $title, $position, $totalPending, (string)$sid)
+        : download_file($url, $destFile, $title, $position, $totalPending, (string)$sid);
 
     if ($ok === 'cancelled') {
         clog("CANCELLED: $title — zurück auf pending");

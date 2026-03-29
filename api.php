@@ -167,9 +167,11 @@ function load_db(?string $serverId = null): array {
         $merged['movies']   = array_unique(array_merge($merged['movies'],   array_map('strval', $db['movies']   ?? [])));
         $merged['episodes'] = array_unique(array_merge($merged['episodes'], array_map('strval', $db['episodes'] ?? [])));
     }
-    // Fallback: alte DOWNLOAD_DB
-    if (empty($merged['movies']) && empty($merged['episodes']) && file_exists(DOWNLOAD_DB)) {
-        return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
+    // Fallback: alte DOWNLOAD_DB — immer zusammenführen (nicht nur wenn leer)
+    if (file_exists(DOWNLOAD_DB)) {
+        $legacy = json_decode(file_get_contents(DOWNLOAD_DB), true) ?? [];
+        $merged['movies']   = array_values(array_unique(array_merge($merged['movies'],   array_map('strval', $legacy['movies']   ?? []))));
+        $merged['episodes'] = array_values(array_unique(array_merge($merged['episodes'], array_map('strval', $legacy['episodes'] ?? []))));
     }
     return $merged;
 }
@@ -1654,14 +1656,6 @@ switch ($action) {
         ]);
         break;
 
-
-        $type = $_POST['type'] ?? '';
-        $id   = (string)($_POST['id'] ?? '');
-        if (!in_array($type, ['movies','episodes']) || $id === '') { echo json_encode(['error'=>'Invalid']); break; }
-        $db = load_db();
-        if (!in_array($id, $db[$type])) { $db[$type][] = $id; save_db($db); }
-        echo json_encode(['ok' => true]);
-        break;
 
     // ─── Queue ────────────────────────────────────────────────────────────────
     case 'get_queue':

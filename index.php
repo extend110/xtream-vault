@@ -2223,6 +2223,12 @@ function queueItemHTML(item) {
       <div class="qi-title">${item.title}</div>
       <div class="qi-meta">${item.type} · ${item.container_extension?.toUpperCase()} · ${item.added_at ?? ''} ${addedBy}</div>
       ${item.error ? `<div style="font-size:.7rem;color:var(--red);margin-top:3px">${item.error}</div>` : ''}
+      <div class="qi-progress" id="qip-${item.stream_id}" style="display:none">
+        <div class="qi-progress-bar-wrap"><div class="qi-progress-bar" style="width:0%"></div></div>
+        <div class="qi-progress-stats">
+          <span class="qip-pct">0%</span><span class="qip-done">–</span><span class="qip-speed">–</span><span class="qip-eta">–</span>
+        </div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
       <span class="qi-status ${item.status}">${statusLabel}${retryBtn}${resetBtn}</span>
@@ -4057,9 +4063,50 @@ function stopProgressPolling() {
 
 async function pollProgress() {
   const p = await api('get_progress');
-  applyProgress(p, 'pc-', 'progress-card');        // Queue-view card
-  applyProgress(p, 'dash-pc-', 'dash-progress-card'); // Dashboard card
+  applyProgress(p, 'pc-', 'progress-card');
+  applyProgress(p, 'dash-pc-', 'dash-progress-card');
   applyTopbarDl(p);
+  applyQueueItemProgress(p);
+}
+
+function applyQueueItemProgress(p) {
+  // Alle qi-progress Divs erst ausblenden
+  document.querySelectorAll('.qi-progress').forEach(el => el.style.display = 'none');
+
+  if (!p.active) return;
+
+  // Einzelne oder parallele Downloads
+  const downloads = p.parallel > 1 ? (p.downloads ?? []) : [p];
+
+  for (const dl of downloads) {
+    if (!dl.stream_id) continue;
+    const el = document.getElementById('qip-' + dl.stream_id);
+    if (!el) continue;
+
+    el.style.display = '';
+    const pct   = dl.percent ?? 0;
+    const bar   = el.querySelector('.qi-progress-bar');
+    const pctEl = el.querySelector('.qip-pct');
+    const doneEl  = el.querySelector('.qip-done');
+    const speedEl = el.querySelector('.qip-speed');
+    const etaEl   = el.querySelector('.qip-eta');
+
+    if (bar)   bar.style.width   = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+
+    if (dl.mode === 'rclone' && pct === 0 && (dl.bytes_done ?? 0) === 0) {
+      if (bar) { bar.style.width = '100%'; bar.style.animation = 'pulse-bar 1.5s ease-in-out infinite'; }
+      if (pctEl)  pctEl.textContent  = '☁️…';
+      if (doneEl) doneEl.textContent = '';
+      if (speedEl) speedEl.textContent = '';
+      if (etaEl)  etaEl.textContent  = '';
+    } else {
+      if (bar) bar.style.animation = '';
+      if (doneEl)  doneEl.textContent  = dl.bytes_total > 0 ? fmtBytes(dl.bytes_done ?? 0) + ' / ' + fmtBytes(dl.bytes_total) : fmtBytes(dl.bytes_done ?? 0);
+      if (speedEl) speedEl.textContent = dl.speed_bps > 0 ? fmtBytes(dl.speed_bps) + '/s' : '';
+      if (etaEl)   etaEl.textContent   = dl.eta_seconds != null ? fmtDuration(dl.eta_seconds) : '';
+    }
+  }
 }
 
 function applyTopbarDl(p) {
