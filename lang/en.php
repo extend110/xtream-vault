@@ -440,6 +440,7 @@ return [
     'cfg.server_new'            => 'New Server',
     'cfg.server_add_btn'        => '💾 Add',
     'cfg.dest_rclone_hint'      => 'Ignored when rclone is enabled',
+    'cfg.editor_visibility_title' => 'Visibility for Editors & Viewers',
     'cfg.editor_desc'           => 'Controls which sections are visible for editor and viewer accounts. Admins always see everything.',
     'cfg.editor_movies_label'   => 'Show Movies',
     'cfg.editor_series_label'   => 'Show Series',
@@ -483,4 +484,12 @@ return [
     'cfg.backup_desc'           => 'Backs up all files in the data/ directory as a ZIP. Automatically daily at 3am, max 7 backups.',
     'cfg.backup_now'            => '▶ Backup now',
     'cfg.maintenance_desc'      => 'When active, only admins can log in. All others see a maintenance page.',
+
+    // ── IP-Whitelist ──────────────────────────────────────────────────────────
+    'cfg.ip_whitelist_title'       => 'API IP Whitelist',
+    'cfg.ip_whitelist_desc'        => 'Restricts access to the external API to specific IP addresses or CIDR blocks. Leave empty to allow all IPs.',
+    'cfg.ip_whitelist_label'       => 'Allowed IPs / CIDR blocks',
+    'cfg.ip_whitelist_placeholder' => "192.168.1.0/24\n10.0.0.1\n203.0.113.42",
+    'cfg.ip_whitelist_hint'        => 'One IP or CIDR per line. Empty = all IPs allowed.',
+    'cfg.ip_whitelist_your_ip'     => 'Your current IP',
 ];

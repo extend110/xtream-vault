@@ -129,6 +129,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   --text:    #e8e8f0;
   --muted:   #5a5a70;
 }
+[data-theme="amoled"]   { --bg:#000; --bg2:#080808; --bg3:#111; --border:rgba(255,255,255,.08); --text:#f0f0f0; --muted:#505050; --accent:#e8ff47; }
+[data-theme="midnight"] { --bg:#0a0e1a; --bg2:#111828; --bg3:#1a2235; --border:rgba(100,160,255,.1); --text:#d0e0ff; --muted:#5070a0; --accent:#64a0ff; }
+[data-theme="light"]    { --bg:#f0f0f5; --bg2:#fff; --bg3:#e8e8ef; --border:rgba(0,0,0,.1); --text:#1a1a2e; --muted:#7a7a90; --accent:#6060e0; --red:#cc2020; }
+[data-theme="nord"]     { --bg:#2e3440; --bg2:#3b4252; --bg3:#434c5e; --border:rgba(216,222,233,.12); --text:#eceff4; --muted:#7b88a1; --accent:#88c0d0; }
+[data-theme="tokyo"]    { --bg:#1a1b2e; --bg2:#16213e; --bg3:#0f3460; --border:rgba(122,162,247,.12); --text:#c0caf5; --muted:#565f89; --accent:#7aa2f7; }
+[data-theme="rosepine"] { --bg:#191724; --bg2:#1f1d2e; --bg3:#26233a; --border:rgba(196,167,231,.1); --text:#e0def4; --muted:#6e6a86; --accent:#ebbcba; }
+</style>
+<script>
+// Theme vor dem Rendern setzen um Flash zu vermeiden
+(function() {
+  // Versuche user-spezifischen Key, dann generischen Fallback
+  var theme = null;
+  try {
+    // Alle xv_theme_* Keys durchsuchen
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.startsWith('xv_theme_')) {
+        theme = localStorage.getItem(key);
+        break;
+      }
+    }
+    if (!theme) theme = localStorage.getItem('xv_theme');
+  } catch(e) {}
+  if (theme && theme !== 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+})();
+</script>
+<style>
 body {
   background: var(--bg); color: var(--text);
   font-family: 'DM Sans', sans-serif;

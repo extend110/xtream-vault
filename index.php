@@ -702,7 +702,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
-          <h3><?= t('cfg.server') ?> — <?= t('cfg.editor_movies') ?></h3>
+          <h3><?= t('cfg.editor_visibility_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
             <?= t('cfg.editor_desc') ?>
           </div>
@@ -918,6 +918,23 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <thead><tr><th><?= t('api.param_name') ?></th><th>Key</th><th><?= t('users.col_status') ?></th><th><?= t('users.col_created') ?></th><th><?= t('cfg.api_key_last_used') ?></th><th><?= t('cfg.api_key_calls') ?></th><th></th></tr></thead>
               <tbody id="apikey-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Lade…</td></tr></tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>🛡 <?= t('cfg.ip_whitelist_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            <?= t('cfg.ip_whitelist_desc') ?>
+          </div>
+          <div class="field">
+            <label><?= t('cfg.ip_whitelist_label') ?></label>
+            <textarea id="cfg-api-allowed-ips" rows="4"
+              style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;resize:vertical;outline:none"
+              placeholder="<?= t('cfg.ip_whitelist_placeholder') ?>"></textarea>
+            <span class="hint"><?= t('cfg.ip_whitelist_hint') ?></span>
+          </div>
+          <div id="ip-whitelist-test" style="margin-top:8px;font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted)">
+            <?= t('cfg.ip_whitelist_your_ip') ?>: <strong id="your-ip">–</strong>
           </div>
         </div>
 
@@ -3014,6 +3031,12 @@ async function loadConfig() {
   if (parallelMaxEl) parallelMaxEl.value = c.parallel_max ?? 4;
   const pFields = document.getElementById('parallel-fields');
   if (pFields) pFields.style.display = parallelEnabled ? '' : 'none';
+  // IP-Whitelist
+  const ipEl = document.getElementById('cfg-api-allowed-ips');
+  if (ipEl) ipEl.value = (c.api_allowed_ips ?? '').split(',').map(s=>s.trim()).filter(Boolean).join('\n');
+  // Aktuelle IP anzeigen
+  const yourIpEl = document.getElementById('your-ip');
+  if (yourIpEl) api('get_my_ip').then(d => { if (d.ip) yourIpEl.textContent = d.ip; });
   setSettingsMsg('', '');
 }
 
@@ -3084,6 +3107,7 @@ function collectConfig() {
     vpn_interface:         document.getElementById('cfg-vpn-interface')?.value.trim() ?? 'wg0',
     parallel_enabled:      document.getElementById('cfg-parallel-enabled')?.checked ?? true,
     parallel_max:          parseInt(document.getElementById('cfg-parallel-max')?.value ?? '4') || 4,
+    api_allowed_ips:       (document.getElementById('cfg-api-allowed-ips')?.value ?? '').split('\n').map(s=>s.trim()).filter(Boolean).join(','),
   };
 }
 
@@ -4417,6 +4441,11 @@ async function loadUserDashboard() {
 
 // ── Auth JS ─────────────────────────────────────────────────────
 async function doLogout() {
+  // Theme in generischen Key kopieren damit die Loginseite ihn lesen kann
+  try {
+    const t = localStorage.getItem(THEME_KEY);
+    if (t) localStorage.setItem('xv_theme', t);
+  } catch(e) {}
   await api('logout');
   window.location.href = 'login.php';
 }

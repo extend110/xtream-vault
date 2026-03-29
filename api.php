@@ -44,6 +44,24 @@ if ($api_key_value !== '') {
         echo json_encode(['error' => 'Invalid or revoked API key']);
         exit;
     }
+
+    // IP-Whitelist prüfen
+    $allowedIps = array_filter(array_map('trim', explode(',', load_config()['api_allowed_ips'] ?? '')));
+    if (!empty($allowedIps)) {
+        $remoteIp = $_SERVER['HTTP_X_FORWARDED_FOR']
+            ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
+            : ($_SERVER['REMOTE_ADDR'] ?? '');
+        $allowed = false;
+        foreach ($allowedIps as $cidr) {
+            if (ip_in_cidr($remoteIp, $cidr)) { $allowed = true; break; }
+        }
+        if (!$allowed) {
+            http_response_code(403);
+            echo json_encode(['error' => 'IP address not allowed: ' . $remoteIp]);
+            exit;
+        }
+    }
+
     record_api_key_use($api_key_value);
     $api_key_auth = true;
     // Erlaubte externe Endpoints
@@ -108,6 +126,19 @@ function clean_title_for_dedup(string $t): string {
     $t = preg_replace('/[^a-z0-9\s]/', '', $t);       // Sonderzeichen
     $t = preg_replace('/\s+/', ' ', trim($t));
     return $t;
+}
+
+/** Prüft ob eine IP-Adresse in einem CIDR-Block liegt (IPv4, z.B. 192.168.1.0/24 oder 1.2.3.4) */
+function ip_in_cidr(string $ip, string $cidr): bool {
+    if (!str_contains($cidr, '/')) return $ip === $cidr;
+    [$subnet, $bits] = explode('/', $cidr, 2);
+    $bits = (int)$bits;
+    if ($bits < 0 || $bits > 32) return false;
+    $ipLong     = ip2long($ip);
+    $subnetLong = ip2long($subnet);
+    if ($ipLong === false || $subnetLong === false) return false;
+    $mask = $bits === 0 ? 0 : (~0 << (32 - $bits));
+    return ($ipLong & $mask) === ($subnetLong & $mask);
 }
 
 function xtream_for_server(array $server, string $action, array $extra = []): array {
@@ -584,6 +615,14 @@ switch ($action) {
         ]);
         break;
 
+    case 'get_my_ip':
+        require_permission('settings');
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR']
+            ? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'])[0])
+            : ($_SERVER['REMOTE_ADDR'] ?? '');
+        echo json_encode(['ip' => $ip]);
+        break;
+
     case 'health':
         $configured = is_configured();
         $queue      = $configured ? load_queue() : [];
@@ -832,6 +871,9 @@ switch ($action) {
             'tg_disk_low_gb'         => (float)($c['tg_disk_low_gb']      ?? 10),
             'vpn_enabled'            => (bool)($c['vpn_enabled']    ?? false),
             'vpn_interface'          => $c['vpn_interface']          ?? 'wg0',
+            'parallel_enabled'       => (bool)($c['parallel_enabled'] ?? true),
+            'parallel_max'           => (int)($c['parallel_max']      ?? 4),
+            'api_allowed_ips'        => $c['api_allowed_ips']         ?? '',
         ]);
         break;
 
@@ -860,17 +902,7 @@ switch ($action) {
         $d = json_decode($_RAW_BODY, true) ?? [];
         $current = load_config();
 
-        // Server-Credentials aus dem ersten Server in servers.json holen falls nicht direkt gesendet
-        $firstServer = [];
-        if (file_exists(SERVERS_FILE)) {
-            $srvList = json_decode(file_get_contents(SERVERS_FILE), true) ?? [];
-            if (!empty($srvList)) $firstServer = $srvList[0];
-        }
-
         $new = [
-            'server_ip'             => trim($d['server_ip']  ?? $firstServer['server_ip'] ?? $current['server_ip']  ?? ''),
-            'port'                  => trim($d['port']        ?? $firstServer['port']       ?? $current['port']       ?? '80'),
-            'username'              => trim($d['username']    ?? $firstServer['username']   ?? $current['username']   ?? ''),
             'dest_path'             => trim($d['dest_path']       ?? $current['dest_path']     ?? ''),
             'rclone_enabled'        => isset($d['rclone_enabled'])       ? (bool)$d['rclone_enabled']       : (bool)($current['rclone_enabled']       ?? false),
             'rclone_remote'         => trim($d['rclone_remote']  ?? $current['rclone_remote']  ?? ''),
@@ -891,17 +923,17 @@ switch ($action) {
             'vpn_interface'         => preg_replace('/[^a-zA-Z0-9_\-]/', '', trim($d['vpn_interface'] ?? $current['vpn_interface'] ?? 'wg0')),
             'parallel_enabled'      => isset($d['parallel_enabled']) ? (bool)$d['parallel_enabled'] : (bool)($current['parallel_enabled'] ?? true),
             'parallel_max'          => max(1, min(10, (int)($d['parallel_max'] ?? $current['parallel_max'] ?? 4))),
+            'api_allowed_ips'       => trim($d['api_allowed_ips'] ?? $current['api_allowed_ips'] ?? ''),
+            // Alte Felder für Rückwärtskompatibilität beibehalten falls vorhanden
+            'server_ip'             => $current['server_ip'] ?? '',
+            'port'                  => $current['port']      ?? '80',
+            'username'              => $current['username']  ?? '',
+            'password'              => $current['password']  ?? '',
         ];
-        if (!empty($d['password']) && $d['password'] !== '••••••••') {
-            $new['password'] = $d['password'];
-        } elseif (!empty($firstServer['password']) && empty($current['password'])) {
-            $new['password'] = $firstServer['password'];
-        } else {
-            $new['password'] = $current['password'] ?? '';
-        }
 
-        // Validierung: mindestens via servers.json konfiguriert
-        if ($new['server_ip'] === '' && empty($firstServer)) {
+        // Validierung: mindestens ein Server in servers.json
+        $srvList = file_exists(SERVERS_FILE) ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? []) : [];
+        if (empty($srvList) && ($new['server_ip'] ?? '') === '') {
             echo json_encode(['error' => 'Bitte zuerst einen Server hinzufügen']);
             break;
         }
