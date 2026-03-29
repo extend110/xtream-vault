@@ -489,13 +489,24 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
             $clean = preg_replace('/\x1b\[[0-9;]*m/', '', $output);
 
             // Match: "1.018 MiB / 2.260 GiB, 0%, 0 B/s, ETA -"
-            // Speed unit is e.g. "B/s", "KiB/s", "MiB/s", "GiB/s"
             if (preg_match('/([\d.]+)\s*([\w]+)\s*\/\s*([\d.]+)\s*([\w]+),\s*(\d+)%,\s*([\d.]+)\s*([\w]+\/s),\s*ETA\s*(\S+)/i', $clean, $m)) {
-                $bytesDone  = parse_rclone_bytes((float)$m[1], $m[2]);
-                $bytesTotal = parse_rclone_bytes((float)$m[3], $m[4]);
-                $percent    = (int)$m[5];
-                $speedBps   = parse_rclone_bytes((float)$m[6], str_replace('/s', '', $m[7]));
-                $etaSecs    = parse_rclone_eta($m[8]);
+                $parsedDone  = parse_rclone_bytes((float)$m[1], $m[2]);
+                $parsedTotal = parse_rclone_bytes((float)$m[3], $m[4]);
+                $parsedSpeed = parse_rclone_bytes((float)$m[6], str_replace('/s', '', $m[7]));
+                $parsedEta   = parse_rclone_eta($m[8]);
+
+                // Ignoriere falsche 100%-Meldungen: wenn done==total aber total < bisheriges Maximum
+                // (rclone meldet manchmal nur den aktuellen Chunk als 100%)
+                $isFakeHundred = ((int)$m[5] === 100 && $parsedDone === $parsedTotal && $parsedTotal < $bytesTotal * 0.9);
+                if (!$isFakeHundred) {
+                    $bytesDone = $parsedDone;
+                    // Gesamtgröße nur nach oben anpassen (nie kleiner werden)
+                    if ($parsedTotal > $bytesTotal) $bytesTotal = $parsedTotal;
+                    $speedBps = $parsedSpeed;
+                    $etaSecs  = $parsedEta;
+                    // Prozent selbst berechnen wenn Gesamtgröße bekannt
+                    $percent = $bytesTotal > 0 ? min(99, (int)round($bytesDone / $bytesTotal * 100)) : (int)$m[5];
+                }
             }
 
             // Nur letzten Teil behalten um Buffer nicht endlos wachsen zu lassen

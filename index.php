@@ -2512,12 +2512,14 @@ async function retryQueueItem(sid) {
 async function clearDone() {
   await api('queue_clear_done');
   refreshQueue(); updateQueueBadge(); loadStats();
+  loadDashboardData();
   showToast('Erledigte Einträge entfernt', 'success');
 }
 async function clearAll() {
   if (!confirm('Wirklich die gesamte Queue löschen?')) return;
   await api('queue_clear_all');
   refreshQueue(); updateQueueBadge(); loadStats();
+  loadDashboardData();
   showToast(t('queue.cleared'), 'success');
 }
 
@@ -3869,13 +3871,13 @@ async function dashRebuildCache() {
 async function dashClearDone() {
   await api('queue_clear_done');
   showToast('Erledigte Einträge entfernt', 'info');
-  loadDashboardData();
+  loadDashboardData(); refreshQueue(); updateQueueBadge(); loadStats();
 }
 async function dashClearAll() {
   if (!confirm('Wirklich die gesamte Queue löschen?')) return;
-  const r = await apiPost('queue_clear_all', {});
+  await apiPost('queue_clear_all', {});
   showToast(t('queue.cleared'), 'info');
-  loadDashboardData();
+  loadDashboardData(); refreshQueue(); updateQueueBadge(); loadStats();
 }
 // ── Xtream Server Info ────────────────────────────────────────
 // loadServerInfo entfernt — Serverinfos werden nicht mehr im Dashboard angezeigt
@@ -4067,6 +4069,21 @@ async function pollProgress() {
   applyProgress(p, 'dash-pc-', 'dash-progress-card');
   applyTopbarDl(p);
   applyQueueItemProgress(p);
+  applyQueueStartButtons(p);
+}
+
+function applyQueueStartButtons(p) {
+  const running = p.active === true;
+  document.querySelectorAll('[onclick*="startQueue"]').forEach(btn => {
+    btn.disabled = running;
+    if (running) {
+      btn.textContent = '⏳ Läuft…';
+      btn.title = 'Download läuft bereits';
+    } else {
+      btn.textContent = btn.dataset.label || '<?= t('queue.start') ?>';
+      btn.title = '';
+    }
+  });
 }
 
 function applyQueueItemProgress(p) {
