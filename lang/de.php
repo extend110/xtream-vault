@@ -497,4 +497,6 @@ return [
     'cfg.ip_whitelist_placeholder' => "192.168.1.0/24\n10.0.0.1\n203.0.113.42",
     'cfg.ip_whitelist_hint'        => 'Eine IP oder CIDR pro Zeile. Leer = alle IPs erlaubt.',
     'cfg.ip_whitelist_your_ip'     => 'Deine aktuelle IP',
+    'profile.theme_desc_local' => 'Wähle ein Design für deine Ansicht. Die Auswahl wird lokal gespeichert.',
+    'lbl.queue_slots' => '{{n}} Queue-Slots verbleibend',
 ];

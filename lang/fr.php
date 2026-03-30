@@ -473,4 +473,6 @@ return [
     'api.error_403'         => 'Action non autorisée',
     'api.error_404'         => 'Utilisateur introuvable',
     'api.error_format'      => 'Les messages d\'erreur sont retournés sous forme de',
+    'profile.theme_desc_local' => 'Choisissez un design pour votre interface. La sélection est stockée localement.',
+    'lbl.queue_slots' => '{{n}} slots restants',
 ];

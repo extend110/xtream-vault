@@ -473,4 +473,6 @@ return [
     'api.error_403'         => 'Azione non consentita',
     'api.error_404'         => 'Utente non trovato',
     'api.error_format'      => 'I messaggi di errore vengono restituiti come',
+    'profile.theme_desc_local' => 'Scegli un design per la tua interfaccia. La selezione viene salvata localmente.',
+    'lbl.queue_slots' => '{{n}} slot rimanenti',
 ];

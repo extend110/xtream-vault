@@ -417,7 +417,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-stat"><span class="val" id="pc-done">–</span><span class="lbl">heruntergeladen</span></div>
           <div class="pc-stat"><span class="val" id="pc-total">–</span><span class="lbl">gesamt</span></div>
           <div class="pc-stat"><span class="val" id="pc-speed">–</span><span class="lbl">Geschwindigkeit</span></div>
-          <div class="pc-stat"><span class="val" id="pc-eta">–</span><span class="lbl">verbleibend</span></div>
+          <div class="pc-stat"><span class="val" id="pc-eta">–</span><span class="lbl"><?= t('dash.eta') ?></span></div>
         </div>
       </div>
       <?php endif; ?>
@@ -465,7 +465,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-new-releases" style="display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em">Neue Releases</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;letter-spacing:.08em"><?= t('new.title') ?></div>
           <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:2px" id="new-releases-meta">–</div>
         </div>
         <div style="display:flex;gap:8px">
@@ -1038,7 +1038,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="settings-card">
           <h3>🎨 Theme</h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.5">
-            Wähle ein Design für deine Ansicht. Die Auswahl wird lokal gespeichert.
+            <?= t('profile.theme_desc_local') ?>
           </div>
           <div class="theme-picker" id="theme-picker"></div>
         </div>
@@ -1522,7 +1522,10 @@ function renderSearchHistory() {
   if (!box) return;
   const history = getSearchHistory();
   if (!history.length) { box.innerHTML = ''; return; }
-  let html = `<div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px">${t('search.history')}</div>`;
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase">${t('search.history')}</div>
+    <button onclick="clearSearchHistory()" style="background:none;border:none;font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);cursor:pointer;padding:0;letter-spacing:.08em;text-transform:uppercase;transition:color .15s" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--muted)'">${t('search.clear_history')}</button>
+  </div>`;
   html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
   html += history.map(q => {
     const escaped = esc(q).replace(/'/g, '&#39;');
@@ -1530,6 +1533,10 @@ function renderSearchHistory() {
   }).join('');
   html += `</div>`;
   box.innerHTML = html;
+}
+function clearSearchHistory() {
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+  renderSearchHistory();
 }
 function doSearchFromHistory(query) {
   document.getElementById('search-input').value = query;
@@ -2152,7 +2159,7 @@ function updateLimitIndicator(remaining) {
   if (!el) return;
   if (remaining === null) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.textContent   = `${remaining} Queue-Slot${remaining !== 1 ? 's' : ''} verbleibend`;
+  el.textContent   = t('lbl.queue_slots', {n: remaining});
   el.style.color   = remaining === 0 ? 'var(--red)' : remaining === 1 ? 'var(--orange)' : 'var(--muted)';
 }
 
@@ -2481,11 +2488,11 @@ async function loadNewReleases() {
   const meta = document.getElementById('new-releases-meta');
   if (_nrData.generated_at) {
     const total = _nrData.movies?.length ?? 0;
-    if (meta) meta.textContent = `${total} neue Filme seit ${_nrData.generated_at}`;
+    if (meta) meta.textContent = t('new.meta', {n: total, date: _nrData.generated_at});
     const badge = document.getElementById('new-releases-badge');
     if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
   } else {
-    if (meta) meta.textContent = 'Noch kein Cache-Run durchgeführt';
+    if (meta) meta.textContent = t('new.no_cache');
   }
   renderNewReleases();
 }
@@ -2494,11 +2501,11 @@ function renderNewReleases() {
   const grid = document.getElementById('new-releases-grid');
   if (!grid || !_nrData) return;
   const items = _nrData.movies ?? [];
-  if (!items.length) { grid.innerHTML = emptyHTML('Keine neuen Filme'); return; }
+  if (!items.length) { grid.innerHTML = emptyHTML(t('new.empty')); return; }
 
   grid.innerHTML = items.map(item => {
     const itemId     = String(item.stream_id ?? item.id);
-    const dismissBtn = <?= $can_settings ? 'true' : 'false' ?> ? `<button class="btn-icon" title="Entfernen"
+    const dismissBtn = <?= $can_settings ? 'true' : 'false' ?> ? `<button class="btn-icon" title="<?= t('btn.delete') ?>"
       onclick="dismissNewRelease('${itemId}','movie',this)"
       style="position:absolute;top:4px;left:4px;z-index:10;background:rgba(0,0,0,.7);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.65rem;padding:0;border:none;cursor:pointer;color:#fff">✕</button>` : '';
     const sid  = String(item.stream_id ?? item.id);
@@ -2533,13 +2540,13 @@ async function dismissNewRelease(id, type, btn) {
     const badge = document.getElementById('new-releases-badge');
     if (badge) { badge.textContent = total; badge.style.display = total > 0 ? '' : 'none'; }
     const meta = document.getElementById('new-releases-meta');
-    if (meta && _nrData.generated_at) meta.textContent = `${total} neue Titel seit ${_nrData.generated_at}`;
+    if (meta && _nrData.generated_at) meta.textContent = t('new.meta', {n: total, date: _nrData.generated_at});
   }
   if (card) card.remove();
 }
 
 async function dismissAllNewReleases(btn) {
-  if (!confirm('Alle neuen Releases als gesehen markieren?')) return;
+  if (!confirm(t('new.all_seen_confirm'))) return;
   btn.disabled = true;
   const d = await apiPost('dismiss_all_new_releases', {});
   btn.disabled = false;
@@ -2548,7 +2555,7 @@ async function dismissAllNewReleases(btn) {
   const badge = document.getElementById('new-releases-badge');
   if (badge) { badge.textContent = '0'; badge.style.display = 'none'; }
   const meta = document.getElementById('new-releases-meta');
-  if (meta) meta.textContent = '0 neue Filme';
+  if (meta) meta.textContent = t('new.empty');
   renderNewReleases();
   showToast(t('new.all_seen_done'), 'success');
 }
@@ -4547,18 +4554,39 @@ async function loadUserDashboard() {
   const nr = await api('get_new_releases');
   const nrEl = document.getElementById('ue-new-releases');
   if (nrEl) {
-    const items = [...(nr?.movies ?? []), ...(nr?.series ?? [])].slice(0, 12);
+    const movies = (nr?.movies ?? []).map(m => ({...m, _type: 'movie'}));
+    const series = (nr?.series ?? []).map(s => ({...s, _type: 'series'}));
+    const items  = [...movies, ...series].slice(0, 12);
     if (!items.length) {
       nrEl.innerHTML = `<div style="color:var(--muted);font-size:.8rem;padding:8px">${t('dash.no_new')}</div>`;
     } else {
-      nrEl.innerHTML = items.map(item => `
-        <div style="flex-shrink:0;width:100px;cursor:pointer" onclick="openTmdbModal('${esc(item.name??item.title??'')}','${item.stream_id?'movie':'series'}','',null)">
+      nrEl.innerHTML = items.map(item => {
+        const title  = esc(item.clean_title ?? item.name ?? item.title ?? '');
+        const cover  = esc(item.stream_icon ?? item.cover ?? '');
+        const isSeries = item._type === 'series';
+        const sid    = String(item.series_id ?? item.stream_id ?? '');
+        const ext    = item.container_extension ?? 'mp4';
+        const srvId  = item._server_id ?? '';
+        const cat    = esc(item.category ?? '');
+        // queueData für TMDB-Modal
+        const qd = !isSeries ? JSON.stringify({
+          stream_id: sid, type: 'movie', clean_title: item.clean_title ?? item.title ?? '',
+          cover: item.stream_icon ?? item.cover ?? '',
+          category: item.category ?? '', container_extension: ext,
+          _server_id: srvId,
+        }).replace(/"/g, '&quot;') : 'null';
+        const onClick = isSeries
+          ? `openSeriesModal('${sid}','${title}','${cover}','${cat}','${esc(srvId)}')`
+          : `openTmdbModal('${title}','movie','',${qd})`;
+        return `
+        <div style="flex-shrink:0;width:100px;cursor:pointer" onclick="${onClick}">
           <div style="width:100px;height:148px;border-radius:6px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);position:relative">
-            ${item.stream_icon||item.cover ? `<img src="${esc(item.stream_icon||item.cover)}" alt="" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.8rem">${item.stream_id?'🎬':'📺'}</div>`}
+            ${cover ? `<img src="${cover}" alt="" style="width:100%;height:100%;object-fit:cover">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:1.8rem">${isSeries?'📺':'🎬'}</div>`}
             ${item.downloaded ? `<span class="card-badge badge-done" style="top:4px;right:4px;font-size:.55rem">✓</span>` : ''}
           </div>
-          <div style="font-size:.72rem;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${esc(item.name??item.title??'')}</div>
-        </div>`).join('');
+          <div style="font-size:.72rem;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)">${title}</div>
+        </div>`;
+      }).join('');
     }
   }
 
