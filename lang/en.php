@@ -13,6 +13,8 @@ return [
     'nav.stats'         => 'Statistics',
     'nav.settings'      => 'Settings',
     'nav.api_docs'      => 'API',
+    'nav.theme' => 'Change theme',
+    'nav.logout' => 'Log out',
     'nav.profile'       => 'My Profile',
     'nav.users'         => 'Users',
 
@@ -202,6 +204,9 @@ return [
     // ── Sort ──────────────────────────────────────────────────────
     'sort.default'          => 'Default',
     'sort.az'               => 'A → Z',
+    'sort.rating_desc' => 'Rating ↓',
+    'sort.rating_asc' => 'Rating ↑',
+    'sort.recent' => 'Newest first',
     'sort.za'               => 'Z → A',
     'sort.label'            => 'Sort:',
 

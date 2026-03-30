@@ -816,7 +816,7 @@ switch ($action) {
     case 'set_language':
         require_permission('browse');
         $lang = preg_replace('/[^a-z]/', '', trim($_JSON_BODY['lang'] ?? 'de'));
-        $allowed = ['de', 'en'];
+        $allowed = ['de', 'en', 'fr', 'es', 'it'];
         if (!in_array($lang, $allowed)) { echo json_encode(['error' => 'Invalid language']); break; }
         $_SESSION['lang'] = $lang;
         // In users.json speichern

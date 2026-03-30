@@ -247,6 +247,7 @@ body::before {
 }
 .badge-done  { background: var(--accent2); color: #000; }
 .badge-queue { background: var(--orange);  color: #000; }
+.badge-seen  { background: rgba(255,255,255,.15); color: var(--text); font-size: .55rem; }
 .card-body { padding: 12px; }
 .card-title { font-size: .82rem; font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-meta { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); margin-top: 6px; letter-spacing: .05em; }

@@ -132,12 +132,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="topbar-overflow" id="topbar-overflow">
       <button class="topbar-icon-btn" onclick="toggleTopbarMenu()" aria-label="Menü">⋯</button>
       <div class="topbar-menu" id="topbar-menu">
-        <button onclick="showView('profile');closeTopbarMenu()">🎨 Theme wechseln</button>
+        <button onclick="showView('profile');closeTopbarMenu()">🎨 <?= t('nav.theme') ?></button>
         <?php if ($can_settings): ?>
-        <button onclick="showView('settings');closeTopbarMenu()">⚙️ Einstellungen</button>
+        <button onclick="showView('settings');closeTopbarMenu()">⚙️ <?= t('nav.settings') ?></button>
         <?php endif; ?>
         <?php if ($can_queue_view): ?>
-        <button onclick="showView('queue');closeTopbarMenu()">📋 Queue</button>
+        <button onclick="showView('queue');closeTopbarMenu()">📋 <?= t('nav.queue') ?></button>
         <?php endif; ?>
         <?php if ($role === 'editor'): ?>
         <div id="limit-indicator-mobile" style="display:none;padding:8px 16px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></div>
@@ -152,12 +152,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div class="user-chip-role"><?= $role ?></div>
       </div>
       <div class="user-dropdown" id="user-dropdown">
-        <button onclick="event.stopPropagation();showView('profile');toggleUserDropdown()">👤 Mein Profil</button>
+        <button onclick="event.stopPropagation();showView('profile');toggleUserDropdown()">👤 <?= t('nav.profile') ?></button>
         <?php if ($can_users): ?>
-        <button onclick="event.stopPropagation();showView('users');toggleUserDropdown()">👥 Benutzer</button>
+        <button onclick="event.stopPropagation();showView('users');toggleUserDropdown()">👥 <?= t('nav.users') ?></button>
         <?php endif; ?>
         <div class="sep"></div>
-        <button class="danger" onclick="doLogout()">⏻ Abmelden</button>
+        <button class="danger" onclick="doLogout()">⏻ <?= t('nav.logout') ?></button>
       </div>
     </div>
   </header>
@@ -312,7 +312,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <option value="default"><?= t('sort.default') ?></option>
             <option value="az"><?= t('sort.az') ?></option>
             <option value="za"><?= t('sort.za') ?></option>
-            <option value="rating_desc">Bewertung ↓</option>
+            <option value="rating_desc">⭐ <?= t('sort.rating_desc') ?></option>
+            <option value="rating_asc">⭐ <?= t('sort.rating_asc') ?></option>
+            <option value="recent">🕐 <?= t('sort.recent') ?></option>
           </select>
         </div>
       </div>
@@ -358,7 +360,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         <div style="display:flex;align-items:center;gap:6px">
           <span style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted)"><?= t('lbl.sortierung') ?></span>
           <select id="sort-series" class="sort-select" onchange="setSortOrder(this.value,'series')">
-            <option value="default"><?= t('sort.default') ?></option><option value="az"><?= t('sort.az') ?></option><option value="za"><?= t('sort.za') ?></option>
+            <option value="default"><?= t('sort.default') ?></option>
+            <option value="az"><?= t('sort.az') ?></option>
+            <option value="za"><?= t('sort.za') ?></option>
+            <option value="rating_desc">⭐ <?= t('sort.rating_desc') ?></option>
+            <option value="rating_asc">⭐ <?= t('sort.rating_asc') ?></option>
+            <option value="recent">🕐 <?= t('sort.recent') ?></option>
           </select>
         </div>
       </div>
@@ -1037,7 +1044,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
         <div class="settings-card">
           <h3>🌐 Sprache / Language</h3>
-          <div style="display:flex;gap:10px;margin-top:4px">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
             <button class="btn-secondary lang-btn" data-lang="de" onclick="setLanguage('de',this)"
               style="<?= get_user_lang() === 'de' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
               🇩🇪 Deutsch
@@ -1045,6 +1052,18 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
             <button class="btn-secondary lang-btn" data-lang="en" onclick="setLanguage('en',this)"
               style="<?= get_user_lang() === 'en' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
               🇬🇧 English
+            </button>
+            <button class="btn-secondary lang-btn" data-lang="fr" onclick="setLanguage('fr',this)"
+              style="<?= get_user_lang() === 'fr' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
+              🇫🇷 Français
+            </button>
+            <button class="btn-secondary lang-btn" data-lang="es" onclick="setLanguage('es',this)"
+              style="<?= get_user_lang() === 'es' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
+              🇪🇸 Español
+            </button>
+            <button class="btn-secondary lang-btn" data-lang="it" onclick="setLanguage('it',this)"
+              style="<?= get_user_lang() === 'it' ? 'border-color:var(--accent);color:var(--accent)' : '' ?>">
+              🇮🇹 Italiano
             </button>
           </div>
           <div class="settings-msg" id="lang-msg" style="margin-top:10px"></div>
@@ -1353,6 +1372,8 @@ const currentUsername   = <?= json_encode($user['username']) ?>;
 let currentView   = 'dashboard';
 let _queuedIds    = new Set(); // stream_ids aktuell in der Queue (non-done)
 let _downloadedIds = new Set(); // stream_ids bereits heruntergeladen (done)
+let _seenIds      = new Set(); // stream_ids die der User angeschaut hat (TMDB-Modal geöffnet)
+try { _seenIds = new Set(Object.keys(JSON.parse(localStorage.getItem('xv_seen_<?= $user['id'] ?>') || '{}'))) } catch(e) {}
 let currentFilter = 'all';
 let allMovies     = [];
 let searchDebounce;
@@ -1751,6 +1772,8 @@ function renderMovies() {
   if (_movieSort === 'az')          movies = [...movies].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
   if (_movieSort === 'za')          movies = [...movies].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
   if (_movieSort === 'rating_desc') movies = [...movies].sort((a,b) => (parseFloat(b.rating_5based??b.rating??0)) - (parseFloat(a.rating_5based??a.rating??0)));
+  if (_movieSort === 'rating_asc')  movies = [...movies].sort((a,b) => (parseFloat(a.rating_5based??a.rating??0)) - (parseFloat(b.rating_5based??b.rating??0)));
+  if (_movieSort === 'recent')      movies = [...movies].sort((a,b) => (b.added??b.stream_id??0) - (a.added??a.stream_id??0));
   // Filter-Zähler
   const countEl = document.getElementById('movie-filter-count');
   if (countEl) {
@@ -1789,7 +1812,8 @@ function movieCard(m, showServer = false) {
   const thumb = m.stream_icon ? `<img data-src="${m.stream_icon}" alt="">` : '';
   const badge = m.downloaded
     ? `<span class="card-badge badge-done">✓ Done</span>`
-    : m.queued ? `<span class="card-badge badge-queue">⏳ Queue</span>` : '';
+    : m.queued ? `<span class="card-badge badge-queue">⏳ Queue</span>`
+    : _seenIds.has(String(m.stream_id)) ? `<span class="card-badge badge-seen">👁</span>` : '';
 
   const btn = m.downloaded
     ? canQueueRemove
@@ -1859,8 +1883,11 @@ function renderSeriesGrid(list) {
   const grid = document.getElementById('series-grid');
   if (!list?.length) { grid.innerHTML = emptyHTML('Keine Serien'); document.getElementById('series-pagination').innerHTML = ''; return; }
   let sorted = list;
-  if (_seriesSort === 'az') sorted = [...list].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
-  if (_seriesSort === 'za') sorted = [...list].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  if (_seriesSort === 'az')          sorted = [...list].sort((a,b) => (a.clean_title||'').localeCompare(b.clean_title||'', 'de'));
+  if (_seriesSort === 'za')          sorted = [...list].sort((a,b) => (b.clean_title||'').localeCompare(a.clean_title||'', 'de'));
+  if (_seriesSort === 'rating_desc') sorted = [...list].sort((a,b) => (parseFloat(b.rating??0)) - (parseFloat(a.rating??0)));
+  if (_seriesSort === 'rating_asc')  sorted = [...list].sort((a,b) => (parseFloat(a.rating??0)) - (parseFloat(b.rating??0)));
+  if (_seriesSort === 'recent')      sorted = [...list].sort((a,b) => (b.series_id??0) - (a.series_id??0));
   const pages = Math.ceil(sorted.length / PAGE_SIZE);
   const page  = Math.min(_seriesPage, pages);
   const slice = sorted.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
@@ -3515,6 +3542,29 @@ const _tmdbCache = new Map();
 async function openTmdbModal(title, type, year, queueData) {
   const modal = document.getElementById('tmdb-modal');
   modal.style.display = 'flex';
+
+  // Zuletzt gesehen tracken
+  if (queueData?.stream_id) {
+    try {
+      const key = 'xv_seen_<?= $user['id'] ?>';
+      const seen = JSON.parse(localStorage.getItem(key) || '{}');
+      seen[String(queueData.stream_id)] = Date.now();
+      // Max 500 Einträge — älteste entfernen
+      const entries = Object.entries(seen).sort((a,b) => b[1]-a[1]).slice(0, 500);
+      localStorage.setItem(key, JSON.stringify(Object.fromEntries(entries)));
+      _seenIds.add(String(queueData.stream_id));
+      // Badge auf Karte aktualisieren
+      const card = document.getElementById('card-m-' + queueData.stream_id);
+      if (card && !card.classList.contains('downloaded') && !card.classList.contains('queued')) {
+        const existing = card.querySelector('.badge-seen');
+        if (!existing) {
+          const b = document.createElement('span');
+          b.className = 'card-badge badge-seen'; b.textContent = '👁';
+          card.querySelector('.card-thumb')?.appendChild(b);
+        }
+      }
+    } catch(e) {}
+  }
   // Reset state
   document.getElementById('tmdb-loading').style.display = '';
   document.getElementById('tmdb-error').style.display = 'none';
