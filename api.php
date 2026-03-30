@@ -2616,8 +2616,7 @@ switch ($action) {
 
     // ── Externer Endpoint: Benutzer anlegen via API-Key ───────────────────────
     case 'external_create_user':
-        // Nur via API-Key erreichbar (geprüft oben)
-        // Parameter aus POST-Body (JSON) oder GET-Query-String
+        if (!$api_key_auth) { http_response_code(401); echo json_encode(['error' => 'API key required']); break; }
         $d = json_decode($_RAW_BODY, true) ?? [];
         $username = trim($d['username'] ?? $_GET['username'] ?? '');
         $password = $d['password']      ?? $_GET['password'] ?? '';
@@ -2637,7 +2636,7 @@ switch ($action) {
         break;
 
     case 'external_list_users':
-        // Gibt alle User zurück (ohne Passwort-Hashes)
+        if (!$api_key_auth) { http_response_code(401); echo json_encode(['error' => 'API key required']); break; }
         $users = array_map(fn($u) => [
             'id'         => $u['id'],
             'username'   => $u['username'],
@@ -2649,6 +2648,7 @@ switch ($action) {
         break;
 
     case 'external_suspend_user':
+        if (!$api_key_auth) { http_response_code(401); echo json_encode(['error' => 'API key required']); break; }
         $d         = json_decode($_RAW_BODY, true) ?? [];
         $target    = trim($d['username'] ?? $_GET['username'] ?? '');
         $suspended = isset($d['suspended']) ? (bool)$d['suspended']
@@ -2675,6 +2675,7 @@ switch ($action) {
         break;
 
     case 'external_delete_user':
+        if (!$api_key_auth) { http_response_code(401); echo json_encode(['error' => 'API key required']); break; }
         $d      = json_decode($_RAW_BODY, true) ?? [];
         $target = trim($d['username'] ?? $_GET['username'] ?? '');
         if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
@@ -2687,7 +2688,7 @@ switch ($action) {
         break;
 
     case 'external_update_user':
-        // Passwort oder Rolle eines Users ändern
+        if (!$api_key_auth) { http_response_code(401); echo json_encode(['error' => 'API key required']); break; }
         $d      = json_decode($_RAW_BODY, true) ?? [];
         $target = trim($d['username'] ?? $_GET['username'] ?? '');
         if ($target === '') { http_response_code(400); echo json_encode(['error' => 'Missing username']); break; }
