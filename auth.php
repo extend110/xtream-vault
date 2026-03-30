@@ -45,36 +45,37 @@ function save_rate_limits(array $data): void {
  *   ['allowed' => true]
  *   ['allowed' => false, 'limit' => 3, 'resets_in' => 1800, 'used' => 3]
  */
-function check_queue_rate_limit(array $user): array {
+function check_queue_rate_limit(array $user, ?string $seriesId = null): array {
     $role  = $user['role'];
-    // User-spezifisches Limit hat Vorrang vor Rollen-Limit
-    // null = kein Limit, 0 = gesperrt, >0 = Limit pro Stunde
     $limit = isset($user['queue_limit']) && $user['queue_limit'] !== ''
         ? (int)$user['queue_limit']
         : (QUEUE_ADD_HOURLY_LIMIT[$role] ?? null);
 
-    // Keine Beschränkung für diese Rolle
     if ($limit === null) return ['allowed' => true];
 
     $now    = time();
-    $window = 3600; // 1 Stunde in Sekunden
+    $window = 3600;
     $uid    = $user['id'];
     $data   = load_rate_limits();
 
-    // Einträge für diesen User holen und veraltete (älter als 1h) entfernen
-    $entries = array_filter($data[$uid] ?? [], fn($ts) => ($now - $ts) < $window);
-    $used    = count($entries);
+    $entries = array_filter($data[$uid] ?? [], fn($e) => ($now - (is_array($e) ? $e['ts'] : $e)) < $window);
 
+    // Wenn seriesId gesetzt: prüfen ob diese Serie schon gezählt wurde
+    if ($seriesId !== null) {
+        foreach ($entries as $e) {
+            if (is_array($e) && ($e['series_id'] ?? '') === $seriesId) {
+                // Serie bereits verbucht — kein neues Limit-Token nötig
+                return ['allowed' => true, 'limit' => $limit, 'used' => count($entries), 'remaining' => max(0, $limit - count($entries)), 'series_counted' => true];
+            }
+        }
+    }
+
+    $used = count($entries);
     if ($used >= $limit) {
-        // Ältesten Eintrag finden → wann läuft das Fenster ab?
-        $oldest    = min($entries);
-        $resetsIn  = ($oldest + $window) - $now;
-        return [
-            'allowed'   => false,
-            'limit'     => $limit,
-            'used'      => $used,
-            'resets_in' => max(0, $resetsIn),
-        ];
+        $timestamps = array_map(fn($e) => is_array($e) ? $e['ts'] : $e, $entries);
+        $oldest     = min($timestamps);
+        $resetsIn   = ($oldest + $window) - $now;
+        return ['allowed' => false, 'limit' => $limit, 'used' => $used, 'resets_in' => max(0, $resetsIn)];
     }
 
     return ['allowed' => true, 'limit' => $limit, 'used' => $used, 'remaining' => $limit - $used];
@@ -82,18 +83,32 @@ function check_queue_rate_limit(array $user): array {
 
 /**
  * Verbucht einen Queue-Add für den User (nach erfolgreicher Prüfung aufrufen).
+ * Bei Episoden seriesId übergeben — dann wird nur einmal pro Serie gezählt.
  */
-function record_queue_add(array $user): void {
-    $limit = QUEUE_ADD_HOURLY_LIMIT[$user['role']] ?? null;
-    if ($limit === null) return; // Admins nicht tracken
+function record_queue_add(array $user, ?string $seriesId = null): void {
+    $limit = isset($user['queue_limit']) && $user['queue_limit'] !== ''
+        ? (int)$user['queue_limit']
+        : (QUEUE_ADD_HOURLY_LIMIT[$user['role']] ?? null);
+    if ($limit === null) return;
 
     $now  = time();
     $uid  = $user['id'];
     $data = load_rate_limits();
 
     // Veraltete Einträge bereinigen
-    $data[$uid] = array_values(array_filter($data[$uid] ?? [], fn($ts) => ($now - $ts) < 3600));
-    $data[$uid][] = $now;
+    $data[$uid] = array_values(array_filter($data[$uid] ?? [], fn($e) => ($now - (is_array($e) ? $e['ts'] : $e)) < 3600));
+
+    // Bei Serien: nur einmal pro Serie verbuchen
+    if ($seriesId !== null) {
+        foreach ($data[$uid] as $e) {
+            if (is_array($e) && ($e['series_id'] ?? '') === $seriesId) {
+                return; // bereits gezählt
+            }
+        }
+        $data[$uid][] = ['ts' => $now, 'series_id' => $seriesId];
+    } else {
+        $data[$uid][] = $now;
+    }
     save_rate_limits($data);
 }
 

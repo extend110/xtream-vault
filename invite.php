@@ -85,7 +85,7 @@ $roleLabels = ['viewer' => 'Viewer', 'editor' => 'Editor', 'admin' => 'Admin'];
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Xtream Vault — Registrierung</title>
+<title><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?> — Registrierung</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -155,7 +155,7 @@ $roleLabels = ['viewer' => 'Viewer', 'editor' => 'Editor', 'admin' => 'Admin'];
 </head>
 <body>
 <div class="box">
-  <div class="logo">XTREAM VAULT</div>
+  <div class="logo"><?= htmlspecialchars(strtoupper(cfg('app_title', 'Xtream Vault'))) ?></div>
   <div class="subtitle">EINLADUNG ZUR REGISTRIERUNG</div>
 
   <?php if ($success): ?>

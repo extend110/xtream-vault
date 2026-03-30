@@ -1380,6 +1380,7 @@ const canQueueAdd       = <?= $can_queue_add        ? 'true' : 'false' ?>;
 const canQueueRemove    = <?= $can_queue_remove     ? 'true' : 'false' ?>;
 const canQueueRemoveOwn = <?= $can_queue_remove_own ? 'true' : 'false' ?>;
 const canSeeAddedBy     = <?= $can_settings         ? 'true' : 'false' ?>;
+const isEditor          = <?= ($role === 'editor')  ? 'true' : 'false' ?>;
 const currentUsername   = <?= json_encode($user['username']) ?>;
 const ACTIVE_SERVER_IDS = new Set(<?= json_encode(array_column(array_filter(
     file_exists(__DIR__ . '/data/servers.json')
@@ -1972,23 +1973,28 @@ async function openSeriesModal(id, title, cover, category, serverId) {
     const eps = episodes[season];
     const seasonNum = parseInt(season, 10) || 1;
     const epIds = eps.map(e => e.id).join(',');
-    html += `<div class="season-header">${t('modal.season')} ${season}
-      <span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ All queuen</span>
-    </div>`;
+    const pendingCount = eps.filter(e => !e.downloaded && !e.queued && !_downloadingIds.has(String(e.id))).length;
+    const queueAllBtn = canQueueAdd && pendingCount > 0
+      ? `<span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ ${t('modal.queue_all')}</span>`
+      : '';
+    html += `<div class="season-header">${t('modal.season')} ${season} ${queueAllBtn}</div>`;
+
     for (const ep of eps) {
-      const epBtn = ep.downloaded
-        ? canQueueRemove
+      let epBtn = '';
+      if (ep.downloaded) {
+        epBtn = canQueueRemove
           ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}','${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')" title="Zurücksetzen">↺</button>`
-          : `<button class="ep-btn done" disabled>✓</button>`
-        : _downloadingIds.has(String(ep.id))
-          ? `<button class="ep-btn done" disabled>⬇</button>`
-          : ep.queued && canQueueRemove
-            ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
-            : ep.queued
-              ? `<button class="ep-btn done" disabled>⏳</button>`
-              : canQueueAdd
-                ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
-                : '';
+          : `<button class="ep-btn done" disabled>✓</button>`;
+      } else if (_downloadingIds.has(String(ep.id))) {
+        epBtn = `<button class="ep-btn done" disabled>⬇</button>`;
+      } else if (ep.queued && canQueueRemove) {
+        epBtn = `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`;
+      } else if (ep.queued) {
+        epBtn = `<button class="ep-btn done" disabled>⏳</button>`;
+      } else if (!isEditor && canQueueAdd) {
+        // Admins/Viewer sehen Einzel-Buttons; Editoren nur den Staffel-Button
+        epBtn = `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`;
+      }
       html += `
       <div class="episode-row" id="ep-${ep.id}">
         <span class="ep-num">E${ep.episode_num??'?'}</span>
@@ -2023,6 +2029,7 @@ async function queueEpisode(ep, season, seriesTitle, category, serverId, btn) {
     category_original:   category || '',
     season:              season,
     _server_id:          serverId || '',
+    _series_id:          seriesTitle || '', // für Rate-Limit: pro Serie zählen
   });
   if (!result) return;
   if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; btn.onclick = () => removeEpFromQueue(ep.id, btn); }
@@ -2035,7 +2042,7 @@ async function removeEpFromQueue(id, btn) {
 async function queueAllSeason(eps, season, seriesTitle, category, serverId) {
   let count = 0;
   for (const ep of eps) {
-    if (!ep.downloaded && !ep.queued) {
+    if (!ep.downloaded && !ep.queued && !_downloadingIds.has(String(ep.id))) {
       const result = await queueItem({
         stream_id: ep.id, type: 'episode',
         title: ep.clean_title || ep.title,
@@ -2045,8 +2052,9 @@ async function queueAllSeason(eps, season, seriesTitle, category, serverId) {
         category_original: category || '',
         season:            season,
         _server_id:        serverId || '',
+        _series_id:        seriesTitle || '',
       });
-      if (!result) break;
+      if (!result) continue; // Duplikat/Fehler → überspringen, nicht abbrechen
       count++;
       const btn = document.getElementById('epbtn-' + ep.id);
       if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; }

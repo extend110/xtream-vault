@@ -1728,8 +1728,16 @@ switch ($action) {
 
     case 'queue_add':
         require_permission('queue_add');
+        $d    = json_decode($_RAW_BODY, true) ?? [];
+        $sid  = (string)($d['stream_id'] ?? '');
+        $type = $d['type'] ?? 'movie';
+        $ext  = $d['container_extension'] ?? 'mp4';
+        // Bei Episoden: series_id für Rate-Limit-Zählung (category als Fallback)
+        $seriesIdForLimit = ($type === 'episode')
+            ? ($d['_series_id'] ?? $d['category'] ?? null)
+            : null;
         // Rate-Limit prüfen
-        $limitCheck = check_queue_rate_limit($current_user);
+        $limitCheck = check_queue_rate_limit($current_user, $seriesIdForLimit ?: null);
         if (!$limitCheck['allowed']) {
             $mins = ceil($limitCheck['resets_in'] / 60);
             http_response_code(429);
@@ -1741,10 +1749,6 @@ switch ($action) {
             ]);
             break;
         }
-        $d    = json_decode($_RAW_BODY, true) ?? [];
-        $sid  = (string)($d['stream_id'] ?? '');
-        $type = $d['type'] ?? 'movie';
-        $ext  = $d['container_extension'] ?? 'mp4';
         if ($sid === '') { echo json_encode(['error'=>'Missing stream_id']); break; }
         $queue = load_queue();
         foreach ($queue as $qi) {
@@ -1867,7 +1871,7 @@ switch ($action) {
             '_server_id'          => $qServerId,
         ];
         save_queue($queue);
-        record_queue_add($current_user);
+        record_queue_add($current_user, $seriesIdForLimit ?: null);
         log_activity($current_user['id'], $current_user['username'], 'queue_add', ['title' => sanitize($d['title'] ?? ''), 'type' => $type]);
         $status = get_queue_limit_status($current_user);
         echo json_encode([
