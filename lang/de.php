@@ -499,4 +499,8 @@ return [
     'cfg.ip_whitelist_your_ip'     => 'Deine aktuelle IP',
     'profile.theme_desc_local' => 'Wähle ein Design für deine Ansicht. Die Auswahl wird lokal gespeichert.',
     'lbl.queue_slots' => '{{n}} Queue-Slots verbleibend',
+    'fav.unavailable' => 'Nicht verfügbar',
+    'fav.server_unavailable' => 'Server deaktiviert oder gelöscht',
+    'cfg.app_title' => 'App-Titel',
+    'cfg.app_title_label' => 'Anzeigename der App',
 ];

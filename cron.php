@@ -1070,6 +1070,7 @@ foreach ($queue as &$item) {
 
         // Download-Verlauf schreiben (unabhängig von Queue — überlebt queue_clear)
         $historyEntry = [
+            'stream_id' => (string)($item['stream_id'] ?? ''),
             'title'    => $title,
             'type'     => $type === 'movie' ? 'movie' : 'episode',
             'cover'    => $item['cover']    ?? '',

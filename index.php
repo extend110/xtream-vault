@@ -21,7 +21,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XTREAM VAULT</title>
+<title><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__.'/style.css') ?>">
@@ -34,7 +34,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    <div class="logo-text">Xtream Vault</div>
+    <div class="logo-text"><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
     <div class="logo-sub">VOD Downloader</div>
   </div>
   <div class="sidebar-stats">
@@ -657,6 +657,18 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-settings" style="display:none">
       <?php if ($can_settings): ?>
       <div>
+
+        <div class="settings-card">
+          <h3>🏷️ <?= t('cfg.app_title') ?></h3>
+          <div class="field">
+            <label><?= t('cfg.app_title_label') ?></label>
+            <input type="text" id="cfg-app-title" value="<?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?>" placeholder="Xtream Vault" maxlength="64">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn-primary" onclick="saveAppTitle()"><?= t('btn.save') ?></button>
+          </div>
+          <div class="settings-msg" id="app-title-msg"></div>
+        </div>
 
         <div class="settings-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -1369,6 +1381,12 @@ const canQueueRemove    = <?= $can_queue_remove     ? 'true' : 'false' ?>;
 const canQueueRemoveOwn = <?= $can_queue_remove_own ? 'true' : 'false' ?>;
 const canSeeAddedBy     = <?= $can_settings         ? 'true' : 'false' ?>;
 const currentUsername   = <?= json_encode($user['username']) ?>;
+const ACTIVE_SERVER_IDS = new Set(<?= json_encode(array_column(array_filter(
+    file_exists(__DIR__ . '/data/servers.json')
+        ? (json_decode(file_get_contents(__DIR__ . '/data/servers.json'), true) ?? [])
+        : [],
+    fn($s) => ($s['enabled'] ?? true) !== false
+), 'id')) ?>);
 let currentView   = 'dashboard';
 let _queuedIds    = new Set(); // stream_ids aktuell in der Queue (non-done)
 let _downloadedIds = new Set(); // stream_ids bereits heruntergeladen (done)
@@ -2373,6 +2391,7 @@ function updateFavouriteButtons() {
     const isDownloaded  = _downloadedIds.has(sid);
     const isDownloading = _downloadingIds.has(sid);
     const isQueued      = !isDownloaded && _queuedIds.has(sid);
+    const serverAvail   = !f.server_id || ACTIVE_SERVER_IDS.has(f.server_id);
     const ext = f.ext || 'mp4';
 
     const card = grid.querySelector(`.card[data-sid="${sid}"]`);
@@ -2391,6 +2410,8 @@ function updateFavouriteButtons() {
       newBtn = (canQueueRemove || canQueueRemoveOwn)
         ? `<button class="btn-q remove" onclick="removeFromQueue('${sid}',this.closest('.card'))">✕ Remove</button>`
         : `<button class="btn-q done" disabled>⏳ Queued</button>`;
+    } else if (!serverAvail) {
+      newBtn = `<button class="btn-q done" disabled title="${t('fav.server_unavailable')}">⚠ ${t('fav.unavailable')}</button>`;
     } else if (canQueueAdd) {
       const movieObj = JSON.stringify({
         stream_id: f.stream_id, type: 'movie', title: f.title,
@@ -2429,6 +2450,7 @@ function renderFavourites() {
     const isDownloaded  = _downloadedIds.has(sid);
     const isDownloading = _downloadingIds.has(sid);
     const isQueued      = !isDownloaded && _queuedIds.has(sid);
+    const serverAvail   = !f.server_id || ACTIVE_SERVER_IDS.has(f.server_id);
 
     if (f.type === 'movie') {
       if (isDownloaded) {
@@ -2441,6 +2463,8 @@ function renderFavourites() {
         actionBtn = canQueueRemove || canQueueRemoveOwn
           ? `<button class="btn-q remove" onclick="removeFromQueue('${sid}',this.closest('.card'))">✕ Remove</button>`
           : `<button class="btn-q done" disabled>⏳ Queued</button>`;
+      } else if (!serverAvail) {
+        actionBtn = `<button class="btn-q done" disabled title="${t('fav.server_unavailable')}">⚠ ${t('fav.unavailable')}</button>`;
       } else if (canQueueAdd) {
         const movieObj = JSON.stringify({
           stream_id: f.stream_id, type: 'movie', title: f.title,
@@ -2450,7 +2474,11 @@ function renderFavourites() {
         actionBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
       }
     } else if (f.type === 'series') {
-      actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}','${esc(f.server_id||'')}')">📋 Episodes</button>`;
+      if (!serverAvail) {
+        actionBtn = `<button class="btn-q done" disabled title="${t('fav.server_unavailable')}">⚠ ${t('fav.unavailable')}</button>`;
+      } else {
+        actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}','${esc(f.server_id||'')}')">📋 Episodes</button>`;
+      }
     }
 
     return `
@@ -3137,6 +3165,9 @@ async function loadConfig() {
   // IP-Whitelist
   const ipEl = document.getElementById('cfg-api-allowed-ips');
   if (ipEl) ipEl.value = (c.api_allowed_ips ?? '').split(',').map(s=>s.trim()).filter(Boolean).join('\n');
+  // App-Titel
+  const appTitleEl = document.getElementById('cfg-app-title');
+  if (appTitleEl) appTitleEl.value = c.app_title ?? 'Xtream Vault';
   // Aktuelle IP anzeigen
   const yourIpEl = document.getElementById('your-ip');
   if (yourIpEl) api('get_my_ip').then(d => { if (d.ip) yourIpEl.textContent = d.ip; });
@@ -3211,6 +3242,7 @@ function collectConfig() {
     parallel_enabled:      document.getElementById('cfg-parallel-enabled')?.checked ?? true,
     parallel_max:          parseInt(document.getElementById('cfg-parallel-max')?.value ?? '4') || 4,
     api_allowed_ips:       (document.getElementById('cfg-api-allowed-ips')?.value ?? '').split('\n').map(s=>s.trim()).filter(Boolean).join(','),
+    app_title:             document.getElementById('cfg-app-title')?.value.trim() || 'Xtream Vault',
   };
 }
 
@@ -3502,6 +3534,19 @@ async function testConnection() {
     setSettingsMsg('❌ ' + d.error, 'err');
   } else {
     setSettingsMsg(`✅ Verbindung erfolgreich — ${d.categories} Kategorien gefunden`, 'ok');
+  }
+}
+
+async function saveAppTitle() {
+  const val = document.getElementById('cfg-app-title').value.trim();
+  const msg = document.getElementById('app-title-msg');
+  const d   = await apiPost('save_app_title', {app_title: val || 'Xtream Vault'});
+  if (d.ok) {
+    document.title = (val || 'Xtream Vault').toUpperCase();
+    document.querySelector('.logo-text').textContent = val || 'Xtream Vault';
+    showSettingsMsg(msg, t('settings.save_ok'), 'success');
+  } else {
+    showSettingsMsg(msg, t('settings.save_err'), 'error');
   }
 }
 
@@ -3967,24 +4012,28 @@ async function loadDashboardData() {
   // Letzte Downloads
   const recent = document.getElementById('dash-recent');
   if (recent) {
-    if (!d.recent_downloads?.length) {
-      recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">${t('dash.no_recent')}</div>`;
-    } else {
-      recent.innerHTML = d.recent_downloads.map(item => {
-        const icon = item.type === 'episode' ? '📺' : '🎬';
-        const sid  = item.stream_id ?? '';
-        const resetBtn = (canQueueRemove && sid)
-          ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${sid}','${item.type ?? 'movie'}',this.closest('.dl-row'))" title="Zurücksetzen">↺</button>`
-          : '';
-        return `<div class="dl-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
-          ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
-          <div style="flex:1;min-width:0">
-            <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
-            <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
-          </div>
-          ${resetBtn}
-        </div>`;
-      }).join('');
+    const newIds = (d.recent_downloads ?? []).map(i => i.stream_id + ':' + i.type).join(',');
+    if (recent.dataset.ids !== newIds) {
+      recent.dataset.ids = newIds;
+      if (!d.recent_downloads?.length) {
+        recent.innerHTML = `<div style="padding:20px;text-align:center;color:var(--muted);font-size:.8rem">${t('dash.no_recent')}</div>`;
+      } else {
+        recent.innerHTML = d.recent_downloads.map(item => {
+          const icon = item.type === 'episode' ? '📺' : '🎬';
+          const sid  = item.stream_id ?? '';
+          const resetBtn = (canQueueRemove && sid)
+            ? `<button class="btn-icon" style="font-size:.62rem;padding:3px 8px;flex-shrink:0" onclick="resetDownload('${sid}','${item.type ?? 'movie'}',this.closest('.dl-row'))" title="Zurücksetzen">↺</button>`
+            : '';
+          return `<div class="dl-row" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.03)">
+            ${item.cover ? `<img src="${esc(item.cover)}" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">` : `<div style="width:36px;height:36px;background:var(--bg3);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${icon}</div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.title)}</div>
+              <div style="font-size:.65rem;color:var(--muted)">${esc(item.added_by)} · ${esc(item.added_at?.slice(0,10) ?? '')}</div>
+            </div>
+            ${resetBtn}
+          </div>`;
+        }).join('');
+      }
     }
   }
 }

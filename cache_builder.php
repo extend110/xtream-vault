@@ -204,18 +204,19 @@ foreach ($allMovieCaches as $srvId => $cache) {
     }
 }
 
-// Akkumulierte Liste aus vorherigem Run (ohne heruntergeladene)
+// Akkumulierte Liste aus vorherigem Run (ohne heruntergeladene und ohne dismissed)
+$dismissedIds = array_flip(array_map('strval', $prev['dismissed_ids'] ?? []));
 $accMovies = [];
 foreach ($prev['movies'] ?? [] as $m) {
     $id = (string)($m['stream_id'] ?? $m['id'] ?? '');
-    if ($id !== '' && !isset($dlMovieIds[$id])) $accMovies[$id] = $m;
+    if ($id !== '' && !isset($dlMovieIds[$id]) && !isset($dismissedIds[$id])) $accMovies[$id] = $m;
 }
 
-// Neue Filme aus allen Servern hinzufügen
+// Neue Filme aus allen Servern hinzufügen (dismissed ebenfalls ausschließen)
 if (!$isFirstRun) {
     foreach ($allCurrentIds as $id => $srvId) {
         $sid = (string)$id;
-        if (!isset($previousMovieIds[$sid]) && !isset($dlMovieIds[$sid])) {
+        if (!isset($previousMovieIds[$sid]) && !isset($dlMovieIds[$sid]) && !isset($dismissedIds[$sid])) {
             $m = $allMovieCaches[$srvId][$sid] ?? null;
             if ($m) {
                 $m['stream_id'] = $sid;
@@ -229,7 +230,8 @@ if (!$isFirstRun) {
 $newReleasesData = [
     'generated_at'     => date('Y-m-d H:i:s'),
     'all_ids'          => array_map('strval', array_keys($allCurrentIds)),
-    'known_server_ids' => array_keys($allMovieCaches), // alle bekannten Server-IDs
+    'known_server_ids' => array_keys($allMovieCaches),
+    'dismissed_ids'    => array_values($prev['dismissed_ids'] ?? []), // beibehalten
     'movies'           => array_values($accMovies),
     'series'           => [],
 ];

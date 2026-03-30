@@ -188,12 +188,9 @@ function load_db(?string $serverId = null): array {
         if (file_exists($file)) return json_decode(file_get_contents($file), true) ?? ['movies' => [], 'episodes' => []];
         return ['movies' => [], 'episodes' => []];
     }
-    // Alle Server-DBs zusammenführen
-    $servers = load_all_servers();
+    // Alle Server-DBs zusammenführen — auch deaktivierte Server einbeziehen
     $merged  = ['movies' => [], 'episodes' => []];
-    foreach ($servers as $srv) {
-        $file = DATA_DIR . '/downloaded_' . $srv['id'] . '.json';
-        if (!file_exists($file)) continue;
+    foreach (glob(DATA_DIR . '/downloaded_*.json') as $file) {
         $db = json_decode(file_get_contents($file), true) ?? [];
         $merged['movies']   = array_unique(array_merge($merged['movies'],   array_map('strval', $db['movies']   ?? [])));
         $merged['episodes'] = array_unique(array_merge($merged['episodes'], array_map('strval', $db['episodes'] ?? [])));
@@ -337,6 +334,9 @@ switch ($action) {
         $nr = file_exists(NEW_RELEASES_FILE)
             ? (json_decode(file_get_contents(NEW_RELEASES_FILE), true) ?? [])
             : [];
+        // Alle aktuellen IDs als dismissed markieren
+        $newDismissed = array_map(fn($m) => (string)($m['stream_id'] ?? $m['id'] ?? ''), $nr['movies'] ?? []);
+        $nr['dismissed_ids'] = array_values(array_unique(array_merge($nr['dismissed_ids'] ?? [], $newDismissed)));
         $nr['movies'] = [];
         $nr['series'] = [];
         file_put_contents(NEW_RELEASES_FILE, json_encode($nr, JSON_UNESCAPED_UNICODE));
@@ -347,7 +347,7 @@ switch ($action) {
         require_permission('settings');
         $d    = json_decode($_RAW_BODY, true) ?? [];
         $id   = (string)($d['id']   ?? '');
-        $type = $d['type'] ?? 'movie'; // 'movie' or 'series'
+        $type = $d['type'] ?? 'movie';
         if ($id === '') { echo json_encode(['error' => 'Missing id']); break; }
         $nr = file_exists(NEW_RELEASES_FILE)
             ? (json_decode(file_get_contents(NEW_RELEASES_FILE), true) ?? [])
@@ -360,6 +360,8 @@ switch ($action) {
             $nr['movies'] = array_values(array_filter($nr['movies'] ?? [], fn($m) =>
                 (string)($m['stream_id'] ?? $m['id'] ?? '') !== $id
             ));
+            // ID als dismissed speichern damit cache_builder sie nicht wieder hinzufügt
+            $nr['dismissed_ids'] = array_values(array_unique(array_merge($nr['dismissed_ids'] ?? [], [$id])));
         }
         file_put_contents(NEW_RELEASES_FILE, json_encode($nr, JSON_UNESCAPED_UNICODE));
         echo json_encode(['ok' => true]);
@@ -874,6 +876,7 @@ switch ($action) {
             'parallel_enabled'       => (bool)($c['parallel_enabled'] ?? true),
             'parallel_max'           => (int)($c['parallel_max']      ?? 4),
             'api_allowed_ips'        => $c['api_allowed_ips']         ?? '',
+            'app_title'              => $c['app_title']               ?? 'Xtream Vault',
         ]);
         break;
 
@@ -895,6 +898,18 @@ switch ($action) {
         $json = json_decode($raw, true);
         if (!is_array($json)) { echo json_encode(['ok' => false, 'error' => 'Falsche Zugangsdaten']); break; }
         echo json_encode(['ok' => true, 'categories' => count($json)]);
+        break;
+
+    case 'save_app_title':
+        require_permission('settings');
+        $d = json_decode($_RAW_BODY, true) ?? [];
+        $title = trim($d['app_title'] ?? 'Xtream Vault');
+        if ($title === '') $title = 'Xtream Vault';
+        $title = mb_substr($title, 0, 64);
+        $current = load_config();
+        $current['app_title'] = $title;
+        save_config($current);
+        echo json_encode(['ok' => true, 'app_title' => $title]);
         break;
 
     case 'save_config':
@@ -924,6 +939,7 @@ switch ($action) {
             'parallel_enabled'      => isset($d['parallel_enabled']) ? (bool)$d['parallel_enabled'] : (bool)($current['parallel_enabled'] ?? true),
             'parallel_max'          => max(1, min(10, (int)($d['parallel_max'] ?? $current['parallel_max'] ?? 4))),
             'api_allowed_ips'       => trim($d['api_allowed_ips'] ?? $current['api_allowed_ips'] ?? ''),
+            'app_title'             => trim($d['app_title'] ?? $current['app_title'] ?? 'Xtream Vault') ?: 'Xtream Vault',
             // Alte Felder für Rückwärtskompatibilität beibehalten falls vorhanden
             'server_ip'             => $current['server_ip'] ?? '',
             'port'                  => $current['port']      ?? '80',
@@ -1348,7 +1364,8 @@ switch ($action) {
         }
         // Temporär mit den übergebenen Werten testen
         $url  = 'https://api.telegram.org/bot' . $token . '/sendMessage';
-        $body = json_encode(['chat_id' => $chatId, 'text' => "✅ <b>Xtream Vault</b>\n\nTest-Nachricht — Benachrichtigungen funktionieren!", 'parse_mode' => 'HTML']);
+        $appTitle = cfg('app_title', 'Xtream Vault');
+        $body = json_encode(['chat_id' => $chatId, 'text' => "✅ <b>{$appTitle}</b>\n\nTest-Nachricht — Benachrichtigungen funktionieren!", 'parse_mode' => 'HTML']);
         $ctx  = stream_context_create(['http' => ['method' => 'POST', 'header' => "Content-Type: application/json\r\n", 'content' => $body, 'timeout' => 8]]);
         $raw  = @file_get_contents($url, false, $ctx);
         if ($raw === false) { echo json_encode(['error' => 'Telegram nicht erreichbar']); break; }

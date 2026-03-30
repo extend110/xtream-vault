@@ -475,4 +475,8 @@ return [
     'api.error_format'      => 'Les messages d\'erreur sont retournés sous forme de',
     'profile.theme_desc_local' => 'Choisissez un design pour votre interface. La sélection est stockée localement.',
     'lbl.queue_slots' => '{{n}} slots restants',
+    'fav.unavailable' => 'Indisponible',
+    'fav.server_unavailable' => 'Serveur désactivé ou supprimé',
+    'cfg.app_title' => 'Titre de l\'app',
+    'cfg.app_title_label' => 'Nom d\'affichage de l\'app',
 ];
