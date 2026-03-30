@@ -1372,6 +1372,7 @@ const currentUsername   = <?= json_encode($user['username']) ?>;
 let currentView   = 'dashboard';
 let _queuedIds    = new Set(); // stream_ids aktuell in der Queue (non-done)
 let _downloadedIds = new Set(); // stream_ids bereits heruntergeladen (done)
+let _downloadingIds = new Set(); // stream_ids gerade im Download
 let _seenIds      = new Set(); // stream_ids die der User angeschaut hat (TMDB-Modal geöffnet)
 try { _seenIds = new Set(Object.keys(JSON.parse(localStorage.getItem('xv_seen_<?= $user['id'] ?>') || '{}'))) } catch(e) {}
 let currentFilter = 'all';
@@ -1564,7 +1565,7 @@ async function loadStats() {
   if (Array.isArray(d.downloaded_ids)) {
     _downloadedIds = new Set(d.downloaded_ids);
   }
-  if (currentView === 'favourites') renderFavourites();
+  if (currentView === 'favourites') updateFavouriteButtons();
 }
 
 function updateQueuePill(n) {
@@ -1597,12 +1598,13 @@ async function updateQueueBadge() {
   <?php if ($can_queue_view): ?>
   const items = await api('get_queue');
   if (Array.isArray(items)) {
-    _queuedIds    = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
+    _queuedIds = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
+    _downloadingIds = new Set(items.filter(i => i.status === 'downloading').map(i => String(i.stream_id)));
     items.filter(i => i.status === 'done').forEach(i => _downloadedIds.add(String(i.stream_id)));
     const serverPending = items.filter(i => i.status === 'pending').length;
     _optimisticDelta = 0;
     updateQueuePill(serverPending);
-    if (currentView === 'favourites') renderFavourites();
+    if (currentView === 'favourites') updateFavouriteButtons();
   }
   <?php endif; ?>
 }
@@ -1815,17 +1817,20 @@ function movieCard(m, showServer = false) {
     : m.queued ? `<span class="card-badge badge-queue">⏳ Queue</span>`
     : _seenIds.has(String(m.stream_id)) ? `<span class="card-badge badge-seen">👁</span>` : '';
 
+  const isDownloading = _downloadingIds.has(String(m.stream_id));
   const btn = m.downloaded
     ? canQueueRemove
       ? `<button class="btn-q done" onclick="resetDownload('${m.stream_id}','movie',null)" title="Zurücksetzen">↺ Reset</button>`
       : `<button class="btn-q done" disabled>✓ Done</button>`
-    : m.queued && canQueueRemove
-      ? `<button class="btn-q remove" onclick="removeFromQueue('${m.stream_id}',this.closest('.card'))">✕ Remove</button>`
-      : m.queued
-        ? `<button class="btn-q done" disabled>⏳ Queued</button>`
-        : canQueueAdd
-          ? `<button class="btn-q add" onclick="addMovieToQueue(${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))">+ Queue</button>`
-          : '';
+    : isDownloading
+      ? `<button class="btn-q done" disabled>⬇ ${t('status.downloading')}</button>`
+      : m.queued && canQueueRemove
+        ? `<button class="btn-q remove" onclick="removeFromQueue('${m.stream_id}',this.closest('.card'))">✕ Remove</button>`
+        : m.queued
+          ? `<button class="btn-q done" disabled>⏳ Queued</button>`
+          : canQueueAdd
+            ? `<button class="btn-q add" onclick="addMovieToQueue(${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))">+ Queue</button>`
+            : '';
 
   // Multi-select checkbox (only in search view, only if can add to queue)
   const selectBox = (currentView === 'search' && canQueueAdd && !m.downloaded && !m.queued)
@@ -1950,13 +1955,15 @@ async function openSeriesModal(id, title, cover, category, serverId) {
         ? canQueueRemove
           ? `<button class="ep-btn done" onclick="resetEpisode('${ep.id}','${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')" title="Zurücksetzen">↺</button>`
           : `<button class="ep-btn done" disabled>✓</button>`
-        : ep.queued && canQueueRemove
-          ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
-          : ep.queued
-            ? `<button class="ep-btn done" disabled>⏳</button>`
-            : canQueueAdd
-              ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
-              : '';
+        : _downloadingIds.has(String(ep.id))
+          ? `<button class="ep-btn done" disabled>⬇</button>`
+          : ep.queued && canQueueRemove
+            ? `<button class="ep-btn remove" id="epbtn-${ep.id}" onclick="removeEpFromQueue('${ep.id}',this)">✕</button>`
+            : ep.queued
+              ? `<button class="ep-btn done" disabled>⏳</button>`
+              : canQueueAdd
+                ? `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`
+                : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
         <span class="ep-num">E${ep.episode_num??'?'}</span>
@@ -2172,6 +2179,7 @@ async function refreshQueue() {
 
   // Global Set für Queue-IDs aktualisieren
   _queuedIds = new Set(items.filter(i => i.status !== 'done').map(i => String(i.stream_id)));
+    _downloadingIds = new Set(items.filter(i => i.status === 'downloading').map(i => String(i.stream_id)));
 
   if (!items.length) {
     // Nur Leer-Meldung zeigen wenn aktuell keine Queue-Items im DOM sind
@@ -2337,7 +2345,7 @@ async function toggleFav(type, sid, title, cover, category, ext, btn, serverId =
     showToast(t('fav.removed'), 'info');
   }
   updateFavBadge();
-  if (currentView === 'favourites') renderFavourites();
+  if (currentView === 'favourites') updateFavouriteButtons();
 }
 
 let favTab = 'all';
@@ -2346,6 +2354,46 @@ function switchFavTab(tab, el) {
   document.querySelectorAll('#view-favourites .filter-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   renderFavourites();
+}
+
+/** Aktualisiert nur die Action-Buttons in bestehenden Favoriten-Karten — ohne Cover neu zu laden */
+function updateFavouriteButtons() {
+  const grid = document.getElementById('fav-grid');
+  if (!grid) return;
+  favouriteData.forEach(f => {
+    if (f.type !== 'movie') return; // Serien haben fixe Episode-Buttons
+    const sid           = String(f.stream_id);
+    const isDownloaded  = _downloadedIds.has(sid);
+    const isDownloading = _downloadingIds.has(sid);
+    const isQueued      = !isDownloaded && _queuedIds.has(sid);
+    const ext = f.ext || 'mp4';
+
+    const card = grid.querySelector(`.card[data-sid="${sid}"]`);
+    if (!card) return;
+    const actions = card.querySelector('.card-actions');
+    if (!actions) return;
+
+    let newBtn = '';
+    if (isDownloaded) {
+      newBtn = canQueueRemove
+        ? `<button class="btn-q done" onclick="resetDownload('${sid}','movie',this.closest('.card'))" title="Zurücksetzen">↺ Reset</button>`
+        : `<button class="btn-q done" disabled>✓ Done</button>`;
+    } else if (isDownloading) {
+      newBtn = `<button class="btn-q done" disabled>⬇ ${t('status.downloading')}</button>`;
+    } else if (isQueued) {
+      newBtn = (canQueueRemove || canQueueRemoveOwn)
+        ? `<button class="btn-q remove" onclick="removeFromQueue('${sid}',this.closest('.card'))">✕ Remove</button>`
+        : `<button class="btn-q done" disabled>⏳ Queued</button>`;
+    } else if (canQueueAdd) {
+      const movieObj = JSON.stringify({
+        stream_id: f.stream_id, type: 'movie', title: f.title,
+        container_extension: ext, cover: f.cover, category: f.category,
+        clean_title: f.title, _server_id: f.server_id ?? '',
+      }).replace(/"/g, '&quot;');
+      newBtn = `<button class="btn-q add" onclick="addMovieToQueue(${movieObj},this.closest('.card'))">+ Queue</button>`;
+    }
+    actions.innerHTML = newBtn;
+  });
 }
 
 function renderFavourites() {
@@ -2370,15 +2418,18 @@ function renderFavourites() {
 
     // Queue-Button: Filme direkt queuen, Serien → Modal öffnen
     let actionBtn = '';
-    const sid          = String(f.stream_id);
-    const isDownloaded = _downloadedIds.has(sid);
-    const isQueued     = !isDownloaded && _queuedIds.has(sid);
+    const sid           = String(f.stream_id);
+    const isDownloaded  = _downloadedIds.has(sid);
+    const isDownloading = _downloadingIds.has(sid);
+    const isQueued      = !isDownloaded && _queuedIds.has(sid);
 
     if (f.type === 'movie') {
       if (isDownloaded) {
         actionBtn = canQueueRemove
           ? `<button class="btn-q done" onclick="resetDownload('${sid}','movie',this.closest('.card'))" title="Zurücksetzen">↺ Reset</button>`
           : `<button class="btn-q done" disabled>✓ Done</button>`;
+      } else if (isDownloading) {
+        actionBtn = `<button class="btn-q done" disabled>⬇ ${t('status.downloading')}</button>`;
       } else if (isQueued) {
         actionBtn = canQueueRemove || canQueueRemoveOwn
           ? `<button class="btn-q remove" onclick="removeFromQueue('${sid}',this.closest('.card'))">✕ Remove</button>`
@@ -2396,7 +2447,7 @@ function renderFavourites() {
     }
 
     return `
-    <div class="card">
+    <div class="card" data-sid="${f.stream_id}">
       <div class="card-thumb">
         <div class="card-thumb-placeholder">${icon}</div>
         ${thumb}
