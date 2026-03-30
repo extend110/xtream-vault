@@ -1244,6 +1244,8 @@ switch ($action) {
             $src  = $extractedDir . '/' . $file;
             $dest = $dir . '/' . $file;
             if (is_dir($src)) {
+                // Zielordner zuerst löschen damit cp nicht in einen Unterordner kopiert
+                if (is_dir($dest)) exec('rm -rf ' . escapeshellarg($dest));
                 exec('cp -r ' . escapeshellarg($src) . ' ' . escapeshellarg($dest) . ' 2>&1');
             } else {
                 copy($src, $dest);
