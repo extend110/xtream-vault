@@ -220,7 +220,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-title" id="dash-pc-title">–</div>
           <div class="pc-pos" id="dash-pc-pos"></div>
           <?php if ($can_queue_remove): ?>
-          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
+          <button class="btn-sm" style="margin-left:auto;flex-shrink:0;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
           <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="dash-pc-bar"></div></div>
@@ -401,7 +401,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div class="pc-title" id="pc-title">–</div>
           <div class="pc-pos" id="pc-pos"></div>
           <?php if ($can_queue_remove): ?>
-          <button class="btn-sm" style="margin-left:auto;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
+          <button class="btn-sm" style="margin-left:auto;flex-shrink:0;color:var(--red);border-color:rgba(255,71,87,.3)" onclick="cancelDownload()"><?= t('queue.abort') ?></button>
           <?php endif; ?>
         </div>
         <div class="pc-bar-wrap"><div class="pc-bar" id="pc-bar"></div></div>
@@ -1953,7 +1953,7 @@ async function queueAllSeasonById(epIdsCsv, season, seriesTitle, category, serve
   await queueAllSeason(eps, season, seriesTitle, category, serverId);
 }
 async function queueEpisode(ep, season, seriesTitle, category, serverId, btn) {
-  await queueItem({
+  const result = await queueItem({
     stream_id:           ep.id,
     type:                'episode',
     title:               ep.clean_title || ep.title,
@@ -1965,6 +1965,7 @@ async function queueEpisode(ep, season, seriesTitle, category, serverId, btn) {
     season:              season,
     _server_id:          serverId || '',
   });
+  if (!result) return;
   if (btn) { btn.textContent = '✕'; btn.className = 'ep-btn remove'; btn.onclick = () => removeEpFromQueue(ep.id, btn); }
 }
 async function removeEpFromQueue(id, btn) {
@@ -1997,7 +1998,7 @@ async function queueAllSeason(eps, season, seriesTitle, category, serverId) {
 
 // ── Queue Add/Remove ──────────────────────────────────────────
 async function addMovieToQueue(m, card) {
-  await queueItem({
+  const result = await queueItem({
     stream_id:           m.stream_id,
     type:                'movie',
     title:               m.clean_title,
@@ -2006,7 +2007,8 @@ async function addMovieToQueue(m, card) {
     dest_subfolder:      'Movies',
     category:            m.category ?? m._category ?? '',
     _server_id:          m._server_id ?? '',
-  });
+  }, card || document.getElementById('card-m-' + m.stream_id));
+  if (!result) return;
   // Karte per ID suchen falls nicht direkt übergeben (z.B. aus TMDB-Modal)
   if (!card) card = document.getElementById('card-m-' + m.stream_id);
   if (card) {
@@ -2073,7 +2075,7 @@ async function removeFromQueue(sid, card) {
   showToast(t('queue.removed'), 'info');
 }
 
-async function queueItem(item) {
+async function queueItem(item, card = null) {
   const r = await fetch(API + '?action=queue_add', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -2088,8 +2090,7 @@ async function queueItem(item) {
     } else if (d.reason === 'duplicate_title') {
       showToast(`⚠️ ${t('queue.duplicate', {title: d.title})}`, 'info');
     } else if (d.reason === 'duplicate') {
-      // Dublette gefunden — Toast mit Bypass-Option
-      showDuplicateToast(d.match_title, item);
+      showDuplicateToast(d.match_title, item, card);
     } else {
       showToast(t('queue.already_queue'), 'info');
     }
@@ -4374,8 +4375,8 @@ function lazyLoadImages() {
 }
 let toastTimer;
 let _dupPendingItem = null;
-function showDuplicateToast(matchTitle, item) {
-  _dupPendingItem = item;
+function showDuplicateToast(matchTitle, item, card) {
+  _dupPendingItem = {item, card: card || null};
   document.getElementById('dup-match-title').textContent = matchTitle;
   document.getElementById('dup-toast').style.display = '';
 }
@@ -4384,10 +4385,38 @@ function closeDupToast() {
   _dupPendingItem = null;
 }
 async function forceQueueAdd() {
-  const item = _dupPendingItem;
+  const pending = _dupPendingItem;
   closeDupToast();
-  if (!item) return;
-  await queueItem({...item, force_add: true});
+  if (!pending) return;
+  const {item, card} = pending;
+  const result = await queueItem({...item, force_add: true});
+  if (!result) return;
+  // Karte aktualisieren — gleicher Code wie in addMovieToQueue
+  const c = card || document.getElementById('card-m-' + item.stream_id);
+  if (c) {
+    c.classList.add('queued');
+    const badge = c.querySelector('.card-badge');
+    if (badge) { badge.className = 'card-badge badge-queue'; badge.textContent = '⏳ Queue'; }
+    const btn = c.querySelector('.btn-q');
+    if (btn) {
+      if (canQueueRemove) {
+        btn.textContent = t('btn.remove_queue');
+        btn.className   = 'btn-q remove';
+        btn.disabled    = false;
+        btn.removeAttribute('onclick');
+        btn.onclick = () => removeFromQueue(item.stream_id, c);
+      } else {
+        btn.textContent = t('btn.queued');
+        btn.className   = 'btn-q done';
+        btn.disabled    = true;
+        btn.onclick     = null;
+      }
+    }
+  }
+  const idx = allMovies.findIndex(x => String(x.stream_id) === String(item.stream_id));
+  if (idx >= 0) allMovies[idx].queued = true;
+  const idx2 = _lastMovies.findIndex(x => String(x.stream_id) === String(item.stream_id));
+  if (idx2 >= 0) _lastMovies[idx2].queued = true;
 }
 
 function showToast(msg, type = '') {
