@@ -685,9 +685,12 @@ if ($serverFilter === null) {
             clog("Worker $srvId abgeschlossen");
         }
         // Nach sequenziellem Run: VPN, Cleanup, Cache
-        if (VPN_ENABLED && $vpnStartedByUs) {
+        if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
+            clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
             $vpnDown = vpn_down();
             clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
+        } elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
+            clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
         }
         $queue  = load_queue();
         $cutoff = date('Y-m-d H:i:s', strtotime('-7 days'));
@@ -764,11 +767,13 @@ if ($serverFilter === null) {
         clog("Worker $srvId beendet (exit $status)");
     }
 
-    // VPN trennen wenn wir ihn gestartet haben
-    if (VPN_ENABLED && $vpnStartedByUs) {
-        clog("VPN: trenne " . VPN_INTERFACE . " …");
+    // VPN trennen wenn wir ihn gestartet haben (nicht wenn manuell verbunden)
+    if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
+        clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
         $vpnDown = vpn_down();
         clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
+    } elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
+        clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
     }
 
     // Cleanup nach allen Workern
@@ -1222,17 +1227,18 @@ if ($removed > 0) {
 }
 
 // ── VPN: nach Downloads trennen ───────────────────────────────────────────────
-// Nur trennen wenn cron ihn selbst gestartet hat.
-// War VPN bereits vorher aktiv, bleibt er nach den Downloads aktiv.
-if (VPN_ENABLED && $vpnStartedByUs) {
+// Nur trennen wenn cron ihn selbst gestartet hat UND er nicht manuell verbunden ist.
+if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
     if (!vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits getrennt (extern)");
     } else {
-        clog("VPN: trenne " . VPN_INTERFACE . " …");
+        clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
         $vpnDown = vpn_down();
         if ($vpnDown !== true) clog("VPN WARN: " . $vpnDown);
         else clog("VPN: " . VPN_INTERFACE . " getrennt");
     }
+} elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
+    clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
 }
 
 // Benachrichtigung: alle Downloads abgeschlossen

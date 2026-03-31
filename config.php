@@ -171,6 +171,11 @@ function vpn_down(): bool|string {
 
     return true;
 }
+/** Gibt true zurück wenn VPN manuell über die UI verbunden wurde (nicht durch den Cron). */
+function vpn_is_manual(): bool {
+    return file_exists(DATA_DIR . '/vpn_manual.flag');
+}
+
 // ── Prüfen ob Grundkonfiguration vorhanden ────────────────────────────────────
 function is_configured(): bool {
     // Primär: config.json hat Server-Zugangsdaten (Rückwärtskompatibilität)

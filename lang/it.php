@@ -301,7 +301,7 @@ return [
     'dash.system'           => 'Sistema',
 
     // ── Season/Episode Modal ──────────────────────────────────────
-    'modal.queue_all'       => '⏳ Aggiungi tutto',
+    'modal.queue_all' => 'Aggiungi tutto',
     'modal.season'          => 'Stagione',
     'modal.no_episodes'     => 'Nessun episodio',
     'modal.loading'         => 'Caricamento…',
@@ -479,4 +479,7 @@ return [
     'fav.server_unavailable' => 'Server disabilitato o rimosso',
     'cfg.app_title' => 'Titolo app',
     'cfg.app_title_label' => 'Nome visualizzato dell\'app',
+    'btn.mark_downloaded' => 'Segna come scaricato',
+    'btn.mark_all_downloaded' => 'Segna tutto',
+    'btn.clear_log' => 'Svuota log',
 ];

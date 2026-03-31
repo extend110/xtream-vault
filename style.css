@@ -224,6 +224,7 @@ body::before {
 .card {
   background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
   overflow: hidden; transition: transform .2s, border-color .2s, box-shadow .2s; position: relative;
+  display: flex; flex-direction: column;
 }
 .card:hover { transform: translateY(-3px); border-color: rgba(232,255,71,.3); box-shadow: 0 8px 32px rgba(0,0,0,.4); }
 .card.downloaded { border-color: rgba(71,212,255,.2); }
@@ -248,7 +249,7 @@ body::before {
 .badge-done  { background: var(--accent2); color: #000; }
 .badge-queue { background: var(--orange);  color: #000; }
 .badge-seen  { background: rgba(255,255,255,.15); color: var(--text); font-size: .55rem; }
-.card-body { padding: 12px; }
+.card-body { padding: 12px; flex: 1; }
 .card-title { font-size: .82rem; font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card-meta { font-family: 'DM Mono', monospace; font-size: .65rem; color: var(--muted); margin-top: 6px; letter-spacing: .05em; }
 .card-actions { display: flex; gap: 6px; padding: 0 12px 12px; }
@@ -295,6 +296,7 @@ body::before {
 .queue-item.status-pending { border-left: 3px solid var(--orange); }
 .queue-item.status-downloading { border-left: 3px solid var(--accent2); animation: pulse-border 1.5s ease-in-out infinite; }
 @keyframes pulse-border { 0%,100%{border-left-color:var(--accent2)} 50%{border-left-color:#ffffff44} }
+@keyframes pulse-border-full { 0%,100%{border-color:var(--accent)} 50%{border-color:rgba(255,255,255,.15)} }
 .qi-progress { margin-top: 6px; }
 .qi-progress-bar-wrap { height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-top: 3px; }
 .qi-progress-bar { height: 100%; background: var(--accent2); border-radius: 2px; transition: width .5s; }

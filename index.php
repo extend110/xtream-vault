@@ -648,6 +648,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div id="view-log" style="display:none">      <div class="queue-toolbar">
         <div class="queue-toolbar-title">Cron Log</div>
         <button class="btn-sm" onclick="loadLog()"><?= t('btn.refresh') ?></button>
+        <?php if ($can_settings): ?>
+        <button class="btn-sm danger" onclick="clearCronLog()"><?= t('btn.clear_log') ?></button>
+        <?php endif; ?>
       </div>
       <div class="log-wrap" id="log-wrap">Lade Log…</div>
     </div>
@@ -1858,6 +1861,12 @@ function movieCard(m, showServer = false) {
             ? `<button class="btn-q add" onclick="addMovieToQueue(${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))">+ Queue</button>`
             : '';
 
+  // "Als heruntergeladen markieren"-Button (nur Admins, nur wenn nicht already done)
+  const markBtn = (<?= $can_settings ? 'true' : 'false' ?> && !m.downloaded && !isDownloading)
+    ? `<button class="btn-q add" style="font-size:.65rem;padding:4px 6px;opacity:.6" title="${t('btn.mark_downloaded')}"
+        onclick="event.stopPropagation();markDownloaded('${m.stream_id}','movie',${JSON.stringify(m.clean_title).replace(/"/g,'&quot;')},'${esc(m.stream_icon||'')}','${esc(m.category||m._category||'')}','${esc(m.container_extension||'mp4')}','${esc(m._server_id||'')}',this.closest('.card'))">✓</button>`
+    : '';
+
   // Multi-select checkbox (only in search view, only if can add to queue)
   const selectBox = (currentView === 'search' && canQueueAdd && !m.downloaded && !m.queued)
     ? `<div class="select-check" onclick="event.stopPropagation();toggleSelectItem('${m.stream_id}',${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))"></div>`
@@ -1890,7 +1899,7 @@ function movieCard(m, showServer = false) {
       <div class="card-meta">${metaParts.join(' · ')}</div>
       ${serverBadge}
     </div>
-    <div class="card-actions" onclick="event.stopPropagation()">${btn}</div>
+    <div class="card-actions" onclick="event.stopPropagation()">${btn}${markBtn}</div>
   </div>`;
 }
 
@@ -1977,7 +1986,10 @@ async function openSeriesModal(id, title, cover, category, serverId) {
     const queueAllBtn = canQueueAdd && pendingCount > 0
       ? `<span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ ${t('modal.queue_all')}</span>`
       : '';
-    html += `<div class="season-header">${t('modal.season')} ${season} ${queueAllBtn}</div>`;
+    const markAllBtn = <?= $can_settings ? 'true' : 'false' ?>
+      ? `<span class="season-queue-all" style="color:var(--accent2);margin-left:4px" onclick="markAllSeasonDownloaded('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">✓ ${t('btn.mark_all_downloaded')}</span>`
+      : '';
+    html += `<div class="season-header">${t('modal.season')} ${season} ${queueAllBtn}${markAllBtn}</div>`;
 
     for (const ep of eps) {
       let epBtn = '';
@@ -1995,18 +2007,71 @@ async function openSeriesModal(id, title, cover, category, serverId) {
         // Admins/Viewer sehen Einzel-Buttons; Editoren nur den Staffel-Button
         epBtn = `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`;
       }
+      // "Als heruntergeladen markieren" — nur Admins, nur wenn nicht already done/downloading
+      const markEpBtn = (<?= $can_settings ? 'true' : 'false' ?> && !ep.downloaded && !_downloadingIds.has(String(ep.id)))
+        ? `<button class="ep-btn done" style="opacity:.5;margin-left:2px" title="${t('btn.mark_downloaded')}"
+            onclick="markEpisodeDownloaded('${ep.id}','${esc(ep.clean_title||ep.title)}','${esc(category||'')}','${esc(ep.container_extension||'mp4')}','${esc(serverId||'')}',this)">✓</button>`
+        : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
         <span class="ep-num">E${ep.episode_num??'?'}</span>
         <span class="ep-title">${ep.clean_title||ep.title}</span>
         <span class="ep-ext">${(ep.container_extension??'').toUpperCase()}</span>
-        ${epBtn}
+        ${epBtn}${markEpBtn}
       </div>`;
     }
   }
   document.getElementById('modal-body').innerHTML = html;
 }
 function closeModal() { document.getElementById('series-modal').classList.remove('open'); }
+
+async function markEpisodeDownloaded(epId, epTitle, category, ext, serverId, btn) {
+  const d = await apiPost('mark_downloaded', {
+    stream_id: epId, type: 'episode',
+    title: epTitle, cover: '', category, ext: ext || 'mp4', server_id: serverId || '',
+  });
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  _downloadedIds.add(String(epId));
+  // Button auf ✓ setzen und deaktivieren
+  const row = document.getElementById('ep-' + epId);
+  if (row) {
+    const btns = row.querySelectorAll('.ep-btn');
+    btns.forEach(b => b.remove());
+    const doneBtn = document.createElement('button');
+    doneBtn.className = 'ep-btn done'; doneBtn.disabled = true; doneBtn.textContent = '✓';
+    row.appendChild(doneBtn);
+  }
+  showToast(`✓ ${epTitle} ${t('btn.mark_downloaded').toLowerCase()}`, 'success');
+}
+
+async function markAllSeasonDownloaded(epIdsCsv, season, seriesTitle, category, serverId) {
+  const eps = (epIdsCsv || '').split(',').map(id => window._epMap?.[id]).filter(Boolean);
+  const pending = eps.filter(ep => !ep.downloaded && !_downloadingIds.has(String(ep.id)));
+  if (!pending.length) { showToast('Keine ausstehenden Episoden', 'info'); return; }
+  if (!confirm(`${pending.length} Episoden von Staffel ${season} als heruntergeladen markieren?`)) return;
+  let count = 0;
+  for (const ep of pending) {
+    const d = await apiPost('mark_downloaded', {
+      stream_id: ep.id, type: 'episode',
+      title: ep.clean_title || ep.title, cover: '', category: seriesTitle,
+      ext: ep.container_extension || 'mp4', server_id: serverId || '',
+    });
+    if (d.ok) {
+      count++;
+      _downloadedIds.add(String(ep.id));
+      const row = document.getElementById('ep-' + ep.id);
+      if (row) {
+        const btns = row.querySelectorAll('.ep-btn');
+        btns.forEach(b => b.remove());
+        const doneBtn = document.createElement('button');
+        doneBtn.className = 'ep-btn done'; doneBtn.disabled = true; doneBtn.textContent = '✓';
+        row.appendChild(doneBtn);
+      }
+    }
+  }
+  showToast(`✓ ${count} Episode(n) als heruntergeladen markiert`, 'success');
+  loadStats();
+}
 
 async function queueEpisodeById(epId, season, seriesTitle, category, serverId, btn) {
   const ep = window._epMap?.[epId];
@@ -2657,6 +2722,44 @@ async function resetDownload(sid, type, rowEl) {
   refreshQueue(); updateQueueBadge(); loadStats();
 }
 
+async function markDownloaded(sid, type, title, cover, category, ext, serverId, cardEl) {
+  if (!confirm(`"${title}" als bereits heruntergeladen markieren?\n\nDas Item erscheint dann als ✓ Done.`)) return;
+  const d = await apiPost('mark_downloaded', {
+    stream_id: sid, type, title, cover, category: category || '',
+    ext: ext || 'mp4', server_id: serverId || '',
+  });
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  showToast(`✓ "${title}" als heruntergeladen markiert`, 'success');
+  _downloadedIds.add(String(sid));
+  _queuedIds.delete(String(sid));
+
+  // Karte aktualisieren
+  const card = cardEl || document.getElementById('card-m-' + sid);
+  if (card) {
+    card.classList.add('downloaded');
+    card.classList.remove('queued');
+    const badge = card.querySelector('.card-badge');
+    if (badge) { badge.className = 'card-badge badge-done'; badge.textContent = '✓ Done'; }
+    const btn = card.querySelector('.btn-q');
+    if (btn && canQueueRemove) {
+      btn.textContent = '↺ Reset';
+      btn.className   = 'btn-q done';
+      btn.disabled    = false;
+      btn.onclick     = () => resetDownload(sid, type, null);
+    }
+  }
+  // _lastMovies aktualisieren
+  const idx = _lastMovies.findIndex(x => String(x.stream_id) === String(sid));
+  if (idx >= 0) _lastMovies[idx].downloaded = true;
+  const idx2 = allMovies.findIndex(x => String(x.stream_id) === String(sid));
+  if (idx2 >= 0) allMovies[idx2].downloaded = true;
+
+  loadStats(); updateQueueBadge();
+  // TMDB-Modal schließen falls offen
+  const tmdbModal = document.getElementById('tmdb-modal');
+  if (tmdbModal?.style.display !== 'none') closeTmdbModal();
+}
+
 async function retryQueueItem(sid) {
   const r = await fetch(`${API}?action=queue_retry`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -2702,6 +2805,14 @@ async function loadLog(autoRefresh = false) {
     return l;
   }).join('\n');
   if (atBottom || !autoRefresh) wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function clearCronLog() {
+  if (!confirm('Cron Log wirklich leeren?')) return;
+  const d = await apiPost('clear_cron_log', {});
+  if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
+  document.getElementById('log-wrap').textContent = 'Log geleert.';
+  showToast('✓ Log geleert', 'success');
 }
 
 function startLogPolling() {
@@ -3083,29 +3194,49 @@ async function saveEditServer() {
   loadServers();
 }
 
-function showServerInfo(s) {
+async function showServerInfo(s) {
   const cacheAge = s.cache_age_min != null
     ? (s.cache_age_min < 60 ? `${s.cache_age_min} Min.` : `${Math.floor(s.cache_age_min/60)}h ${s.cache_age_min%60}m`)
     : '–';
-  const rows = [
-    ['🌐 Host',         `${s.server_ip}:${s.port}`],
-    ['👤 User',         s.username],
-    ['🎬 Filme',        s.movie_count != null ? s.movie_count.toLocaleString() : '–'],
-    ['📺 Serien',       s.series_count != null ? s.series_count.toLocaleString() : '–'],
-    ['🗂 Cache',        s.has_cache ? `✓ vor ${cacheAge}` : '⚠ Kein Cache'],
-    ['⏳ Pending',      s.queue?.pending ?? 0],
-    ['⬇ Lädt',         s.queue?.downloading ?? 0],
-    ['❌ Fehler',       s.queue?.error ?? 0],
-  ];
-  const body = rows.map(([k,v]) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-      <span style="color:var(--muted);font-size:.78rem">${k}</span>
-      <span style="font-family:'DM Mono',monospace;font-size:.78rem">${v}</span>
-    </div>`).join('');
+
+  // Modal sofort mit lokalen Daten öffnen
   const modal = document.getElementById('srv-info-modal');
   document.getElementById('srv-info-title').textContent = s.name;
-  document.getElementById('srv-info-body').innerHTML = body;
+  document.getElementById('srv-info-body').innerHTML = `
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">🌐 Host</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${esc(s.server_ip)}:${esc(s.port)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">👤 User</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${esc(s.username)}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">🎬 Filme</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.movie_count != null ? s.movie_count.toLocaleString() : '–'}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">📺 Serien</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.series_count != null ? s.series_count.toLocaleString() : '–'}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">🗂 Cache</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.has_cache ? `✓ vor ${cacheAge}` : '⚠ Kein Cache'}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">⏳ Pending</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.queue?.pending ?? 0}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)"><span style="color:var(--muted);font-size:.78rem">⬇ Lädt</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.queue?.downloading ?? 0}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="color:var(--muted);font-size:.78rem">❌ Fehler</span><span style="font-family:'DM Mono',monospace;font-size:.78rem">${s.queue?.error ?? 0}</span></div>
+    <div id="srv-xinfo" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="color:var(--muted);font-size:.72rem;font-family:'DM Mono',monospace">⏳ Xtream-Serverdaten werden geladen…</div>
+    </div>`;
   modal.style.display = 'flex';
+
+  // Live-Daten vom Xtream-Server nachladen
+  const xi = await apiPost('get_server_xinfo', {server_id: s.id});
+  const xEl = document.getElementById('srv-xinfo');
+  if (!xEl) return;
+  if (xi.error) {
+    xEl.innerHTML = `<div style="color:var(--red);font-size:.72rem;font-family:'DM Mono',monospace">⚠ ${esc(xi.error)}</div>`;
+    return;
+  }
+  const xRows = [
+    ['📋 Status',       xi.status],
+    ['📅 Läuft bis',    xi.exp_date],
+    ['🔗 Verbindungen', `${xi.active_cons} / ${xi.max_connections}`],
+    ['🧪 Trial',        xi.is_trial ? 'Ja' : 'Nein'],
+    ['🕐 Zeitzone',     xi.timezone],
+    ['🖥 Version',      xi.server_version],
+  ];
+  xEl.innerHTML = xRows.map(([k, v]) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="color:var(--muted);font-size:.78rem">${k}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:.78rem">${esc(String(v ?? '–'))}</span>
+    </div>`).join('');
 }
 function closeSrvInfoModal() {
   document.getElementById('srv-info-modal').style.display = 'none';
@@ -3708,6 +3839,18 @@ async function openTmdbModal(title, type, year, queueData) {
       const qd = JSON.stringify(queueData).replace(/"/g,'&quot;');
       actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();addMovieToQueue(${qd},null)">+ Queue</button>`;
     }
+    // "Als heruntergeladen markieren" — nur Admins, nur wenn nicht already done
+    <?php if ($can_settings): ?>
+    if (!_downloadedIds.has(sid) && type !== 'series') {
+      const qt = esc(queueData.clean_title || queueData.title || '');
+      const qc = esc(queueData.cover || '');
+      const qcat = esc(queueData.category || '');
+      const qext = esc(queueData.container_extension || 'mp4');
+      const qsrv = esc(queueData._server_id || '');
+      actionHtml += ` <button class="btn-secondary" style="opacity:.7;font-size:.78rem"
+        onclick="markDownloaded('${sid}','movie','${qt}','${qc}','${qcat}','${qext}','${qsrv}',null)">✓ ${t('btn.mark_downloaded')}</button>`;
+    }
+    <?php endif; ?>
     document.getElementById('tmdb-actions').innerHTML = actionHtml;
   }
 
@@ -4002,16 +4145,21 @@ async function loadDashboardData() {
   if (srvEl) {
     if (d.servers?.length) {
       srvEl.style.display = 'flex';
-      srvEl.innerHTML = d.servers.map(s => `
+      srvEl.innerHTML = d.servers.map(s => {
+        const isDownloading = (s.queue?.downloading ?? 0) > 0;
+        const borderColor   = isDownloading ? 'var(--accent)' : 'var(--border)';
+        const pulse         = isDownloading ? 'animation:pulse-border-full 1.5s ease-in-out infinite' : '';
+        return `
         <div onclick="showServerInfo(${JSON.stringify(s).replace(/"/g,'&quot;')})"
-          style="display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer;transition:border-color .15s"
-          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          style="display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:2px solid ${borderColor};border-radius:8px;padding:6px 12px;font-size:.78rem;cursor:pointer;transition:border-color .2s;${pulse}"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='${borderColor}'">
           <span style="color:${s.has_cache ? 'var(--green)' : 'var(--orange)'}">●</span>
           <span style="font-weight:500">${esc(s.name)}</span>
-          ${s.queue?.downloading > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent)">⬇ ${s.queue.downloading}</span>` : ''}
+          ${isDownloading ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--accent)">⬇ ${s.queue.downloading}</span>` : ''}
           ${s.queue?.pending > 0 ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--muted)">${s.queue.pending} pending</span>` : ''}
           ${!s.has_cache ? `<span style="font-family:'DM Mono',monospace;font-size:.55rem;color:var(--orange)">NO CACHE</span>` : ''}
-        </div>`).join('');
+        </div>`;
+      }).join('');
     } else {
       srvEl.style.display = 'none';
     }

@@ -880,6 +880,38 @@ switch ($action) {
         ]);
         break;
 
+    case 'get_server_xinfo':
+        require_permission('settings');
+        $srvId  = trim($_JSON_BODY['server_id'] ?? $_GET['server_id'] ?? '');
+        $allSrv = load_all_servers();
+        $srv    = null;
+        foreach ($allSrv as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+        if (!$srv) { echo json_encode(['error' => 'Server nicht gefunden']); break; }
+        $url = 'http://' . $srv['server_ip'] . ':' . $srv['port'] . '/player_api.php?' . http_build_query([
+            'username' => $srv['username'], 'password' => $srv['password'] ?? '',
+        ]);
+        $ctx = stream_context_create(['http' => ['timeout' => 8, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+        $raw = @file_get_contents($url, false, $ctx);
+        if ($raw === false) { echo json_encode(['error' => 'Server nicht erreichbar']); break; }
+        $data = json_decode($raw, true);
+        if (!is_array($data)) { echo json_encode(['error' => 'Ungültige Antwort']); break; }
+        $ui = $data['user_info'] ?? [];
+        $si = $data['server_info'] ?? [];
+        echo json_encode([
+            'ok'              => true,
+            'status'          => $ui['status']            ?? '–',
+            'exp_date'        => isset($ui['exp_date']) && $ui['exp_date']
+                                    ? date('d.m.Y', (int)$ui['exp_date'])
+                                    : ($ui['exp_date'] === null ? 'Unbegrenzt' : '–'),
+            'max_connections' => $ui['max_connections']   ?? '–',
+            'active_cons'     => $ui['active_cons']       ?? '–',
+            'is_trial'        => (bool)($ui['is_trial']   ?? false),
+            'timezone'        => $si['timezone']          ?? '–',
+            'server_url'      => ($si['url']  ?? '') . ':' . ($si['port'] ?? ''),
+            'server_version'  => $si['version']           ?? '–',
+        ]);
+        break;
+
     case 'test_server':
         require_permission('settings');
         $srvId = trim($_JSON_BODY['server_id'] ?? '');
@@ -1338,6 +1370,8 @@ switch ($action) {
         require_permission('settings');
         $result = vpn_up();
         if ($result !== true) { echo json_encode(['error' => $result]); break; }
+        // Manuell verbunden — Flag setzen damit cron VPN nicht automatisch trennt
+        @file_put_contents(DATA_DIR . '/vpn_manual.flag', (string)time());
         log_activity($current_user['id'], $current_user['username'], 'vpn_connect', ['interface' => VPN_INTERFACE]);
         echo json_encode(['ok' => true, 'up' => true]);
         break;
@@ -1346,6 +1380,8 @@ switch ($action) {
         require_permission('settings');
         $result = vpn_down();
         if ($result !== true) { echo json_encode(['error' => $result]); break; }
+        // Manuelle Flag entfernen
+        @unlink(DATA_DIR . '/vpn_manual.flag');
         log_activity($current_user['id'], $current_user['username'], 'vpn_disconnect', ['interface' => VPN_INTERFACE]);
         echo json_encode(['ok' => true, 'up' => false]);
         break;
@@ -2041,6 +2077,72 @@ switch ($action) {
         echo json_encode(['ok' => true, 'count' => count($queue)]);
         break;
 
+    case 'mark_downloaded':
+        require_permission('settings');
+        $d       = json_decode($_RAW_BODY, true) ?? [];
+        $sid     = (string)($d['stream_id'] ?? '');
+        $type    = $d['type']     ?? 'movie';
+        $title   = trim($d['title']    ?? '');
+        $cover   = trim($d['cover']    ?? '');
+        $category= trim($d['category'] ?? '');
+        $ext     = trim($d['ext']      ?? 'mp4');
+        $srvId   = trim($d['server_id'] ?? '');
+        if ($sid === '') { http_response_code(400); echo json_encode(['error' => 'Missing stream_id']); break; }
+
+        $dbKey = $type === 'episode' ? 'episodes' : 'movies';
+
+        // Server-ID auflösen — Fallback auf ersten aktiven Server
+        if ($srvId === '') {
+            $servers = load_all_servers();
+            $srvId   = $servers[0]['id'] ?? SERVER_ID;
+        }
+
+        // In downloaded_{server_id}.json eintragen
+        $db = load_db($srvId);
+        if (!in_array($sid, $db[$dbKey] ?? [])) {
+            $db[$dbKey][] = $sid;
+            save_db($db, $srvId);
+        }
+
+        // In downloaded_index_{server_id}.json eintragen
+        $indexFile = DATA_DIR . '/downloaded_index_' . $srvId . '.json';
+        $index = file_exists($indexFile) ? (json_decode(@file_get_contents($indexFile), true) ?? []) : [];
+        $index[$sid] = [
+            'id'       => $sid,
+            'title'    => $title,
+            'cover'    => $cover,
+            'category' => $category,
+            'ext'      => $ext,
+            'type'     => $type,
+        ];
+        file_put_contents($indexFile, json_encode($index, JSON_UNESCAPED_UNICODE));
+
+        // In download_history_{server_id}.json eintragen
+        $histFile = DATA_DIR . '/download_history_' . $srvId . '.json';
+        $history  = file_exists($histFile) ? (json_decode(@file_get_contents($histFile), true) ?? []) : [];
+        array_unshift($history, [
+            'stream_id' => $sid,
+            'title'     => $title,
+            'type'      => $type,
+            'cover'     => $cover,
+            'category'  => $category,
+            'added_by'  => $current_user['username'],
+            'done_at'   => date('Y-m-d H:i:s'),
+            'bytes'     => 0,
+            'manual'    => true,
+        ]);
+        if (count($history) > 2000) $history = array_slice($history, 0, 2000);
+        file_put_contents($histFile, json_encode($history, JSON_UNESCAPED_UNICODE));
+
+        // Aus Queue entfernen falls vorhanden
+        $queue = load_queue();
+        $queue = array_values(array_filter($queue, fn($qi) => (string)$qi['stream_id'] !== $sid));
+        save_queue($queue);
+
+        log_activity($current_user['id'], $current_user['username'], 'mark_downloaded', ['stream_id' => $sid, 'type' => $type, 'title' => sanitize($title)]);
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'reset_download':
         // Entfernt ein Item aus downloaded.json und downloaded_index.json
         // damit es erneut zur Queue hinzugefügt werden kann
@@ -2128,6 +2230,12 @@ switch ($action) {
         if (!file_exists(CRON_LOG)) { echo json_encode(['lines' => []]); break; }
         $lines = file(CRON_LOG, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         echo json_encode(['lines' => array_slice($lines, -150)]);
+        break;
+
+    case 'clear_cron_log':
+        require_permission('settings');
+        file_put_contents(CRON_LOG, '');
+        echo json_encode(['ok' => true]);
         break;
 
     case 'php_error_log':
