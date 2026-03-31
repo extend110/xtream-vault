@@ -482,4 +482,5 @@ return [
     'btn.mark_downloaded' => 'Segna come scaricato',
     'btn.mark_all_downloaded' => 'Segna tutto',
     'btn.clear_log' => 'Svuota log',
+    'stats.by_server' => 'Download per server',
 ];

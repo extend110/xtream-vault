@@ -2152,17 +2152,19 @@ switch ($action) {
         $type = $d['type'] ?? 'movie'; // 'movie' oder 'episode'
         if ($sid === '') { http_response_code(400); echo json_encode(['error' => 'Missing stream_id']); break; }
 
-        // Aus allen server-spezifischen downloaded_*.json entfernen
+        // Aus allen server-spezifischen downloaded_*.json entfernen (inkl. deaktivierte Server)
         $dbKey   = $type === 'movie' ? 'movies' : 'episodes';
-        $before  = 0;
         $removed = 0;
-        foreach (load_all_servers() as $srv) {
-            $db = load_db($srv['id']);
-            $before += count($db[$dbKey]);
-            $db[$dbKey] = array_values(array_filter($db[$dbKey], fn($id) => (string)$id !== $sid));
-            $removed += $before - count($db[$dbKey]);
-            save_db($db, $srv['id']);
-            $before = 0;
+        foreach (glob(DATA_DIR . '/downloaded_*.json') ?: [] as $dbFile) {
+            // downloaded_index_*.json überspringen
+            if (str_contains(basename($dbFile), 'index')) continue;
+            $db = json_decode(@file_get_contents($dbFile), true) ?? ['movies'=>[],'episodes'=>[]];
+            $before = count($db[$dbKey] ?? []);
+            $db[$dbKey] = array_values(array_filter($db[$dbKey] ?? [], fn($id) => (string)$id !== $sid));
+            if (count($db[$dbKey]) < $before) {
+                file_put_contents($dbFile, json_encode($db, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                $removed++;
+            }
         }
         // Fallback: alte DOWNLOAD_DB
         if (file_exists(DOWNLOAD_DB)) {
@@ -2594,6 +2596,28 @@ switch ($action) {
         $currentMonth = date('Y-m');
         $thisMonth = $byMonth[$currentMonth] ?? ['count' => 0, 'bytes' => 0];
 
+        // ── Statistiken pro Server ────────────────────────────────────────────
+        $allServersAll = file_exists(SERVERS_FILE)
+            ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
+            : [];
+        $serverNames = array_column($allServersAll, 'name', 'id');
+        $byServer = [];
+        foreach (glob(DATA_DIR . '/download_history_*.json') ?: [] as $hFile) {
+            preg_match('/download_history_(.+)\.json$/', basename($hFile), $m);
+            $srvId   = $m[1] ?? 'unknown';
+            $srvName = $serverNames[$srvId] ?? $srvId;
+            $entries = json_decode(@file_get_contents($hFile), true) ?? [];
+            $byServer[$srvId] = [
+                'name'     => $srvName,
+                'count'    => count($entries),
+                'bytes'    => array_sum(array_column($entries, 'bytes')),
+                'movies'   => count(array_filter($entries, fn($e) => ($e['type'] ?? '') === 'movie')),
+                'episodes' => count(array_filter($entries, fn($e) => ($e['type'] ?? '') === 'episode')),
+                'enabled'  => isset($serverNames[$srvId]),
+            ];
+        }
+        uasort($byServer, fn($a, $b) => $b['count'] - $a['count']);
+
         echo json_encode([
             'by_month'       => $months,
             'by_weekday'     => $byWeekday,
@@ -2604,6 +2628,7 @@ switch ($action) {
             'total_movies'   => $totalMovies,
             'total_episodes' => $totalEpisodes,
             'this_month'     => $thisMonth,
+            'by_server'      => array_values($byServer),
         ]);
         break;
 

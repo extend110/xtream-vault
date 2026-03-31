@@ -22,6 +22,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__.'/style.css') ?>">
@@ -34,7 +35,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    <div class="logo-text"><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
+    <div class="logo-text"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:22px;height:18px;vertical-align:middle;margin-right:8px;color:var(--accent)" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
     <div class="logo-sub">VOD Downloader</div>
   </div>
   <div class="sidebar-stats">
@@ -519,6 +520,12 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <div class="settings-card">
         <h3>🏷️ Top Kategorien</h3>
         <div id="stats-top-cats" style="font-size:.82rem"></div>
+      </div>
+
+      <!-- Statistiken pro Server -->
+      <div class="settings-card" style="margin-top:16px">
+        <h3>🌐 <?= t('stats.by_server') ?></h3>
+        <div id="stats-by-server" style="font-size:.82rem"></div>
       </div>
     </div>
     <?php endif; ?>
@@ -4396,6 +4403,36 @@ async function loadStatsView() {
           }).join('')}
         </div>`;
     }
+  }
+
+  // ── Statistiken pro Server ────────────────────────────────────
+  const srvStatsEl = document.getElementById('stats-by-server');
+  if (srvStatsEl && d.by_server?.length) {
+    const maxSrv = d.by_server[0]?.count ?? 1;
+    srvStatsEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:0;font-family:'DM Mono',monospace;font-size:.72rem">
+        <div style="color:var(--muted);padding:6px 0;border-bottom:1px solid var(--border)">${t('cfg.server')}</div>
+        <div style="color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">${t('stats.downloads')}</div>
+        <div style="color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--border);text-align:right">🎬 / 📺</div>
+        <div style="color:var(--muted);padding:6px 0 6px 8px;border-bottom:1px solid var(--border);text-align:right">${t('stats.volume_col')}</div>
+        ${d.by_server.map(s => {
+          const pct = Math.round((s.count / maxSrv) * 100);
+          const nameColor = s.enabled ? 'var(--text)' : 'var(--muted)';
+          const nameLabel = s.enabled ? esc(s.name) : `${esc(s.name)} <span style="opacity:.5">(inaktiv)</span>`;
+          return `
+          <div style="padding:7px 0;border-bottom:1px solid var(--border);overflow:hidden">
+            <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${nameColor}">${nameLabel}</div>
+            <div style="height:2px;background:var(--bg3);border-radius:1px;margin-top:3px;overflow:hidden">
+              <div style="height:100%;width:${pct}%;background:var(--accent);border-radius:1px"></div>
+            </div>
+          </div>
+          <div style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--text)">${s.count}</div>
+          <div style="padding:7px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--muted)">${s.movies} / ${s.episodes}</div>
+          <div style="padding:7px 0 7px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--muted)">${fmtBytes(s.bytes)}</div>`;
+        }).join('')}
+      </div>`;
+  } else if (srvStatsEl) {
+    srvStatsEl.innerHTML = `<div style="color:var(--muted)">${t('stats.no_data')}</div>`;
   }
 }
 <?php endif; ?>

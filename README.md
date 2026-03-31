@@ -9,7 +9,7 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 **Mediathek & Suche**
 - Filme und Serien nach Kategorie browsen — Grid- und Listenansicht
 - Suche über alle konfigurierten Server gleichzeitig
-- Suchverlauf als klickbare Vorschläge
+- Suchverlauf als klickbare Vorschläge (löschbar)
 - TMDB-Integration — Cover, Beschreibung, Bewertung, Erscheinungsjahr
 - Sortierung nach Name (A–Z), Bewertung oder neuesten Einträgen
 - Neue Releases — Überblick über Filme die seit dem letzten Cache-Run hinzugekommen sind
@@ -23,8 +23,9 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 - Fortschrittsanzeige direkt im Queue-Item (Bytes, Geschwindigkeit, ETA)
 - Dubletten-Erkennung — verhindert doppelte Downloads anhand von Titel-Ähnlichkeit
 - Automatisches Naming — `Movies/[CC]/Kategorie/Titel.Jahr.mkv` und `TV Shows/[CC]/Serie/Staffel N/`
+- Filme und Episoden manuell als heruntergeladen markieren
 - Cloud-Speicher — Downloads direkt nach Google Drive, OneDrive, MEGA u.v.m. streamen (via rclone)
-- VPN-Unterstützung — Downloads optional über WireGuard leiten
+- VPN-Unterstützung — Downloads optional über WireGuard leiten (manuell oder automatisch)
 
 **Multi-Server**
 - Beliebig viele Xtream-Server gleichzeitig aktiv
@@ -32,13 +33,14 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 - Cache, Queue und Download-Verlauf sind pro Server getrennt gespeichert
 - Parallele oder sequenzielle Download-Strategie konfigurierbar
 - Server können einzeln oder alle gleichzeitig auf Erreichbarkeit getestet werden
-- Dashboard-Kacheln mit Klick-Info zu jedem Server (Cache-Alter, Queue-Status, Zugangsdaten)
+- Dashboard-Kacheln mit Live-Infos vom Xtream-Server (Ablaufdatum, Verbindungen, Status)
 
 **Benutzerverwaltung**
 - Mehrere Benutzer mit Rollen (Admin, Editor, Viewer)
+- Editoren können nur ganze Staffeln queuen, keine Einzelepisoden
+- Rate-Limiting pro Benutzer und Stunde — bei Serien wird pro Serie gezählt, nicht pro Episode
 - Einladungslinks mit konfigurierbarer Gültigkeit und Rolle
 - Aktivitätslog — wer hat wann was zur Queue hinzugefügt
-- Rate-Limiting pro Benutzer und Stunde
 - Wartungsmodus — sperrt alle Nicht-Admins aus
 - Externe Benutzerverwaltung via REST-API mit IP-Whitelist
 
@@ -46,10 +48,16 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 - Telegram-Bot-Integration
 - Konfigurierbar pro Ereignis: Download abgeschlossen, Fehler, Queue-Run fertig, Speicherplatz niedrig
 
+**Statistiken**
+- Downloads pro Monat (Anzahl + Datenvolumen)
+- Verteilung nach Wochentag
+- Top-User und Top-Kategorien
+- Downloads pro Server (inkl. deaktivierter Server)
+
 **UI & Sonstiges**
 - 7 Themes — Dark, AMOLED, Midnight, Nord, Tokyo Night, Rosé Pine, Light
 - 5 Sprachen — Deutsch, Englisch, Französisch, Spanisch, Italienisch (pro Benutzer wählbar)
-- Theme wird auch auf der Login-Seite angezeigt
+- App-Titel frei konfigurierbar
 - Listenansicht und Grid-Ansicht
 - In-App-Updates mit automatischem Backup
 - API-Keys für externe Benutzerverwaltung
@@ -58,11 +66,11 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 
 ## Rollen
 
-| Rolle | Browsen | Queue hinzufügen | Queue verwalten | Einstellungen |
-|---|:---:|:---:|:---:|:---:|
-| **Admin** | ✓ | ✓ | ✓ | ✓ |
-| **Editor** | ✓ | ✓ | — | — |
-| **Viewer** | ✓ | — | — | — |
+| Rolle | Browsen | Queue hinzufügen | Episoden einzeln | Queue verwalten | Einstellungen |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Admin** | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Editor** | ✓ | ✓ (nur Staffeln) | — | — | — |
+| **Viewer** | ✓ | — | — | — | — |
 
 ---
 
@@ -113,6 +121,12 @@ Wenn mehrere Server konfiguriert sind, kann `cron.php` pro Server einen eigenen 
 Einstellbar unter Einstellungen → Parallele Downloads:
 - **Aktivieren/Deaktivieren** — bei Deaktivierung laufen alle Server nacheinander
 - **Maximale parallele Downloads** — wie viele Server gleichzeitig starten dürfen (1–10)
+
+---
+
+## VPN
+
+Wenn VPN für Downloads aktiviert ist, verbindet der Cron-Worker WireGuard automatisch vor dem ersten Download und trennt die Verbindung danach. Wird VPN manuell über die Einstellungen verbunden, bleibt die Verbindung nach Downloads erhalten.
 
 ---
 

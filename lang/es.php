@@ -482,4 +482,5 @@ return [
     'btn.mark_downloaded' => 'Marcar como descargado',
     'btn.mark_all_downloaded' => 'Marcar todo',
     'btn.clear_log' => 'Limpiar log',
+    'stats.by_server' => 'Descargas por servidor',
 ];

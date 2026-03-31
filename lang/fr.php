@@ -482,4 +482,5 @@ return [
     'btn.mark_downloaded' => 'Marquer comme téléchargé',
     'btn.mark_all_downloaded' => 'Tout marquer',
     'btn.clear_log' => 'Vider le journal',
+    'stats.by_server' => 'Téléchargements par serveur',
 ];

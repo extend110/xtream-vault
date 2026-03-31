@@ -506,4 +506,5 @@ return [
     'btn.mark_downloaded' => 'Als heruntergeladen markieren',
     'btn.mark_all_downloaded' => 'Alle markieren',
     'btn.clear_log' => 'Log leeren',
+    'stats.by_server' => 'Downloads pro Server',
 ];
