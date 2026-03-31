@@ -127,7 +127,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <?php endif; ?>
 
       <?php if ($can_settings): ?>
-      <span id="vpn-badge" class="topbar-chip" title="VPN-Status — klicken für Einstellungen" onclick="showView('settings')" style="display:none"></span>
+      <span id="vpn-badge" class="topbar-chip" title="VPN-Status — klicken zum Verbinden/Trennen" onclick="vpnBadgeToggle()" style="display:none"></span>
       <span id="update-badge" class="topbar-chip" onclick="showView('settings')" title="Update verfügbar"
         style="display:none;color:var(--orange);border-color:rgba(255,159,67,.3);background:rgba(255,159,67,.06)">⬆ Update</span>
       <?php endif; ?>
@@ -884,10 +884,6 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             <?= t('cfg.vpn_desc') ?>
           </div>
-          <label class="settings-toggle" style="margin-bottom:14px">
-            <input type="checkbox" id="cfg-vpn-enabled">
-            <span><?= t('cfg.vpn_enable') ?></span>
-          </label>
           <div class="field">
             <label><?= t('cfg.vpn_iface_label') ?></label>
             <input type="text" id="cfg-vpn-interface" placeholder="wg0" style="max-width:160px">
@@ -1240,6 +1236,19 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   </div>
 </div>
 
+<!-- VPN Disconnect Confirm Modal -->
+<div class="modal-overlay" id="vpn-confirm-modal" style="display:none;z-index:1060" onclick="if(event.target===this)vpnConfirmCancel()">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:380px;width:90%;text-align:center">
+    <div style="font-size:2rem;margin-bottom:12px">🔓</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.06em;margin-bottom:10px">VPN trennen?</div>
+    <div style="font-size:.84rem;color:var(--muted);line-height:1.6;margin-bottom:24px">Die VPN-Verbindung wird getrennt. Laufende Downloads werden abgebrochen falls sie über den VPN-Tunnel laufen.</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn-secondary" onclick="vpnConfirmCancel()">Abbrechen</button>
+      <button class="btn-primary danger" onclick="vpnConfirmOk()" style="background:var(--red);color:#fff;border-color:var(--red)">Trennen</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="series-modal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <div class="modal-header">
@@ -1501,7 +1510,7 @@ setTimeout(async () => {
   <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?>
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
   initTheme();
-  <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
+  <?php if ($can_settings): ?>startVpnPolling();<?php endif; ?>
   <?php if ($can_queue_view && $can_settings): ?>startProgressPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
   api('get_new_releases').then(d => {
@@ -3074,7 +3083,7 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = t('nav.dashboard'); <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); <?php if ($can_settings): ?>startProgressPolling();<?php endif; ?> }
   if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); <?php if (VPN_ENABLED): ?>checkVpnStatus();<?php endif; ?><?php endif; ?> }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); checkVpnStatus();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = t('nav.activity_log'); loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = t('profile.title'); document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
@@ -3415,9 +3424,7 @@ async function loadConfig() {
   const diskGbEl = document.getElementById('cfg-tg-disk-low-gb');
   if (diskGbEl) diskGbEl.value = c.tg_disk_low_gb ?? 10;
   toggleDiskLowField(c.tg_notify_disk_low ?? false);
-  const vpnEnabled = document.getElementById('cfg-vpn-enabled');
   const vpnIface   = document.getElementById('cfg-vpn-interface');
-  if (vpnEnabled) vpnEnabled.checked  = c.vpn_enabled    ?? false;
   if (vpnIface)   vpnIface.value      = c.vpn_interface  ?? 'wg0';
   // Parallel Downloads
   const parallelEnabled = c.parallel_enabled ?? true;
@@ -3510,7 +3517,6 @@ function collectConfig() {
     tg_notify_new_releases: document.getElementById('cfg-tg-notify-new-releases')?.checked ?? false,
     tg_notify_disk_low:    document.getElementById('cfg-tg-notify-disk-low')?.checked  ?? false,
     tg_disk_low_gb:        parseFloat(document.getElementById('cfg-tg-disk-low-gb')?.value ?? '10'),
-    vpn_enabled:           document.getElementById('cfg-vpn-enabled')?.checked  ?? false,
     vpn_interface:         document.getElementById('cfg-vpn-interface')?.value.trim() ?? 'wg0',
     parallel_enabled:      document.getElementById('cfg-parallel-enabled')?.checked ?? true,
     parallel_max:          parseInt(document.getElementById('cfg-parallel-max')?.value ?? '4') || 4,
@@ -3661,26 +3667,26 @@ function updateVpnBadge(status) {
 
   if (!badge) return;
   if (!status) { badge.style.display = 'none'; if (statsCard) statsCard.style.display = 'none'; return; }
-  badge.style.display = '';
+
   badge.classList.remove('vpn-on');
   badge.style.removeProperty('background');
   badge.style.removeProperty('color');
   badge.style.removeProperty('border-color');
 
   if (!status.wg_installed) {
-    badge.textContent = '⚠️ VPN';
-    badge.style.color       = 'var(--red)';
-    badge.style.borderColor = 'rgba(255,71,87,.3)';
-    badge.style.background  = 'rgba(255,71,87,.08)';
-    badge.title = t('cfg.vpn_not_installed');
+    // WireGuard nicht installiert — Badge ausblenden
+    badge.style.display = 'none';
     if (statsCard) statsCard.style.display = 'none';
     return;
   }
 
+  // Badge immer anzeigen wenn wg installiert
+  badge.style.display = '';
+
   if (status.up) {
     badge.textContent = '🔒 VPN';
     badge.classList.add('vpn-on');
-    badge.title = `VPN aktiv (${status.interface})${status.public_ip ? ' · ' + status.public_ip : ''}`;
+    badge.title = `VPN aktiv — klicken zum Trennen${status.public_ip ? ' · ' + status.public_ip : ''}`;
 
     // Stats-Card befüllen und anzeigen
     if (statsCard) {
@@ -3698,8 +3704,6 @@ function updateVpnBadge(status) {
         const updateDur = () => sinceEl.textContent = fmtDurationVpn(_vpnConnectedSince);
         updateDur();
         _vpnDurationTimer = setInterval(updateDur, 1000);
-      } else if (sinceEl) {
-        sinceEl.textContent = '–';
       }
     }
   } else {
@@ -3707,10 +3711,48 @@ function updateVpnBadge(status) {
     badge.style.color       = 'var(--orange)';
     badge.style.borderColor = 'rgba(255,159,67,.25)';
     badge.style.background  = 'rgba(255,159,67,.06)';
-    badge.title = `VPN inaktiv (${status.interface})`;
+    badge.title = `VPN inaktiv — klicken zum Verbinden (${status.interface})`;
     if (statsCard) statsCard.style.display = 'none';
     if (_vpnDurationTimer) { clearInterval(_vpnDurationTimer); _vpnDurationTimer = null; }
   }
+}
+
+let _vpnConfirmResolve = null;
+
+function vpnConfirmCancel() {
+  document.getElementById('vpn-confirm-modal').style.display = 'none';
+  if (_vpnConfirmResolve) { _vpnConfirmResolve(false); _vpnConfirmResolve = null; }
+}
+
+function vpnConfirmOk() {
+  document.getElementById('vpn-confirm-modal').style.display = 'none';
+  if (_vpnConfirmResolve) { _vpnConfirmResolve(true); _vpnConfirmResolve = null; }
+}
+
+function vpnConfirmDisconnect() {
+  return new Promise(resolve => {
+    _vpnConfirmResolve = resolve;
+    document.getElementById('vpn-confirm-modal').style.display = 'flex';
+  });
+}
+
+async function vpnBadgeToggle() {
+  const badge = document.getElementById('vpn-badge');
+  const isConnected = badge?.classList.contains('vpn-on');
+  if (isConnected && !await vpnConfirmDisconnect()) return;
+  if (badge) { badge.style.opacity = '.5'; badge.style.pointerEvents = 'none'; }
+  const d = await apiPost(isConnected ? 'vpn_disconnect' : 'vpn_connect', {});
+  if (d.error) {
+    if (badge) { badge.style.opacity = ''; badge.style.pointerEvents = ''; }
+    showToast('❌ VPN: ' + d.error, 'error');
+    return;
+  }
+  showToast(isConnected ? '🔓 VPN getrennt' : '🔒 VPN verbunden', 'success');
+  _vpnUpdateToggleBtn(!isConnected);
+  // WireGuard braucht kurz zum Hoch-/Runterfahren → 1.5s warten dann Status holen
+  await new Promise(r => setTimeout(r, 1500));
+  if (badge) { badge.style.opacity = ''; badge.style.pointerEvents = ''; }
+  await pollVpnStatus(true);
 }
 
 function _vpnUpdateToggleBtn(up) {
@@ -3748,6 +3790,7 @@ async function checkVpnStatus() {
 
 async function vpnToggle(btn) {
   const isConnected = btn.textContent.includes('Trennen');
+  if (isConnected && !await vpnConfirmDisconnect()) return;
   const msg = document.getElementById('vpn-status-msg');
   btn.disabled = true;
   btn.textContent = isConnected ? t('vpn.disconnecting') : t('vpn.connecting');
@@ -3762,7 +3805,8 @@ async function vpnToggle(btn) {
   msg.textContent = isConnected ? t('vpn.disconnected') : t('vpn.connected');
   msg.className = isConnected ? 'settings-msg err' : 'settings-msg ok';
   _vpnUpdateToggleBtn(!isConnected);
-  pollVpnStatus();
+  await new Promise(r => setTimeout(r, 1500));
+  pollVpnStatus(true);
 }
 
 async function vpnConnect() { /* legacy — nicht mehr verwendet */ }

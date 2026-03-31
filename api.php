@@ -2665,7 +2665,6 @@ switch ($action) {
         if (can('queue_view')) {
             $queue = load_queue();
             if (!can('settings')) {
-                // Editoren/Viewer: nur eigene Einträge zählen
                 $queue = array_filter($queue, fn($q) => ($q['added_by'] ?? '') === $current_user['username']);
             }
             $qStats = ['pending' => 0, 'downloading' => 0, 'done' => 0, 'error' => 0];
@@ -2673,13 +2672,25 @@ switch ($action) {
         } else {
             $qStats = null;
         }
+        // IDs der letzten 24h aus History
+        $cutoff24h = date('Y-m-d H:i:s', time() - 86400);
+        $recentIds = [];
+        foreach (glob(DATA_DIR . '/download_history_*.json') ?: [] as $hf) {
+            $entries = json_decode(@file_get_contents($hf), true) ?? [];
+            foreach ($entries as $e) {
+                if (($e['done_at'] ?? '') >= $cutoff24h && isset($e['stream_id'])) {
+                    $recentIds[] = (string)$e['stream_id'];
+                }
+            }
+        }
         echo json_encode([
-            'movies'           => count($db['movies']),
-            'episodes'         => count($db['episodes']),
-            'total_downloaded' => count($db['movies']) + count($db['episodes']),
-            'queue_stats'      => $qStats,
-            'downloaded_ids'   => array_map('strval', array_merge($db['movies'] ?? [], $db['episodes'] ?? [])),
-            'configured'       => is_configured(),
+            'movies'                 => count($db['movies']),
+            'episodes'               => count($db['episodes']),
+            'total_downloaded'       => count($db['movies']) + count($db['episodes']),
+            'queue_stats'            => $qStats,
+            'downloaded_ids'         => array_map('strval', array_merge($db['movies'] ?? [], $db['episodes'] ?? [])),
+            'recently_downloaded_ids'=> array_values(array_unique($recentIds)),
+            'configured'             => is_configured(),
             'can' => [
                 'queue_view'   => can('queue_view'),
                 'queue_add'    => can('queue_add'),

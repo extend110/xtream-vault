@@ -281,16 +281,6 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
         preg_replace('/[<>:"|?*]/u', '',
         str_replace(['/', '\\'], '-', $n))))) ?: 'Unknown';
 
-    $aq_stream_url = fn(array $srv, string $sid, string $ext): string =>
-        'http://' . $srv['server_ip'] . ':' . $srv['port']
-        . '/movie/' . $srv['username'] . '/' . ($srv['password'] ?? '') . "/{$sid}.{$ext}";
-
-    // Server-Map für stream_url Aufbau
-    $allSrvMap = [];
-    foreach (file_exists(SERVERS_FILE) ? (json_decode(@file_get_contents(SERVERS_FILE), true) ?? []) : [] as $s) {
-        $allSrvMap[$s['id']] = $s;
-    }
-
     // Neue Filme (noch nicht heruntergeladen)
     $dbAq       = load_db_local();
     $dlMovieIds = array_flip(array_map('strval', $dbAq['movies'] ?? []));
@@ -319,7 +309,6 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
             if ($sid === '' || $srvId === '' || isset($queuedIds[$srvId][$sid])) continue;
             $qf    = DATA_DIR . '/queue_' . $srvId . '.json';
             $ext   = $m['ext'] ?? 'mp4';
-            $srv   = $allSrvMap[$srvId] ?? null;
             $title = $aq_sanitize($m['clean_title'] ?? $m['title'] ?? 'Unknown');
             $queues[$srvId][] = [
                 'stream_id'           => $sid,
@@ -330,8 +319,6 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
                 'dest_subfolder'      => 'Movies',
                 'category'            => $m['category'] ?? '',
                 'category_original'   => $m['category'] ?? '',
-                'priority'            => 2,
-                'stream_url'          => $srv ? $aq_stream_url($srv, $sid, $ext) : '',
                 'added_at'            => date('Y-m-d H:i:s'),
                 'added_by'            => 'auto-queue',
                 'status'              => 'pending',

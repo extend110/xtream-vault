@@ -71,8 +71,8 @@ define('INVITES_FILE',       DATA_DIR . '/invites.json');
 define('NEW_RELEASES_FILE',  DATA_DIR . '/new_releases.json');
 
 // ── VPN (WireGuard) ───────────────────────────────────────────────────────────
-define('VPN_ENABLED',    (bool)($_cfg['vpn_enabled']    ?? false));
 define('VPN_INTERFACE',  preg_replace('/[^a-zA-Z0-9_\-]/', '', $_cfg['vpn_interface'] ?? 'wg0'));
+define('VPN_ENABLED',    VPN_INTERFACE !== ''); // immer aktiv wenn Interface konfiguriert
 define('VPN_RT_TABLE',   51820);
 
 /**

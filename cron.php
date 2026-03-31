@@ -55,13 +55,6 @@ if (!is_configured()) {
     exit(1);
 }
 
-// ── Stale vpn_manual.flag bereinigen ─────────────────────────────────────────
-// Wenn VPN manuell verbunden war aber nicht mehr läuft (z.B. nach Serverneustart),
-// die Flag automatisch löschen damit der Cron VPN wieder korrekt verwalten kann.
-if (VPN_ENABLED && vpn_is_manual() && !vpn_is_up()) {
-    @unlink(DATA_DIR . '/vpn_manual.flag');
-    clog("VPN: veraltetes vpn_manual.flag entfernt (VPN läuft nicht mehr)");
-}
 
 // ── Ziel prüfen ───────────────────────────────────────────────────────────────
 if (RCLONE_ENABLED) {
@@ -369,8 +362,8 @@ function download_file(string $url, string $destPath, string $title, int $queueP
             return 1;
         }
 
-        // VPN-Prüfung alle 30s — nur wenn VPN beim Start aktiv war
-        if (VPN_ENABLED && ($GLOBALS['vpnActiveAtStart'] ?? false) && $now % 30 === 0 && $now !== $lastWrite) {
+        // VPN-Prüfung alle 30s — nur wenn VPN beim Download-Start aktiv war
+        if (($GLOBALS['_vpnWasUp'] ?? false) && $now % 30 === 0 && $now !== $lastWrite) {
             if (!vpn_is_up()) {
                 clog("  VPN-ABBRUCH: Interface " . VPN_INTERFACE . " nicht mehr aktiv");
                 return 1; // cURL abbrechen
@@ -549,8 +542,8 @@ function rclone_stream(string $url, string $remotePath, string $title, int $queu
                 $percent, format_bytes($speedBps), $now - $startTime));
             $lastLog = $now;
 
-            // VPN-Prüfung: nur wenn VPN beim Start aktiv war
-            if (VPN_ENABLED && $GLOBALS['vpnActiveAtStart'] && !vpn_is_up()) {
+            // VPN-Prüfung — nur wenn VPN beim Download-Start aktiv war
+            if (($GLOBALS['_vpnWasUp'] ?? false) && !vpn_is_up()) {
                 clog("  VPN-ABBRUCH: Interface " . VPN_INTERFACE . " nicht mehr aktiv — beende rclone…");
                 proc_terminate($proc, 9);
                 @unlink(CANCEL_FILE);
@@ -657,11 +650,6 @@ if ($serverFilter === null) {
         if (count($serverIds) === 1) {
             $serverFilter = $serverIds[0];
             clog(sprintf("Found %d pending item(s) — running inline for: %s", count($pendingAll), $serverFilter));
-            // VPN verbinden vor inline-Run
-            if (VPN_ENABLED) {
-                if (vpn_is_up()) { clog("VPN: " . VPN_INTERFACE . " bereits aktiv"); $vpnActiveAtStart = true; }
-                else { $r = vpn_up(); if ($r === true) { $vpnStartedByUs = true; $vpnActiveAtStart = true; clog("VPN: verbunden"); } else clog("VPN ERROR: $r"); }
-            }
             goto single_server_run;
         }
         clog(sprintf("Found %d pending item(s) across %d server(s) — parallel disabled, running sequentially",
@@ -669,37 +657,13 @@ if ($serverFilter === null) {
         $php    = PHP_BINARY ?: '/usr/bin/php';
         $script = __FILE__;
 
-        // VPN verbinden vor sequenziellem Run
-        if (VPN_ENABLED) {
-            if (vpn_is_up()) {
-                clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
-                $vpnActiveAtStart = true;
-            } else {
-                clog("VPN: verbinde " . VPN_INTERFACE . " …");
-                $vpnResult = vpn_up();
-                if ($vpnResult !== true) {
-                    clog("VPN ERROR: " . $vpnResult);
-                } else {
-                    $vpnStartedByUs = true; $vpnActiveAtStart = true;
-                    clog("VPN: " . VPN_INTERFACE . " verbunden");
-                }
-            }
-        }
-
         foreach ($serverIds as $srvId) {
             clog("Starte sequenziellen Worker für Server: $srvId");
             $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' --server=' . escapeshellarg($srvId);
             passthru($cmd);
             clog("Worker $srvId abgeschlossen");
         }
-        // Nach sequenziellem Run: VPN, Cleanup, Cache
-        if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
-            clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
-            $vpnDown = vpn_down();
-            clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
-        } elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
-            clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
-        }
+        // Nach sequenziellem Run: Cleanup, Cache
         $queue  = load_queue();
         $cutoff = date('Y-m-d H:i:s', strtotime('-7 days'));
         $queue  = array_values(array_filter($queue, fn($i) => $i['status'] !== 'done' || ($i['done_at'] ?? $i['added_at'] ?? '9999') > $cutoff));
@@ -722,36 +686,11 @@ if ($serverFilter === null) {
         $serverFilter = $serverIds[0];
         clog(sprintf("Found %d pending item(s) — only 1 server after limit, running inline: %s",
             count($pendingAll), $serverFilter));
-        // VPN verbinden vor inline-Run
-        if (VPN_ENABLED) {
-            if (vpn_is_up()) { clog("VPN: " . VPN_INTERFACE . " bereits aktiv"); $vpnActiveAtStart = true; }
-            else { $r = vpn_up(); if ($r === true) { $vpnStartedByUs = true; $vpnActiveAtStart = true; clog("VPN: verbunden"); } else clog("VPN ERROR: $r"); }
-        }
         goto single_server_run;
     }
 
     clog(sprintf("Found %d pending item(s) across %d server(s) (max %d parallel): %s",
         count($pendingAll), count($serverIds), $parallelMax, implode(', ', $serverIds)));
-
-    // VPN verbinden (vor allen Downloads)
-    $vpnStartedByUs  = false;
-    $vpnActiveAtStart = false;
-    if (VPN_ENABLED) {
-        if (vpn_is_up()) {
-            clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
-            $vpnActiveAtStart = true;
-        } else {
-            clog("VPN: verbinde " . VPN_INTERFACE . " …");
-            $vpnResult = vpn_up();
-            if ($vpnResult !== true) {
-                clog("VPN ERROR: " . $vpnResult . " — Downloads werden trotzdem gestartet");
-            } else {
-                $vpnStartedByUs   = true;
-                $vpnActiveAtStart = true;
-                clog("VPN: " . VPN_INTERFACE . " verbunden");
-            }
-        }
-    }
 
     // Mehrere Server → Worker-Prozesse starten
     $php     = PHP_BINARY ?: '/usr/bin/php';
@@ -773,17 +712,6 @@ if ($serverFilter === null) {
     foreach ($procs as $srvId => $proc) {
         $status = proc_close($proc);
         clog("Worker $srvId beendet (exit $status)");
-    }
-
-    // VPN trennen wenn wir ihn gestartet haben (nicht wenn manuell verbunden)
-    clog(sprintf("VPN-Status: startedByUs=%s isManual=%s",
-        $vpnStartedByUs ? 'ja' : 'nein', vpn_is_manual() ? 'ja' : 'nein'));
-    if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
-        clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
-        $vpnDown = vpn_down();
-        clog($vpnDown === true ? "VPN: getrennt" : "VPN WARN: " . $vpnDown);
-    } elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
-        clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
     }
 
     // Cleanup nach allen Workern
@@ -871,26 +799,6 @@ save_queue($queue);
 $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
-// ── VPN: nur im Single-Server-Modus (Worker: Coordinator übernimmt) ───────────
-$vpnStartedByUs   = $vpnStartedByUs  ?? false;
-$vpnActiveAtStart = $vpnActiveAtStart ?? false;
-
-if (VPN_ENABLED && $totalPending > 0 && $serverFilter === null) {
-    if (vpn_is_up()) {
-        clog("VPN: " . VPN_INTERFACE . " bereits aktiv");
-        $vpnActiveAtStart = true;
-    } else {
-        clog("VPN: verbinde " . VPN_INTERFACE . " …");
-        $vpnResult = vpn_up();
-        if ($vpnResult !== true) {
-            clog("VPN ERROR: " . $vpnResult . " — Downloads werden trotzdem gestartet");
-        } else {
-            $vpnStartedByUs   = true;
-            $vpnActiveAtStart = true;
-            clog("VPN: " . VPN_INTERFACE . " verbunden");
-        }
-    }
-}
 
 $processed = 0;
 $errors    = 0;
@@ -977,6 +885,10 @@ foreach ($queue as &$item) {
 
     clog("START: [$position/$totalPending] $title  →  $destDisplay");
     clog(sprintf("  Typ: %s | Ext: %s | Server: %s", strtoupper($type), strtoupper($ext), $item['_server_id'] ?? 'default'));
+
+    // VPN-Status beim Download-Start merken — nur überwachen wenn VPN gerade aktiv ist
+    $vpnWasUp = VPN_ENABLED && vpn_is_up();
+    $GLOBALS['_vpnWasUp'] = $vpnWasUp;
 
     // Speicherplatz-Prüfung (nur im lokalen Modus)
     $fileSize = 0;
@@ -1236,28 +1148,6 @@ if ($removed > 0) {
     clog("CLEANUP: $removed alte done-Einträge entfernt");
 }
 
-// ── VPN: nach Downloads trennen ───────────────────────────────────────────────
-// Nur trennen wenn cron ihn selbst gestartet hat UND er nicht manuell verbunden ist.
-clog(sprintf("VPN-Status: ENABLED=%s startedByUs=%s isManual=%s isUp=%s",
-    VPN_ENABLED ? 'ja' : 'nein',
-    ($vpnStartedByUs ?? false) ? 'ja' : 'nein',
-    vpn_is_manual() ? 'ja' : 'nein',
-    (VPN_ENABLED && vpn_is_up()) ? 'ja' : 'nein'
-));
-if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
-    if (!vpn_is_up()) {
-        clog("VPN: " . VPN_INTERFACE . " bereits getrennt (extern)");
-    } else {
-        clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
-        $vpnDown = vpn_down();
-        if ($vpnDown !== true) clog("VPN WARN: " . $vpnDown);
-        else clog("VPN: " . VPN_INTERFACE . " getrennt");
-    }
-} elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
-    clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
-} elseif (VPN_ENABLED && !$vpnStartedByUs) {
-    clog("VPN: nicht vom Cron gestartet — kein Trennen");
-}
 
 // Benachrichtigung: alle Downloads abgeschlossen
 if ($processed > 0) {
