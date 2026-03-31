@@ -649,6 +649,11 @@ if ($serverFilter === null) {
         if (count($serverIds) === 1) {
             $serverFilter = $serverIds[0];
             clog(sprintf("Found %d pending item(s) — running inline for: %s", count($pendingAll), $serverFilter));
+            // VPN verbinden vor inline-Run
+            if (VPN_ENABLED) {
+                if (vpn_is_up()) { clog("VPN: " . VPN_INTERFACE . " bereits aktiv"); $vpnActiveAtStart = true; }
+                else { $r = vpn_up(); if ($r === true) { $vpnStartedByUs = true; $vpnActiveAtStart = true; clog("VPN: verbunden"); } else clog("VPN ERROR: $r"); }
+            }
             goto single_server_run;
         }
         clog(sprintf("Found %d pending item(s) across %d server(s) — parallel disabled, running sequentially",
@@ -706,6 +711,11 @@ if ($serverFilter === null) {
         $serverFilter = $serverIds[0];
         clog(sprintf("Found %d pending item(s) — only 1 server after limit, running inline: %s",
             count($pendingAll), $serverFilter));
+        // VPN verbinden vor inline-Run
+        if (VPN_ENABLED) {
+            if (vpn_is_up()) { clog("VPN: " . VPN_INTERFACE . " bereits aktiv"); $vpnActiveAtStart = true; }
+            else { $r = vpn_up(); if ($r === true) { $vpnStartedByUs = true; $vpnActiveAtStart = true; clog("VPN: verbunden"); } else clog("VPN ERROR: $r"); }
+        }
         goto single_server_run;
     }
 
@@ -847,8 +857,8 @@ $totalPending = count($pending);
 clog(sprintf("Found %d pending item(s)", $totalPending));
 
 // ── VPN: nur im Single-Server-Modus (Worker: Coordinator übernimmt) ───────────
-$vpnStartedByUs  = false;
-$vpnActiveAtStart = false;
+$vpnStartedByUs   = $vpnStartedByUs  ?? false;
+$vpnActiveAtStart = $vpnActiveAtStart ?? false;
 
 if (VPN_ENABLED && $totalPending > 0 && $serverFilter === null) {
     if (vpn_is_up()) {
