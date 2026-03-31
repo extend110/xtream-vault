@@ -107,12 +107,13 @@ function vpn_up(): bool|string {
     $uid   = trim(shell_exec('id -u www-data 2>/dev/null') ?: '');
     if ($uid === '') return 'www-data UID nicht ermittelbar';
 
+    ob_start(); // Unerwartete Ausgabe von wg-quick/sudo abfangen
+
     // Interface hochfahren
     if (!vpn_is_up()) {
         exec('sudo /usr/bin/wg-quick up ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
-        if ($ret !== 0) return 'wg-quick up: ' . (implode(' ', $out) ?: 'Fehler');
+        if ($ret !== 0) { ob_end_clean(); return 'wg-quick up: ' . (implode(' ', $out) ?: 'Fehler'); }
         sleep(1);
-        // Verbindungszeitpunkt speichern
         @file_put_contents(DATA_DIR . '/vpn_connected_at.txt', (string)time());
     }
 
@@ -120,15 +121,12 @@ function vpn_up(): bool|string {
     // Diese leiten Traffic ALLER User durch den Tunnel — das müssen wir rückgängig machen.
     exec("sudo /usr/sbin/ip rule show 2>/dev/null", $rules);
     foreach ($rules as $rule) {
-        // wg-quick-Regeln erkennen: "not fwmark 51820 lookup 51820" oder "lookup 51820"
         if (preg_match('/lookup\s+51820/', $rule) && !str_contains($rule, "uidrange {$uid}")) {
-            // Priorität extrahieren und Regel löschen
             if (preg_match('/^(\d+):/', trim($rule), $m)) {
                 exec("sudo /usr/sbin/ip rule del priority {$m[1]} 2>/dev/null");
             }
         }
     }
-    // Gleiches für IPv6
     exec("sudo /usr/sbin/ip -6 rule show 2>/dev/null", $rules6);
     foreach ($rules6 as $rule) {
         if (preg_match('/lookup\s+51820/', $rule) && !str_contains($rule, "uidrange {$uid}")) {
@@ -138,9 +136,9 @@ function vpn_up(): bool|string {
         }
     }
 
-    // Eigene UID-Regel setzen: nur www-data nutzt Tabelle 51820
     exec("sudo /usr/sbin/ip rule add uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
 
+    ob_end_clean();
     return true;
 }
 
@@ -155,20 +153,20 @@ function vpn_down(): bool|string {
     $table = VPN_RT_TABLE;
     $iface = VPN_INTERFACE;
 
-    // UID-Regel entfernen
+    ob_start(); // Unerwartete Ausgabe von wg-quick/sudo abfangen
+
     if ($uid !== '') {
         exec("sudo /usr/sbin/ip rule del uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
         exec("sudo /usr/sbin/ip -6 rule del uidrange {$uid}-{$uid} lookup {$table} priority 100 2>/dev/null");
     }
 
-    // Interface herunterfahren (wg-quick down bereinigt seine eigenen Routen)
     if (vpn_is_up()) {
         exec('sudo /usr/bin/wg-quick down ' . escapeshellarg($iface) . ' 2>&1', $out, $ret);
-        if ($ret !== 0) return 'wg-quick down: ' . (implode(' ', $out) ?: 'Fehler');
+        if ($ret !== 0) { ob_end_clean(); return 'wg-quick down: ' . (implode(' ', $out) ?: 'Fehler'); }
     }
-    // Verbindungszeitpunkt löschen
     @unlink(DATA_DIR . '/vpn_connected_at.txt');
 
+    ob_end_clean();
     return true;
 }
 /** Gibt true zurück wenn VPN manuell über die UI verbunden wurde (nicht durch den Cron). */

@@ -1379,7 +1379,6 @@ switch ($action) {
         require_permission('settings');
         $result = vpn_up();
         if ($result !== true) { echo json_encode(['error' => $result]); break; }
-        // Manuell verbunden — Flag setzen damit cron VPN nicht automatisch trennt
         @file_put_contents(DATA_DIR . '/vpn_manual.flag', (string)time());
         log_activity($current_user['id'], $current_user['username'], 'vpn_connect', ['interface' => VPN_INTERFACE]);
         echo json_encode(['ok' => true, 'up' => true]);
@@ -1389,7 +1388,6 @@ switch ($action) {
         require_permission('settings');
         $result = vpn_down();
         if ($result !== true) { echo json_encode(['error' => $result]); break; }
-        // Manuelle Flag entfernen
         @unlink(DATA_DIR . '/vpn_manual.flag');
         log_activity($current_user['id'], $current_user['username'], 'vpn_disconnect', ['interface' => VPN_INTERFACE]);
         echo json_encode(['ok' => true, 'up' => false]);

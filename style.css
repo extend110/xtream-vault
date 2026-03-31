@@ -57,9 +57,6 @@
 }
 [data-theme="light"] body::before { opacity: .15; }
 [data-theme="light"] .sidebar { border-right-color: rgba(0,0,0,.1); }
-[data-theme="light"] .topbar-logo-block .logo-text { color: #fff; }
-[data-theme="light"] .topbar-logo-block .logo-text svg { color: #fff; }
-[data-theme="light"] .hamburger span { background: #fff; }
 
 /* ── Nord ── */
 [data-theme="nord"] {
@@ -193,40 +190,54 @@ body::before {
 /* ── Main ── */
 .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
 .topbar {
-  height: 56px; border-bottom: 2px solid var(--accent);
-  display: flex; align-items: stretch; gap: 0;
+  height: auto; border-bottom: none; padding: 8px 16px;
+  display: flex; align-items: center; gap: 0;
   position: sticky; top: 0;
-  background: var(--bg2);
-  z-index: 50; min-width: 0;
+  background: var(--bg); z-index: 50; min-width: 0;
+}
+.topbar-inner {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.09);
+  border-radius: 12px; padding: 0 14px; height: 48px;
+  flex: 1; min-width: 0;
+}
+[data-theme="light"] .topbar-inner {
+  background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.1);
 }
 .topbar-logo-block {
-  background: var(--accent); display: flex; align-items: center; gap: 8px;
-  flex-shrink: 0;
+  background: none; display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0; padding-right: 14px;
+  border-right: 1px solid rgba(255,255,255,.09);
 }
+[data-theme="light"] .topbar-logo-block { border-right-color: rgba(0,0,0,.1); }
 .topbar-logo-block .logo-text {
-  font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem;
-  letter-spacing: .1em; color: #000; line-height: 1;
-  display: none; /* Desktop: Sidebar zeigt den Titel bereits */
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem;
+  letter-spacing: .1em; color: var(--accent); line-height: 1;
+  display: none;
 }
-.topbar-logo-block .logo-text svg { color: #000; }
+.topbar-logo-block .logo-text svg { color: var(--accent); }
 .topbar-logo-block .logo-sub { display: none; }
 .topbar-center {
-  display: flex; align-items: center; padding: 0 20px; flex: 1; gap: 12px; min-width: 0;
+  display: flex; align-items: center; padding: 0; flex: 1; gap: 12px; min-width: 0;
 }
-.page-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; letter-spacing: .08em; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
+.page-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.15rem; letter-spacing: .08em; color: var(--muted); flex: 0 0 auto; white-space: nowrap; }
 .topbar-right {
-  display: flex; align-items: center; gap: 8px; padding: 0 16px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding-left: 14px;
 }
+.topbar-sep { width: 1px; height: 18px; background: rgba(255,255,255,.09); flex-shrink: 0; }
+[data-theme="light"] .topbar-sep { background: rgba(0,0,0,.1); }
 .topbar-chip {
-  background: rgba(255,255,255,.05); border: 1px solid var(--border);
-  border-radius: 6px; padding: 4px 10px;
-  font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .04em;
+  background: none; border: none; border-radius: 4px; padding: 3px 8px;
+  font-family: 'DM Mono', monospace; font-size: .6rem; letter-spacing: .04em;
   color: var(--muted); cursor: pointer; white-space: nowrap;
-  transition: border-color .15s, color .15s, background .15s;
+  display: flex; align-items: center; gap: 5px;
+  transition: color .15s, background .15s;
 }
-.topbar-chip:hover { border-color: var(--accent); color: var(--accent); }
-.topbar-chip.active { color: var(--accent2); border-color: rgba(71,212,255,.3); background: rgba(71,212,255,.06); }
-.topbar-chip.vpn-on { color: var(--green); border-color: rgba(71,255,100,.3); background: rgba(71,255,100,.06); }
+.topbar-chip:hover { color: var(--text); background: rgba(255,255,255,.06); }
+.topbar-chip.active { color: var(--accent2); }
+.topbar-chip.vpn-on { color: var(--green); }
+.topbar-chip .tc-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 .search-wrap { flex: 1; max-width: 420px; position: relative; }
 .search-wrap input {
   width: 100%; background: var(--bg3); border: 1px solid var(--border);
@@ -437,7 +448,7 @@ body::before {
 .toast.error   { border-left: 3px solid var(--red); }
 .toast.info    { border-left: 3px solid var(--orange); }
 .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-.hamburger span { width: 22px; height: 2px; background: #000; border-radius: 1px; }
+.hamburger span { width: 20px; height: 1.5px; background: var(--muted); border-radius: 1px; }
 .sidebar-overlay {
   display: none;
   position: fixed; inset: 0;
@@ -473,12 +484,12 @@ body::before {
   /* Volle Breite für alle Views */
   .content > div, .content > [id^="view-"] > div { width: 100%; }
 
-  /* Topbar — kein Überlauf */
-  .topbar { padding: 0; gap: 0; min-width: 0; }
-  .topbar-logo-block { gap: 8px; padding: 0 14px; }
+  /* Topbar floating bar — mobile */
+  .topbar { padding: 6px 10px; }
+  .topbar-inner { padding: 0 10px; gap: 8px; border-radius: 10px; }
+  .topbar-logo-block { padding-right: 10px; }
   .topbar-logo-block .logo-text { display: flex; align-items: center; }
-  .topbar-center { padding: 0 10px; gap: 8px; }
-  .topbar-right { padding: 0 8px; gap: 6px; }
+  .topbar-right { padding-left: 10px; gap: 6px; }
   /* Auf Mobile nur Queue + User-Chip zeigen, Rest ausblenden */
   #topbar-dl { display: none !important; }
   #vpn-badge { display: none !important; }
@@ -742,20 +753,19 @@ body::before {
 
 /* ── Topbar user chip ── */
 .user-chip {
-  display: flex; align-items: center; gap: 8px;
-  background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px;
-  padding: 4px 10px 4px 6px; cursor: pointer; transition: border-color .15s;
+  display: flex; align-items: center; gap: 7px;
+  background: none; border: none; border-radius: 6px;
+  padding: 3px 6px; cursor: pointer; transition: background .15s;
   position: relative;
 }
-.user-chip:hover { border-color: var(--accent); }
+.user-chip:hover { background: rgba(255,255,255,.06); }
 .user-chip-avatar {
-  width: 22px; height: 22px; border-radius: 4px; background: var(--accent);
-  color: #000; font-weight: 700; font-size: .7rem;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
+  width: 24px; height: 24px; border-radius: 5px; background: var(--accent);
+  color: #000; font-weight: 700; font-size: .68rem;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
-.user-chip-name { font-family: 'DM Mono', monospace; font-size: .7rem; }
-.user-chip-role { font-size: .65rem; color: var(--muted); }
+.user-chip-name { font-family: 'DM Mono', monospace; font-size: .68rem; }
+.user-chip-role { font-size: .62rem; color: var(--muted); }
 .user-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
   background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
@@ -773,13 +783,14 @@ body::before {
 .user-dropdown .sep { height: 1px; background: var(--border); margin: 4px 0; }
 .user-dropdown .danger { color: var(--red); }
 .queue-pill {
-  background: rgba(255,159,67,.08); color: var(--orange); border: 1px solid rgba(255,159,67,.3);
-  font-family: 'DM Mono', monospace; font-size: .62rem; font-weight: 600;
-  padding: 4px 10px; border-radius: 6px; cursor: pointer;
-  display: none; transition: border-color .15s, background .15s; white-space: nowrap;
+  background: none; color: var(--orange);
+  font-family: 'DM Mono', monospace; font-size: .6rem; font-weight: 600;
+  padding: 3px 8px; border-radius: 4px; cursor: pointer;
+  display: none; white-space: nowrap;
+  transition: background .15s;
 }
-.queue-pill:hover { background: rgba(255,159,67,.15); }
-.queue-pill.show { display: inline-block; }
+.queue-pill:hover { background: rgba(255,159,67,.08); }
+.queue-pill.show { display: inline-flex; align-items: center; gap: 4px; }
 .qi-prio {
   background: var(--bg3); border: 1px solid var(--border); border-radius: 4px;
   color: var(--text); font-size: .65rem; padding: 3px 6px; cursor: pointer; outline: none;

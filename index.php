@@ -87,10 +87,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <!-- ── Main ─────────────────────────────────────────────────── -->
 <div class="main">
   <header class="topbar">
-    <!-- Logo-Block (Accent-Hintergrund) -->
+    <div class="topbar-inner">
+    <!-- Logo-Block -->
     <div class="topbar-logo-block">
       <div class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
-      <div class="logo-text"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:20px;height:16px;vertical-align:middle;margin-right:7px" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
+      <div class="logo-text"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:18px;height:14px;vertical-align:middle;margin-right:7px" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
     </div>
 
     <!-- Mitte: Page-Title + Search + Filter -->
@@ -108,28 +109,29 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <!-- Rechte Chips -->
     <div class="topbar-right">
       <?php if ($can_settings): ?>
-      <!-- Download-Fortschritt -->
       <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log"
-        style="display:none;align-items:center;gap:8px;background:rgba(71,212,255,.06);border:1px solid rgba(71,212,255,.25);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.62rem;max-width:200px;overflow:hidden;transition:border-color .2s">
-        <span style="color:var(--accent2);flex-shrink:0">⬇</span>
+        style="display:none;align-items:center;gap:6px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.6rem;max-width:180px;overflow:hidden;padding:3px 8px;border-radius:4px;transition:background .15s"
+        onmouseover="this.style.background='rgba(255,255,255,.06)'" onmouseout="this.style.background=''">
+        <span class="tc-dot" style="background:var(--accent2);width:5px;height:5px;border-radius:50%;flex-shrink:0"></span>
         <div style="flex:1;min-width:0;overflow:hidden">
           <div id="topbar-dl-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent2)"></div>
-          <div style="height:2px;background:var(--bg3);border-radius:1px;margin-top:2px;overflow:hidden">
+          <div style="height:2px;background:rgba(255,255,255,.1);border-radius:1px;margin-top:2px;overflow:hidden">
             <div id="topbar-dl-bar" style="height:100%;width:0%;background:var(--accent2);border-radius:1px;transition:width .5s"></div>
           </div>
         </div>
-        <span id="topbar-dl-pct" style="color:var(--accent2);flex-shrink:0">0%</span>
+        <span id="topbar-dl-pct" style="color:var(--accent2);flex-shrink:0"></span>
       </div>
       <?php endif; ?>
 
       <?php if ($can_queue_view): ?>
-      <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
+      <span class="queue-pill" id="queue-pill" onclick="showView('queue')"><span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
       <?php endif; ?>
 
       <?php if ($can_settings): ?>
-      <span id="vpn-badge" class="topbar-chip" title="VPN-Status — klicken zum Verbinden/Trennen" onclick="vpnBadgeToggle()" style="display:none"></span>
+      <div class="topbar-sep"></div>
+      <span id="vpn-badge" class="topbar-chip" title="VPN — klicken zum Verbinden/Trennen" onclick="vpnBadgeToggle()" style="display:none"></span>
       <span id="update-badge" class="topbar-chip" onclick="showView('settings')" title="Update verfügbar"
-        style="display:none;color:var(--orange);border-color:rgba(255,159,67,.3);background:rgba(255,159,67,.06)">⬆ Update</span>
+        style="display:none;color:var(--orange)">⬆ Update</span>
       <?php endif; ?>
 
       <?php if ($role === 'editor'): ?>
@@ -155,6 +157,8 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
       </div>
 
+      <div class="topbar-sep"></div>
+
       <!-- User Chip -->
       <div class="user-chip" id="user-chip" onclick="toggleUserDropdown()">
         <div class="user-chip-avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div>
@@ -172,6 +176,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
       </div>
     </div>
+    </div><!-- /topbar-inner -->
   </header>
 
   <div class="content" id="content">
@@ -1236,15 +1241,15 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
   </div>
 </div>
 
-<!-- VPN Disconnect Confirm Modal -->
-<div class="modal-overlay" id="vpn-confirm-modal" style="display:none;z-index:1060" onclick="if(event.target===this)vpnConfirmCancel()">
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:380px;width:90%;text-align:center">
-    <div style="font-size:2rem;margin-bottom:12px">🔓</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.06em;margin-bottom:10px">VPN trennen?</div>
-    <div style="font-size:.84rem;color:var(--muted);line-height:1.6;margin-bottom:24px">Die VPN-Verbindung wird getrennt. Laufende Downloads werden abgebrochen falls sie über den VPN-Tunnel laufen.</div>
+<!-- Generic Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal" style="display:none;z-index:1060" onclick="if(event.target===this)_confirmResolve(false)">
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:400px;width:90%;text-align:center">
+    <div id="confirm-modal-icon" style="font-size:2rem;margin-bottom:12px"></div>
+    <div id="confirm-modal-title" style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;letter-spacing:.06em;margin-bottom:10px"></div>
+    <div id="confirm-modal-msg" style="font-size:.84rem;color:var(--muted);line-height:1.6;margin-bottom:24px"></div>
     <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn-secondary" onclick="vpnConfirmCancel()">Abbrechen</button>
-      <button class="btn-primary danger" onclick="vpnConfirmOk()" style="background:var(--red);color:#fff;border-color:var(--red)">Trennen</button>
+      <button class="btn-secondary" onclick="_confirmResolve(false)"><?= t('btn.cancel') ?></button>
+      <button id="confirm-modal-ok" class="btn-primary" onclick="_confirmResolve(true)"></button>
     </div>
   </div>
 </div>
@@ -2180,7 +2185,7 @@ async function markAllSeasonDownloaded(epIdsCsv, season, seriesTitle, category, 
   const eps = (epIdsCsv || '').split(',').map(id => window._epMap?.[id]).filter(Boolean);
   const pending = eps.filter(ep => !ep.downloaded && !_downloadingIds.has(String(ep.id)));
   if (!pending.length) { showToast('Keine ausstehenden Episoden', 'info'); return; }
-  if (!confirm(`${pending.length} Episoden von Staffel ${season} als heruntergeladen markieren?`)) return;
+  if (!await showConfirm(`${pending.length} Episoden von Staffel ${season} als heruntergeladen markieren?`, {title:'Staffel markieren?', icon:'✓', okLabel:'Markieren'})) return;
   let count = 0;
   for (const ep of pending) {
     const d = await apiPost('mark_downloaded', {
@@ -2779,7 +2784,7 @@ async function dismissNewRelease(id, type, btn) {
 }
 
 async function dismissAllNewReleases(btn) {
-  if (!confirm(t('new.all_seen_confirm'))) return;
+  if (!await showConfirm(t('new.all_seen_confirm'), {title:'Alle als gesehen?', icon:'👁', okLabel:'Bestätigen'})) return;
   btn.disabled = true;
   const d = await apiPost('dismiss_all_new_releases', {});
   btn.disabled = false;
@@ -2817,7 +2822,7 @@ async function setPriority(sid, priority) {
 }
 
 async function resetEpisode(sid, epId, season, seriesTitle, category, serverId) {
-  if (!confirm('Episode zurücksetzen?\n\nSie kann danach neu zur Queue hinzugefügt werden.')) return;
+  if (!await showConfirm('Die Episode wird aus der Heruntergeladen-Liste entfernt und kann neu zur Queue hinzugefügt werden.', {title:'Episode zurücksetzen?', icon:'↺', okLabel:'Zurücksetzen', danger:true})) return;
   const d = await apiPost('reset_download', {stream_id: sid, type: 'episode'});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast(t('reset.done'), 'success');
@@ -2835,7 +2840,7 @@ async function resetEpisode(sid, epId, season, seriesTitle, category, serverId) 
 }
 
 async function resetDownload(sid, type, rowEl) {
-  if (!confirm('Download zurücksetzen?\n\nDas Item wird aus der "Heruntergeladen"-Liste entfernt und kann neu zur Queue hinzugefügt werden.')) return;
+  if (!await showConfirm('Das Item wird aus der Heruntergeladen-Liste entfernt und kann neu zur Queue hinzugefügt werden.', {title:'Download zurücksetzen?', icon:'↺', okLabel:'Zurücksetzen', danger:true})) return;
   const d = await apiPost('reset_download', {stream_id: sid, type});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast('↺ Zurückgesetzt — kann neu gequeued werden', 'success');
@@ -2855,7 +2860,7 @@ async function resetDownload(sid, type, rowEl) {
 }
 
 async function markDownloaded(sid, type, title, cover, category, ext, serverId, cardEl) {
-  if (!confirm(`"${title}" als bereits heruntergeladen markieren?\n\nDas Item erscheint dann als ✓ Done.`)) return;
+  if (!await showConfirm(`"${title}" wird als heruntergeladen markiert und erscheint dann als ✓ Done.`, {title:'Als heruntergeladen markieren?', icon:'✓', okLabel:'Markieren'})) return;
   const d = await apiPost('mark_downloaded', {
     stream_id: sid, type, title, cover, category: category || '',
     ext: ext || 'mp4', server_id: serverId || '',
@@ -2908,7 +2913,7 @@ async function clearDone() {
   showToast('Erledigte Einträge entfernt', 'success');
 }
 async function clearAll() {
-  if (!confirm('Wirklich die gesamte Queue löschen?')) return;
+  if (!await showConfirm('Alle Einträge werden unwiderruflich aus der Queue entfernt.', {title:'Queue löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   await api('queue_clear_all');
   refreshQueue(); refreshDashboardQueue(); updateQueueBadge(); loadStats(); loadDashboardData();
   showToast(t('queue.cleared'), 'success');
@@ -2940,7 +2945,7 @@ async function loadLog(autoRefresh = false) {
 }
 
 async function clearCronLog() {
-  if (!confirm('Cron Log wirklich leeren?')) return;
+  if (!await showConfirm('Das Cron-Log wird vollständig geleert.', {title:'Log leeren?', icon:'🧹', okLabel:'Leeren', danger:true})) return;
   const d = await apiPost('clear_cron_log', {});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   document.getElementById('log-wrap').textContent = 'Log geleert.';
@@ -3147,7 +3152,7 @@ async function runBackup(btn) {
 }
 
 async function restoreBackup(name) {
-  if (!confirm(`Backup "${name}" wiederherstellen?\n\nDie aktuellen Daten (Users, Queue, Config etc.) werden überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.`)) return;
+  if (!await showConfirm(`Backup "${name}" wird eingespielt. Die aktuellen Daten (Users, Queue, Config etc.) werden überschrieben. Diese Aktion kann nicht rückgängig gemacht werden.`, {title:'Backup wiederherstellen?', icon:'↩', okLabel:'Wiederherstellen', danger:true})) return;
   showToast('Wiederherstellung läuft…', 'info');
   const d = await apiPost('backup_restore', {name});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
@@ -3160,7 +3165,7 @@ async function restoreBackup(name) {
 }
 
 async function deleteBackup(name, row) {
-  if (!confirm(`Backup "${name}" löschen?`)) return;
+  if (!await showConfirm(`Backup "${name}" wird endgültig gelöscht.`, {title:'Backup löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   const d = await apiPost('backup_delete', {name});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   row?.remove();
@@ -3193,7 +3198,7 @@ function applyMaintenanceStatus(active) {
 
 async function toggleMaintenance() {
   const current = document.getElementById('maintenance-status')?.textContent?.includes('AKTIV');
-  if (!current && !confirm(t('maintenance.enable_confirm'))) return;
+  if (!current && !await showConfirm(t('maintenance.enable_confirm'), {title:'Wartungsmodus?', icon:'🔒', okLabel:'Aktivieren', danger:true})) return;
   const action = current ? 'maintenance_disable' : 'maintenance_enable';
   const r = await apiPost(action, {});
   if (r.error) { showToast('❌ ' + r.error, 'error'); return; }
@@ -3384,7 +3389,7 @@ async function toggleServer(serverId, btn) {
 }
 
 async function deleteServer(serverId, name) {
-  if (!confirm(`Server "${name}" wirklich löschen?\n\nQueue, Cache und Download-Verlauf dieses Servers werden ebenfalls gelöscht.`)) return;
+  if (!await showConfirm(`Server "${name}" wird gelöscht. Queue, Cache und Download-Verlauf dieses Servers werden ebenfalls gelöscht.`, {title:'Server löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   const d = await apiPost('delete_server', {server_id: serverId});
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast('🗑 Server entfernt', 'info');
@@ -3603,7 +3608,7 @@ async function runUpdate(btn) {
   const logEl  = document.getElementById('update-log');
   const status = document.getElementById('update-status');
 
-  if (!confirm(t('cfg.update_confirm'))) return;
+  if (!await showConfirm(t('cfg.update_confirm'), {title:'Update installieren?', icon:'⬆️', okLabel:'Update installieren'})) return;
 
   btn.disabled = true;
   msgEl.textContent = t('update.installing'); msgEl.className = 'settings-msg info';
@@ -3684,7 +3689,7 @@ function updateVpnBadge(status) {
   badge.style.display = '';
 
   if (status.up) {
-    badge.textContent = '🔒 VPN';
+    badge.innerHTML = '<span class="tc-dot"></span> VPN';
     badge.classList.add('vpn-on');
     badge.title = `VPN aktiv — klicken zum Trennen${status.public_ip ? ' · ' + status.public_ip : ''}`;
 
@@ -3707,33 +3712,43 @@ function updateVpnBadge(status) {
       }
     }
   } else {
-    badge.textContent = '🔓 VPN';
-    badge.style.color       = 'var(--orange)';
-    badge.style.borderColor = 'rgba(255,159,67,.25)';
-    badge.style.background  = 'rgba(255,159,67,.06)';
+    badge.innerHTML = '<span class="tc-dot" style="background:var(--orange)"></span> VPN';
+    badge.style.color = 'var(--orange)';
     badge.title = `VPN inaktiv — klicken zum Verbinden (${status.interface})`;
     if (statsCard) statsCard.style.display = 'none';
     if (_vpnDurationTimer) { clearInterval(_vpnDurationTimer); _vpnDurationTimer = null; }
   }
 }
 
-let _vpnConfirmResolve = null;
+let _confirmCb = null;
 
-function vpnConfirmCancel() {
-  document.getElementById('vpn-confirm-modal').style.display = 'none';
-  if (_vpnConfirmResolve) { _vpnConfirmResolve(false); _vpnConfirmResolve = null; }
+function _confirmResolve(val) {
+  document.getElementById('confirm-modal').style.display = 'none';
+  if (_confirmCb) { _confirmCb(val); _confirmCb = null; }
 }
 
-function vpnConfirmOk() {
-  document.getElementById('vpn-confirm-modal').style.display = 'none';
-  if (_vpnConfirmResolve) { _vpnConfirmResolve(true); _vpnConfirmResolve = null; }
+// showConfirm(msg, {title, icon, okLabel, danger}) → Promise<bool>
+function showConfirm(msg, opts = {}) {
+  return new Promise(resolve => {
+    _confirmCb = resolve;
+    const modal = document.getElementById('confirm-modal');
+    document.getElementById('confirm-modal-icon').textContent  = opts.icon  ?? '❓';
+    document.getElementById('confirm-modal-title').textContent = opts.title ?? 'Bestätigen';
+    document.getElementById('confirm-modal-msg').textContent   = msg;
+    const okBtn = document.getElementById('confirm-modal-ok');
+    okBtn.textContent = opts.okLabel ?? 'OK';
+    okBtn.style.background   = opts.danger ? 'var(--red)'  : '';
+    okBtn.style.color        = opts.danger ? '#fff'        : '';
+    okBtn.style.borderColor  = opts.danger ? 'var(--red)'  : '';
+    modal.style.display = 'flex';
+  });
 }
 
 function vpnConfirmDisconnect() {
-  return new Promise(resolve => {
-    _vpnConfirmResolve = resolve;
-    document.getElementById('vpn-confirm-modal').style.display = 'flex';
-  });
+  return showConfirm(
+    'Die VPN-Verbindung wird getrennt. Laufende Downloads werden abgebrochen falls sie über den VPN-Tunnel laufen.',
+    { title: 'VPN trennen?', icon: '🔓', okLabel: 'Trennen', danger: true }
+  );
 }
 
 async function vpnBadgeToggle() {
@@ -4253,7 +4268,7 @@ async function createApiKey() {
 }
 
 async function revokeApiKey(id) {
-  if (!confirm('API-Key widerrufen? Er kann danach nicht mehr verwendet werden.')) return;
+  if (!await showConfirm('Der API-Key wird widerrufen und kann danach nicht mehr verwendet werden.', {title:'API-Key widerrufen?', icon:'🔑', okLabel:'Widerrufen', danger:true})) return;
   await fetch(`${API}?action=revoke_api_key`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({...({id}), _csrf: CSRF_TOKEN})
@@ -4263,7 +4278,7 @@ async function revokeApiKey(id) {
 }
 
 async function deleteApiKey(id) {
-  if (!confirm('API-Key endgültig löschen?')) return;
+  if (!await showConfirm('Der API-Key wird endgültig gelöscht.', {title:'API-Key löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   await fetch(`${API}?action=delete_api_key`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({...({id}), _csrf: CSRF_TOKEN})
@@ -4379,7 +4394,7 @@ async function loadDashboardData() {
 
 // ── Dashboard Schnellzugriff ──────────────────────────────────
 async function cancelDownload() {
-  if (!confirm(t('queue.cancel_confirm'))) return;
+  if (!await showConfirm(t('queue.cancel_confirm'), {title:'Download abbrechen?', icon:'✕', okLabel:'Abbrechen', danger:true})) return;
   const d = await fetch(`${API}?action=queue_cancel`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -4412,7 +4427,7 @@ async function dashClearDone() {
   refreshDashboardQueue(); loadDashboardData(); refreshQueue(); updateQueueBadge(); loadStats();
 }
 async function dashClearAll() {
-  if (!confirm('Wirklich die gesamte Queue löschen?')) return;
+  if (!await showConfirm('Alle Einträge werden unwiderruflich aus der Queue entfernt.', {title:'Queue löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   await apiPost('queue_clear_all', {});
   showToast(t('queue.cleared'), 'info');
   refreshDashboardQueue(); loadDashboardData(); refreshQueue(); updateQueueBadge(); loadStats();
@@ -5140,7 +5155,7 @@ async function setUserLimit(id, username, current) {
 
 async function toggleSuspend(id, suspend, username) {
   const action = suspend ? t('users.suspend_confirm', {name: username}) : t('users.unsuspend_confirm', {name: username});
-  if (!confirm(action)) return;
+  if (!await showConfirm(action, {title:'Bestätigen?', icon:'🎭', okLabel:'Bestätigen', danger:true})) return;
   const r = await fetch(`${API}?action=suspend_user`, {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({...({id, suspended: suspend}), _csrf: CSRF_TOKEN})
@@ -5345,7 +5360,7 @@ async function submitUModal() {
 }
 
 async function deleteUser(id, username) {
-  if (!confirm(`Benutzer "${username}" wirklich löschen?`)) return;
+  if (!await showConfirm(`Benutzer "${username}" wird endgültig gelöscht.`, {title:'Benutzer löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
   const r = await fetch(`${API}?action=delete_user`, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
