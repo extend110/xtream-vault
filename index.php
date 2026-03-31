@@ -87,78 +87,89 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <!-- ── Main ─────────────────────────────────────────────────── -->
 <div class="main">
   <header class="topbar">
-    <div class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
-    <div class="page-title" id="page-title">Dashboard</div>
-    <div class="search-wrap" id="search-bar" style="display:none"></div>
-    <div class="filter-bar" id="filter-bar" style="display:none">
-      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
-      <button class="filter-btn" onclick="setFilter('new',this)"><?= t('filter.new') ?></button>
-      <button class="filter-btn" onclick="setFilter('queued',this)"><?= t('filter.queued') ?></button>
-      <button class="filter-btn" onclick="setFilter('done',this)"><?= t('status.done') ?></button>
+    <!-- Logo-Block (Accent-Hintergrund) -->
+    <div class="topbar-logo-block">
+      <div class="hamburger" id="hamburger" onclick="toggleSidebar()"><span></span><span></span><span></span></div>
+      <div class="logo-text"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:20px;height:16px;vertical-align:middle;margin-right:7px" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
     </div>
-    <?php if ($can_queue_view): ?>
-    <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
-    <?php endif; ?>
-    <?php if ($can_settings): ?>
-    <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log" style="display:none;align-items:center;gap:8px;
-         background:var(--bg3);border:1px solid var(--border);border-radius:20px;
-         padding:3px 12px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.65rem;
-         max-width:220px;overflow:hidden;transition:border-color .2s">
-      <span style="color:var(--accent2);flex-shrink:0">⬇</span>
-      <div style="flex:1;min-width:0;overflow:hidden">
-        <div id="topbar-dl-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)"></div>
-        <div style="height:2px;background:var(--bg2);border-radius:1px;margin-top:2px;overflow:hidden">
-          <div id="topbar-dl-bar" style="height:100%;width:0%;background:var(--accent2);border-radius:1px;transition:width .5s"></div>
+
+    <!-- Mitte: Page-Title + Search + Filter -->
+    <div class="topbar-center">
+      <div class="page-title" id="page-title">Dashboard</div>
+      <div class="search-wrap" id="search-bar" style="display:none"></div>
+      <div class="filter-bar" id="filter-bar" style="display:none">
+        <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+        <button class="filter-btn" onclick="setFilter('new',this)"><?= t('filter.new') ?></button>
+        <button class="filter-btn" onclick="setFilter('queued',this)"><?= t('filter.queued') ?></button>
+        <button class="filter-btn" onclick="setFilter('done',this)"><?= t('status.done') ?></button>
+      </div>
+    </div>
+
+    <!-- Rechte Chips -->
+    <div class="topbar-right">
+      <?php if ($can_settings): ?>
+      <!-- Download-Fortschritt -->
+      <div id="topbar-dl" onclick="showView('queue')" title="Zum Download-Log"
+        style="display:none;align-items:center;gap:8px;background:rgba(71,212,255,.06);border:1px solid rgba(71,212,255,.25);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'DM Mono',monospace;font-size:.62rem;max-width:200px;overflow:hidden;transition:border-color .2s">
+        <span style="color:var(--accent2);flex-shrink:0">⬇</span>
+        <div style="flex:1;min-width:0;overflow:hidden">
+          <div id="topbar-dl-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--accent2)"></div>
+          <div style="height:2px;background:var(--bg3);border-radius:1px;margin-top:2px;overflow:hidden">
+            <div id="topbar-dl-bar" style="height:100%;width:0%;background:var(--accent2);border-radius:1px;transition:width .5s"></div>
+          </div>
+        </div>
+        <span id="topbar-dl-pct" style="color:var(--accent2);flex-shrink:0">0%</span>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($can_queue_view): ?>
+      <span class="queue-pill" id="queue-pill" onclick="showView('queue')">📋 <span id="pill-count">0</span> <?= t('queue.in_queue') ?></span>
+      <?php endif; ?>
+
+      <?php if ($can_settings): ?>
+      <span id="vpn-badge" class="topbar-chip" title="VPN-Status — klicken für Einstellungen" onclick="showView('settings')" style="display:none"></span>
+      <span id="update-badge" class="topbar-chip" onclick="showView('settings')" title="Update verfügbar"
+        style="display:none;color:var(--orange);border-color:rgba(255,159,67,.3);background:rgba(255,159,67,.06)">⬆ Update</span>
+      <?php endif; ?>
+
+      <?php if ($role === 'editor'): ?>
+      <span id="limit-indicator" class="topbar-chip topbar-desktop-only" style="display:none"></span>
+      <?php endif; ?>
+
+      <button id="theme-toggle" class="topbar-chip topbar-desktop-only" onclick="showView('profile')" title="Theme wechseln">🎨</button>
+
+      <!-- Mobile Overflow -->
+      <div class="topbar-overflow" id="topbar-overflow">
+        <button class="topbar-icon-btn" onclick="toggleTopbarMenu()" aria-label="Menü">⋯</button>
+        <div class="topbar-menu" id="topbar-menu">
+          <button onclick="showView('profile');closeTopbarMenu()">🎨 <?= t('nav.theme') ?></button>
+          <?php if ($can_settings): ?>
+          <button onclick="showView('settings');closeTopbarMenu()">⚙️ <?= t('nav.settings') ?></button>
+          <?php endif; ?>
+          <?php if ($can_queue_view): ?>
+          <button onclick="showView('queue');closeTopbarMenu()">📋 <?= t('nav.queue') ?></button>
+          <?php endif; ?>
+          <?php if ($role === 'editor'): ?>
+          <div id="limit-indicator-mobile" style="display:none;padding:8px 16px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></div>
+          <?php endif; ?>
         </div>
       </div>
-      <span id="topbar-dl-pct" style="color:var(--accent2);flex-shrink:0">0%</span>
-    </div>
-    <?php endif; ?>
-    <?php if ($can_settings): ?>
-    <span id="vpn-badge" title="VPN-Status — klicken für Einstellungen" onclick="showView('settings')"
-      style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;font-weight:600;
-             padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
-             border:1px solid transparent;transition:background .3s,color .3s,border-color .3s"></span>
-    <span id="update-badge" onclick="showView('settings')" title="Update verfügbar"
-      style="display:none;font-family:'DM Mono',monospace;font-size:.6rem;font-weight:600;
-             padding:3px 10px;border-radius:20px;cursor:pointer;letter-spacing:.04em;
-             background:rgba(255,159,67,.12);color:var(--orange);border:1px solid rgba(255,159,67,.3)">⬆ Update</span>
-    <?php endif; ?>
-    <!-- Desktop: direkte Buttons -->
-    <button id="theme-toggle" class="topbar-icon-btn topbar-desktop-only" onclick="showView('profile')" title="Theme wechseln" aria-label="Theme wechseln">🎨</button>
-    <?php if ($role === 'editor'): ?>
-    <span id="limit-indicator" class="topbar-desktop-only" style="display:none;font-family:'DM Mono',monospace;font-size:.65rem;padding:4px 10px;border-radius:4px;background:var(--bg3);border:1px solid var(--border)"></span>
-    <?php endif; ?>
-    <!-- Mobile: ⋯ Overflow-Menü -->
-    <div class="topbar-overflow" id="topbar-overflow">
-      <button class="topbar-icon-btn" onclick="toggleTopbarMenu()" aria-label="Menü">⋯</button>
-      <div class="topbar-menu" id="topbar-menu">
-        <button onclick="showView('profile');closeTopbarMenu()">🎨 <?= t('nav.theme') ?></button>
-        <?php if ($can_settings): ?>
-        <button onclick="showView('settings');closeTopbarMenu()">⚙️ <?= t('nav.settings') ?></button>
-        <?php endif; ?>
-        <?php if ($can_queue_view): ?>
-        <button onclick="showView('queue');closeTopbarMenu()">📋 <?= t('nav.queue') ?></button>
-        <?php endif; ?>
-        <?php if ($role === 'editor'): ?>
-        <div id="limit-indicator-mobile" style="display:none;padding:8px 16px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted)"></div>
-        <?php endif; ?>
-      </div>
-    </div>
-    <!-- User Chip -->
-    <div class="user-chip" id="user-chip" onclick="toggleUserDropdown()">
-      <div class="user-chip-avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div>
-      <div>
-        <div class="user-chip-name"><?= htmlspecialchars($user['username']) ?></div>
-        <div class="user-chip-role"><?= $role ?></div>
-      </div>
-      <div class="user-dropdown" id="user-dropdown">
-        <button onclick="event.stopPropagation();showView('profile');toggleUserDropdown()">👤 <?= t('nav.profile') ?></button>
-        <?php if ($can_users): ?>
-        <button onclick="event.stopPropagation();showView('users');toggleUserDropdown()">👥 <?= t('nav.users') ?></button>
-        <?php endif; ?>
-        <div class="sep"></div>
-        <button class="danger" onclick="doLogout()">⏻ <?= t('nav.logout') ?></button>
+
+      <!-- User Chip -->
+      <div class="user-chip" id="user-chip" onclick="toggleUserDropdown()">
+        <div class="user-chip-avatar"><?= strtoupper(substr($user['username'], 0, 1)) ?></div>
+        <div>
+          <div class="user-chip-name"><?= htmlspecialchars($user['username']) ?></div>
+          <div class="user-chip-role"><?= $role ?></div>
+        </div>
+        <div class="user-dropdown" id="user-dropdown">
+          <button onclick="event.stopPropagation();showView('profile');toggleUserDropdown()">👤 <?= t('nav.profile') ?></button>
+          <?php if ($can_users): ?>
+          <button onclick="event.stopPropagation();showView('users');toggleUserDropdown()">👥 <?= t('nav.users') ?></button>
+          <?php endif; ?>
+          <div class="sep"></div>
+          <button class="danger" onclick="doLogout()">⏻ <?= t('nav.logout') ?></button>
+        </div>
       </div>
     </div>
   </header>
@@ -495,11 +506,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Charts: 2 Spalten -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
         <div class="settings-card">
-          <h3>📦 Datenvolumen pro Monat</h3>
+          <h3>📦 <?= t('stats.by_month_gb') ?></h3>
           <div style="position:relative;height:200px"><canvas id="stats-chart-gb"></canvas></div>
         </div>
         <div class="settings-card">
-          <h3>📥 Downloads pro Monat</h3>
+          <h3>📥 <?= t('stats.by_month_dl') ?></h3>
           <div style="position:relative;height:200px"><canvas id="stats-chart-count"></canvas></div>
         </div>
       </div>
@@ -507,18 +518,18 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       <!-- Wochentag-Verteilung + Top User nebeneinander -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
         <div class="settings-card">
-          <h3>📅 Downloads nach Wochentag</h3>
+          <h3>📅 <?= t('stats.weekday') ?></h3>
           <div style="position:relative;height:200px"><canvas id="stats-chart-weekday"></canvas></div>
         </div>
         <div class="settings-card">
-          <h3>👤 Top User</h3>
+          <h3>👤 <?= t('stats.top_users') ?></h3>
           <div id="stats-top-users" style="font-size:.82rem"></div>
         </div>
       </div>
 
       <!-- Top Kategorien als Tabelle -->
       <div class="settings-card">
-        <h3>🏷️ Top Kategorien</h3>
+        <h3>🏷️ <?= t('stats.top_cats') ?></h3>
         <div id="stats-top-cats" style="font-size:.82rem"></div>
       </div>
 
@@ -798,6 +809,25 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
+          <h3>🆕 <?= t('cfg.autoqueue_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:16px;line-height:1.6">
+            <?= t('cfg.autoqueue_desc') ?>
+          </div>
+          <label class="settings-toggle" style="margin-bottom:14px">
+            <input type="checkbox" id="cfg-autoqueue-enabled" onchange="document.getElementById('autoqueue-fields').style.display=this.checked?'':'none'">
+            <span><?= t('cfg.autoqueue_enable') ?></span>
+          </label>
+          <div id="autoqueue-fields" style="display:none">
+            <div class="field">
+              <label><?= t('cfg.autoqueue_max') ?></label>
+              <input type="number" id="cfg-autoqueue-max" min="1" max="100" step="1" value="10" style="max-width:100px">
+              <span class="hint"><?= t('cfg.autoqueue_max_hint') ?></span>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="settings-card">
           <h3><?= t('cfg.cache_status') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             <?= t('cfg.cache_desc') ?>
@@ -912,6 +942,10 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <input type="checkbox" id="cfg-tg-notify-queue-done">
               <span><?= t('cfg.tg_on_queue_done') ?></span>
             </label>
+            <label class="settings-toggle" style="margin-bottom:6px">
+              <input type="checkbox" id="cfg-tg-notify-new-releases">
+              <span><?= t('cfg.tg_on_new_releases') ?></span>
+            </label>
             <label class="settings-toggle" style="margin-bottom:10px">
               <input type="checkbox" id="cfg-tg-notify-disk-low" onchange="toggleDiskLowField(this.checked)">
               <span><?= t('cfg.tg_on_disk_low') ?></span>
@@ -947,6 +981,20 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <thead><tr><th><?= t('api.param_name') ?></th><th>Key</th><th><?= t('users.col_status') ?></th><th><?= t('users.col_created') ?></th><th><?= t('cfg.api_key_last_used') ?></th><th><?= t('cfg.api_key_calls') ?></th><th></th></tr></thead>
               <tbody id="apikey-tbody"><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Lade…</td></tr></tbody>
             </table>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>🚫 <?= t('cfg.blacklist_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            <?= t('cfg.blacklist_desc') ?>
+          </div>
+          <div class="field">
+            <label><?= t('cfg.blacklist_label') ?></label>
+            <textarea id="cfg-category-blacklist" rows="4"
+              style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;resize:vertical;outline:none"
+              placeholder="<?= t('cfg.blacklist_placeholder') ?>"></textarea>
+            <span class="hint"><?= t('cfg.blacklist_hint') ?></span>
           </div>
         </div>
 
@@ -996,6 +1044,22 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <button class="btn-primary" id="btn-save-cfg" onclick="saveConfig()"><?= t('cfg.save') ?></button>
         </div>
         <div class="settings-msg" id="settings-msg"></div>
+
+        <!-- Version -->
+        <?php
+        $versionInfo = file_exists(__DIR__ . '/version.json')
+            ? (json_decode(file_get_contents(__DIR__ . '/version.json'), true) ?? [])
+            : [];
+        $commit = $versionInfo['commit'] ?? 'unknown';
+        $commitShort = strlen($commit) > 7 ? substr($commit, 0, 7) : $commit;
+        $updatedAt = $versionInfo['updated_at'] ?? '';
+        ?>
+        <div style="margin-top:24px;text-align:center;font-family:'DM Mono',monospace;font-size:.62rem;color:var(--muted);letter-spacing:.06em">
+          <?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?>
+          <?php if ($commitShort && $commitShort !== 'unknown'): ?>
+          · <span title="<?= htmlspecialchars($updatedAt) ?>">commit <?= htmlspecialchars($commitShort) ?></span>
+          <?php endif; ?>
+        </div>
 
       </div>
       <?php else: ?>
@@ -1404,13 +1468,14 @@ let _downloadedIds = new Set(); // stream_ids bereits heruntergeladen (done)
 let _downloadingIds = new Set(); // stream_ids gerade im Download
 let _seenIds      = new Set(); // stream_ids die der User angeschaut hat (TMDB-Modal geöffnet)
 try { _seenIds = new Set(Object.keys(JSON.parse(localStorage.getItem('xv_seen_<?= $user['id'] ?>') || '{}'))) } catch(e) {}
+let _recentIds    = new Set(); // stream_ids in den letzten 24h heruntergeladen
 let currentFilter = 'all';
 let allMovies     = [];
 let searchDebounce;
 let queueRefreshInterval;
 
 // ── Init ──────────────────────────────────────────────────────
-(async () => {
+setTimeout(async () => {
   const stats = await api('stats');
   if (stats.configured === false) {
     <?php if ($can_settings): ?>
@@ -1436,7 +1501,6 @@ let queueRefreshInterval;
   <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?>
   <?php if ($role === 'editor'): ?>loadLimitStatus();<?php endif; ?>
   initTheme();
-  startBadgePolling();
   <?php if ($can_settings && VPN_ENABLED): ?>startVpnPolling();<?php endif; ?>
   <?php if ($can_queue_view && $can_settings): ?>startProgressPolling();<?php endif; ?>
   // Neue-Releases-Badge beim Start laden
@@ -1454,7 +1518,7 @@ let queueRefreshInterval;
     }
   });
   <?php endif; ?>
-})();
+}, 0);
 
 // ── Theme Toggle ──────────────────────────────────────────────
 const THEMES = {
@@ -1600,6 +1664,9 @@ async function loadStats() {
   }
   if (Array.isArray(d.downloaded_ids)) {
     _downloadedIds = new Set(d.downloaded_ids);
+    if (Array.isArray(d.recently_downloaded_ids)) {
+      _recentIds = new Set(d.recently_downloaded_ids);
+    }
   }
   if (currentView === 'favourites') updateFavouriteButtons();
 }
@@ -1652,6 +1719,53 @@ function startBadgePolling() {
   _badgeInterval = setInterval(updateQueueBadge, 3000);
 }
 startBadgePolling();
+
+// ── URL-Parameter und Hash beim Start lesen ───────────────────
+// setTimeout(0) stellt sicher dass alle let-Deklarationen geparst sind
+setTimeout(function applyUrlParams() {
+  const validViews = ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats'];
+  const params = new URLSearchParams(window.location.search);
+  const hash   = window.location.hash.replace('#', '');
+  const view   = params.get('view') || (validViews.includes(hash) ? hash : null);
+  if (view && validViews.includes(view)) {
+    if (view === 'movies') {
+      showView('movies');
+      const cat = params.get('cat') || '';
+      if (cat) {
+        const tryClick = (n = 0) => {
+          const match = Array.from(document.querySelectorAll('#cats-movies .cat-item'))
+            .find(el => el.textContent.trim() === cat);
+          if (match) match.click();
+          else if (n < 20) setTimeout(() => tryClick(n + 1), 300);
+        };
+        tryClick();
+      }
+    } else if (view === 'series') {
+      showView('series');
+      const cat = params.get('cat') || '';
+      if (cat) {
+        const tryClick = (n = 0) => {
+          const match = Array.from(document.querySelectorAll('#cats-series .cat-item'))
+            .find(el => el.textContent.trim() === cat);
+          if (match) match.click();
+          else if (n < 20) setTimeout(() => tryClick(n + 1), 300);
+        };
+        tryClick();
+      }
+    } else if (view === 'search') {
+      showView('search');
+      const q = params.get('q') || '';
+      if (q) { const inp = document.getElementById('search-input'); if (inp) { inp.value = q; doSearch(q); } }
+    } else {
+      showView(view);
+    }
+  }
+  // Hash-Navigation (Rückwärtskompatibilität)
+  window.addEventListener('popstate', () => {
+    const h = window.location.hash.replace('#', '');
+    if (h && validViews.includes(h)) showView(h);
+  });
+}, 0);
 
 // ── Categories ────────────────────────────────────────────────
 async function loadMovieCats() {
@@ -1849,7 +1963,9 @@ function movieCard(m, showServer = false) {
   registerFavItem('movie', m.stream_id, m);
   const thumb = m.stream_icon ? `<img data-src="${m.stream_icon}" alt="">` : '';
   const badge = m.downloaded
-    ? `<span class="card-badge badge-done">✓ Done</span>`
+    ? _recentIds.has(String(m.stream_id))
+      ? `<span class="card-badge badge-recent">✓ Neu</span>`
+      : `<span class="card-badge badge-done">✓ Done</span>`
     : m.queued ? `<span class="card-badge badge-queue">⏳ Queue</span>`
     : _seenIds.has(String(m.stream_id)) ? `<span class="card-badge badge-seen">👁</span>` : '';
 
@@ -2931,6 +3047,8 @@ function clearSearchCache() {
 
 // ── View management ───────────────────────────────────────────
 function showView(v) {
+  // URL-Hash aktualisieren
+  if (history.replaceState) history.replaceState(null, '', '#' + v);
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
   ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats'].forEach(name => {
@@ -3291,7 +3409,8 @@ async function loadConfig() {
   const setChk = (id, val, def = false) => { const el = document.getElementById(id); if (el) el.checked = val ?? def; };
   setChk('cfg-tg-notify-success',    c.tg_notify_success,    true);
   setChk('cfg-tg-notify-error',      c.tg_notify_error,      true);
-  setChk('cfg-tg-notify-queue-done', c.tg_notify_queue_done, false);
+  setChk('cfg-tg-notify-queue-done',    c.tg_notify_queue_done,    false);
+  setChk('cfg-tg-notify-new-releases', c.tg_notify_new_releases, false);
   setChk('cfg-tg-notify-disk-low',   c.tg_notify_disk_low,   false);
   const diskGbEl = document.getElementById('cfg-tg-disk-low-gb');
   if (diskGbEl) diskGbEl.value = c.tg_disk_low_gb ?? 10;
@@ -3314,6 +3433,13 @@ async function loadConfig() {
   // App-Titel
   const appTitleEl = document.getElementById('cfg-app-title');
   if (appTitleEl) appTitleEl.value = c.app_title ?? 'Xtream Vault';
+  const blEl = document.getElementById('cfg-category-blacklist');
+  if (blEl) blEl.value = (c.category_blacklist ?? '').split(',').map(s=>s.trim()).filter(Boolean).join('\n');
+  const aqChk   = document.getElementById('cfg-autoqueue-enabled');
+  const aqMax   = document.getElementById('cfg-autoqueue-max');
+  const aqFields = document.getElementById('autoqueue-fields');
+  if (aqChk) { aqChk.checked = c.autoqueue_enabled ?? false; if (aqFields) aqFields.style.display = aqChk.checked ? '' : 'none'; }
+  if (aqMax) aqMax.value = c.autoqueue_max ?? 10;
   // Aktuelle IP anzeigen
   const yourIpEl = document.getElementById('your-ip');
   if (yourIpEl) api('get_my_ip').then(d => { if (d.ip) yourIpEl.textContent = d.ip; });
@@ -3381,6 +3507,7 @@ function collectConfig() {
     tg_notify_success:     document.getElementById('cfg-tg-notify-success')?.checked  ?? true,
     tg_notify_error:       document.getElementById('cfg-tg-notify-error')?.checked    ?? true,
     tg_notify_queue_done:  document.getElementById('cfg-tg-notify-queue-done')?.checked ?? false,
+    tg_notify_new_releases: document.getElementById('cfg-tg-notify-new-releases')?.checked ?? false,
     tg_notify_disk_low:    document.getElementById('cfg-tg-notify-disk-low')?.checked  ?? false,
     tg_disk_low_gb:        parseFloat(document.getElementById('cfg-tg-disk-low-gb')?.value ?? '10'),
     vpn_enabled:           document.getElementById('cfg-vpn-enabled')?.checked  ?? false,
@@ -3389,6 +3516,9 @@ function collectConfig() {
     parallel_max:          parseInt(document.getElementById('cfg-parallel-max')?.value ?? '4') || 4,
     api_allowed_ips:       (document.getElementById('cfg-api-allowed-ips')?.value ?? '').split('\n').map(s=>s.trim()).filter(Boolean).join(','),
     app_title:             document.getElementById('cfg-app-title')?.value.trim() || 'Xtream Vault',
+    category_blacklist:    (document.getElementById('cfg-category-blacklist')?.value ?? '').split('\n').map(s=>s.trim()).filter(Boolean).join(','),
+    autoqueue_enabled:     document.getElementById('cfg-autoqueue-enabled')?.checked ?? false,
+    autoqueue_max:         parseInt(document.getElementById('cfg-autoqueue-max')?.value ?? '10') || 10,
   };
 }
 
@@ -3532,12 +3662,16 @@ function updateVpnBadge(status) {
   if (!badge) return;
   if (!status) { badge.style.display = 'none'; if (statsCard) statsCard.style.display = 'none'; return; }
   badge.style.display = '';
+  badge.classList.remove('vpn-on');
+  badge.style.removeProperty('background');
+  badge.style.removeProperty('color');
+  badge.style.removeProperty('border-color');
 
   if (!status.wg_installed) {
     badge.textContent = '⚠️ VPN';
-    badge.style.background   = 'rgba(255,71,87,.15)';
-    badge.style.color        = 'var(--red)';
-    badge.style.borderColor  = 'rgba(255,71,87,.3)';
+    badge.style.color       = 'var(--red)';
+    badge.style.borderColor = 'rgba(255,71,87,.3)';
+    badge.style.background  = 'rgba(255,71,87,.08)';
     badge.title = t('cfg.vpn_not_installed');
     if (statsCard) statsCard.style.display = 'none';
     return;
@@ -3545,9 +3679,7 @@ function updateVpnBadge(status) {
 
   if (status.up) {
     badge.textContent = '🔒 VPN';
-    badge.style.background  = 'rgba(46,213,115,.15)';
-    badge.style.color       = 'var(--green)';
-    badge.style.borderColor = 'rgba(46,213,115,.3)';
+    badge.classList.add('vpn-on');
     badge.title = `VPN aktiv (${status.interface})${status.public_ip ? ' · ' + status.public_ip : ''}`;
 
     // Stats-Card befüllen und anzeigen
@@ -3572,9 +3704,9 @@ function updateVpnBadge(status) {
     }
   } else {
     badge.textContent = '🔓 VPN';
-    badge.style.background  = 'rgba(255,159,67,.12)';
     badge.style.color       = 'var(--orange)';
     badge.style.borderColor = 'rgba(255,159,67,.25)';
+    badge.style.background  = 'rgba(255,159,67,.06)';
     badge.title = `VPN inaktiv (${status.interface})`;
     if (statsCard) statsCard.style.display = 'none';
     if (_vpnDurationTimer) { clearInterval(_vpnDurationTimer); _vpnDurationTimer = null; }
@@ -4994,12 +5126,26 @@ async function loadActivityLog() {
     queue_add: '➕', queue_add_bulk: '➕', queue_remove: '➖',
     create_user: '👤', delete_user: '🗑', suspend_user: '🚫', unsuspend_user: '✅',
     reset_password: '🔑', change_role: '🎭', change_own_password: '🔑',
+    save_config: '⚙️', clear_cron_log: '🧹', rebuild_cache: '🔄',
+    mark_downloaded: '✓', reset_download: '↺',
+    vpn_connect: '🔒', vpn_disconnect: '🔓',
+    queue_start: '▶', queue_cancel: '✕',
+    maintenance_enable: '🔒', maintenance_disable: '🔓',
+    run_update: '⬆️', backup_run: '💾', backup_restore: '↩',
+    create_invite: '🔗', reveal_api_key: '🔑',
   };
   const labels = {
     queue_add: t('actlog.queue_add'), queue_add_bulk: t('actlog.queue_add_bulk'), queue_remove: t('queue.removed'),
     create_user: t('users.created'), delete_user: t('actlog.delete_user'),
     suspend_user: t('users.suspended'), unsuspend_user: t('users.unsuspended'),
     reset_password: t('actlog.reset_password'), change_role: t('actlog.change_role'), change_own_password: t('actlog.change_own_password'),
+    save_config: t('actlog.save_config'), clear_cron_log: t('actlog.clear_cron_log'), rebuild_cache: t('actlog.rebuild_cache'),
+    mark_downloaded: t('actlog.mark_downloaded'), reset_download: t('actlog.reset_download'),
+    vpn_connect: t('actlog.vpn_connect'), vpn_disconnect: t('actlog.vpn_disconnect'),
+    queue_start: t('actlog.queue_start'), queue_cancel: t('actlog.queue_cancel'),
+    maintenance_enable: t('actlog.maintenance_enable'), maintenance_disable: t('actlog.maintenance_disable'),
+    run_update: t('update.done'), backup_run: t('backup.ok'), backup_restore: t('backup.restored'),
+    create_invite: t('invite.created'), reveal_api_key: t('apikey.copied'),
   };
 
   list.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px 20px">` +

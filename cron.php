@@ -55,6 +55,14 @@ if (!is_configured()) {
     exit(1);
 }
 
+// ── Stale vpn_manual.flag bereinigen ─────────────────────────────────────────
+// Wenn VPN manuell verbunden war aber nicht mehr läuft (z.B. nach Serverneustart),
+// die Flag automatisch löschen damit der Cron VPN wieder korrekt verwalten kann.
+if (VPN_ENABLED && vpn_is_manual() && !vpn_is_up()) {
+    @unlink(DATA_DIR . '/vpn_manual.flag');
+    clog("VPN: veraltetes vpn_manual.flag entfernt (VPN läuft nicht mehr)");
+}
+
 // ── Ziel prüfen ───────────────────────────────────────────────────────────────
 if (RCLONE_ENABLED) {
     $rcloneBin = RCLONE_BIN;
@@ -768,6 +776,8 @@ if ($serverFilter === null) {
     }
 
     // VPN trennen wenn wir ihn gestartet haben (nicht wenn manuell verbunden)
+    clog(sprintf("VPN-Status: startedByUs=%s isManual=%s",
+        $vpnStartedByUs ? 'ja' : 'nein', vpn_is_manual() ? 'ja' : 'nein'));
     if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
         clog("VPN: trenne " . VPN_INTERFACE . " (automatisch verbunden) …");
         $vpnDown = vpn_down();
@@ -1228,6 +1238,12 @@ if ($removed > 0) {
 
 // ── VPN: nach Downloads trennen ───────────────────────────────────────────────
 // Nur trennen wenn cron ihn selbst gestartet hat UND er nicht manuell verbunden ist.
+clog(sprintf("VPN-Status: ENABLED=%s startedByUs=%s isManual=%s isUp=%s",
+    VPN_ENABLED ? 'ja' : 'nein',
+    ($vpnStartedByUs ?? false) ? 'ja' : 'nein',
+    vpn_is_manual() ? 'ja' : 'nein',
+    (VPN_ENABLED && vpn_is_up()) ? 'ja' : 'nein'
+));
 if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
     if (!vpn_is_up()) {
         clog("VPN: " . VPN_INTERFACE . " bereits getrennt (extern)");
@@ -1239,6 +1255,8 @@ if (VPN_ENABLED && $vpnStartedByUs && !vpn_is_manual()) {
     }
 } elseif (VPN_ENABLED && $vpnStartedByUs && vpn_is_manual()) {
     clog("VPN: manuell verbunden — wird nicht automatisch getrennt");
+} elseif (VPN_ENABLED && !$vpnStartedByUs) {
+    clog("VPN: nicht vom Cron gestartet — kein Trennen");
 }
 
 // Benachrichtigung: alle Downloads abgeschlossen

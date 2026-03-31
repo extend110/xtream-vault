@@ -868,7 +868,8 @@ switch ($action) {
             'telegram_enabled'       => (bool)($c['telegram_enabled'] ?? false),
             'tg_notify_success'      => (bool)($c['tg_notify_success']    ?? true),
             'tg_notify_error'        => (bool)($c['tg_notify_error']      ?? true),
-            'tg_notify_queue_done'   => (bool)($c['tg_notify_queue_done'] ?? false),
+            'tg_notify_queue_done'   => (bool)($c['tg_notify_queue_done']    ?? false),
+            'tg_notify_new_releases' => (bool)($c['tg_notify_new_releases'] ?? false),
             'tg_notify_disk_low'     => (bool)($c['tg_notify_disk_low']   ?? false),
             'tg_disk_low_gb'         => (float)($c['tg_disk_low_gb']      ?? 10),
             'vpn_enabled'            => (bool)($c['vpn_enabled']    ?? false),
@@ -876,6 +877,9 @@ switch ($action) {
             'parallel_enabled'       => (bool)($c['parallel_enabled'] ?? true),
             'parallel_max'           => (int)($c['parallel_max']      ?? 4),
             'api_allowed_ips'        => $c['api_allowed_ips']         ?? '',
+            'category_blacklist'     => $c['category_blacklist']      ?? '',
+            'autoqueue_enabled'      => (bool)($c['autoqueue_enabled']  ?? false),
+            'autoqueue_max'          => (int)($c['autoqueue_max']        ?? 10),
             'app_title'              => $c['app_title']               ?? 'Xtream Vault',
         ]);
         break;
@@ -963,7 +967,8 @@ switch ($action) {
             'telegram_enabled'      => (bool)($d['telegram_enabled'] ?? $current['telegram_enabled'] ?? false),
             'tg_notify_success'     => (bool)($d['tg_notify_success']    ?? $current['tg_notify_success']    ?? true),
             'tg_notify_error'       => (bool)($d['tg_notify_error']      ?? $current['tg_notify_error']      ?? true),
-            'tg_notify_queue_done'  => (bool)($d['tg_notify_queue_done'] ?? $current['tg_notify_queue_done'] ?? false),
+            'tg_notify_queue_done'   => (bool)($d['tg_notify_queue_done']    ?? $current['tg_notify_queue_done']    ?? false),
+            'tg_notify_new_releases' => (bool)($d['tg_notify_new_releases'] ?? $current['tg_notify_new_releases'] ?? false),
             'tg_notify_disk_low'    => (bool)($d['tg_notify_disk_low']   ?? $current['tg_notify_disk_low']   ?? false),
             'tg_disk_low_gb'        => (float)($d['tg_disk_low_gb']      ?? $current['tg_disk_low_gb']       ?? 10),
             'vpn_enabled'           => (bool)($d['vpn_enabled']   ?? $current['vpn_enabled']   ?? false),
@@ -971,6 +976,9 @@ switch ($action) {
             'parallel_enabled'      => isset($d['parallel_enabled']) ? (bool)$d['parallel_enabled'] : (bool)($current['parallel_enabled'] ?? true),
             'parallel_max'          => max(1, min(10, (int)($d['parallel_max'] ?? $current['parallel_max'] ?? 4))),
             'api_allowed_ips'       => trim($d['api_allowed_ips'] ?? $current['api_allowed_ips'] ?? ''),
+            'category_blacklist'    => trim($d['category_blacklist'] ?? $current['category_blacklist'] ?? ''),
+            'autoqueue_enabled'     => isset($d['autoqueue_enabled']) ? (bool)$d['autoqueue_enabled'] : (bool)($current['autoqueue_enabled'] ?? false),
+            'autoqueue_max'         => max(1, min(100, (int)($d['autoqueue_max'] ?? $current['autoqueue_max'] ?? 10))),
             'app_title'             => trim($d['app_title'] ?? $current['app_title'] ?? 'Xtream Vault') ?: 'Xtream Vault',
             // Alte Felder für Rückwärtskompatibilität beibehalten falls vorhanden
             'server_ip'             => $current['server_ip'] ?? '',
@@ -987,6 +995,7 @@ switch ($action) {
         }
 
         if (save_config($new)) {
+            log_activity($current_user['id'], $current_user['username'], 'save_config', []);
             echo json_encode(['ok' => true]);
         } else {
             echo json_encode(['error' => 'Konnte config.json nicht schreiben – Berechtigungen prüfen']);
@@ -1493,6 +1502,12 @@ switch ($action) {
         $queue = load_queue();
         $qids  = array_map('strval', array_column($queue, 'stream_id'));
 
+        // Kategorien-Blacklist
+        $cfgBl = load_config();
+        $blacklist = array_filter(array_map('mb_strtolower', array_map('trim',
+            explode(',', $cfgBl['category_blacklist'] ?? ''))));
+        $isBlacklisted = fn($cat) => !empty($blacklist) && in_array(mb_strtolower(trim((string)($cat ?? ''))), $blacklist);
+
         // Cache nutzen wenn vorhanden
         $cacheFile = DATA_DIR . '/library_cache_' . $resolvedSrvId . '.json';
         $useCache  = file_exists($cacheFile);
@@ -1505,6 +1520,7 @@ switch ($action) {
                 $movies = [];
                 foreach ($cache as $sid => $m) {
                     if ($catId !== '' && ($m['category_id'] ?? '') !== (string)$catId) continue;
+                    if ($isBlacklisted($m['category'] ?? '')) continue;
                     $sidStr = (string)($m['stream_id'] ?? $sid);
                     $movies[] = [
                         'stream_id'           => $sidStr,
@@ -1539,6 +1555,8 @@ switch ($action) {
             $m['rating_5based'] = $m['rating_5based']  ?? '';
             $m['genre']         = $m['genre']          ?? '';
         }
+        unset($m);
+        $movies = array_values(array_filter($movies, fn($m) => !$isBlacklisted($m['category'] ?? '')));
         echo json_encode($movies);
         break;
     }
@@ -1551,9 +1569,17 @@ switch ($action) {
         foreach ($servers as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
         if (!$srv) $srv = $servers[0] ?? null;
         $list = $srv ? xtream_for_server($srv, 'get_series', ['category_id' => $catId]) : [];
+        $cfgBlS = load_config();
+        $blacklistS = array_filter(array_map('mb_strtolower', array_map('trim',
+            explode(',', $cfgBlS['category_blacklist'] ?? ''))));
         foreach ($list as &$s) {
             $s['clean_title'] = display_title($s['name'] ?? '');
             $s['_server_id']  = $srvId ?: ($srv['id'] ?? '');
+        }
+        unset($s);
+        if (!empty($blacklistS)) {
+            $list = array_values(array_filter($list, fn($s) =>
+                !in_array(mb_strtolower(trim((string)($s['category'] ?? ''))), $blacklistS)));
         }
         echo json_encode($list);
         break;
@@ -2237,6 +2263,7 @@ switch ($action) {
     case 'clear_cron_log':
         require_permission('settings');
         file_put_contents(CRON_LOG, '');
+        log_activity($current_user['id'], $current_user['username'], 'clear_cron_log', []);
         echo json_encode(['ok' => true]);
         break;
 
@@ -2482,6 +2509,7 @@ switch ($action) {
         $script = escapeshellarg(__DIR__ . '/cache_builder.php');
         $log    = escapeshellarg(DATA_PATH . '/cache_build.log');
         shell_exec("php {$script} > {$log} 2>&1 &");
+        log_activity($current_user['id'], $current_user['username'], 'rebuild_cache', []);
         echo json_encode(['ok' => true, 'message' => 'Cache-Rebuild gestartet']);
         break;
 

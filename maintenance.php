@@ -13,6 +13,7 @@ header('Retry-After: 3600');
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wartung – Xtream Vault</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -45,7 +46,7 @@ p { color: var(--muted); font-size: .88rem; line-height: 1.6; }
 <body>
 <div class="card">
   <div class="icon">🔧</div>
-  <div class="logo">Xtream Vault</div>
+  <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:26px;height:21px;vertical-align:middle;margin-right:10px;color:var(--accent)" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg>Xtream Vault</div>
   <div class="logo-sub">VOD Downloader</div>
   <h1>Wartungsmodus aktiv</h1>
   <p>Die Seite wird gerade gewartet und ist vorübergehend nicht verfügbar.<br>Bitte versuche es später erneut.</p>

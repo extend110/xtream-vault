@@ -34,10 +34,23 @@ register_shutdown_function(function() use ($lockFile) { @unlink($lockFile); });
 function blog(string $msg): void {
     $line = '[' . date('H:i:s') . '] [CACHE] ' . $msg;
     echo $line . PHP_EOL;
-    // Auch ins CRON_LOG schreiben damit es im UI sichtbar ist
     if (defined('CRON_LOG')) {
         @file_put_contents(CRON_LOG, $line . PHP_EOL, FILE_APPEND);
     }
+}
+
+function cache_tg_notify(string $msg): void {
+    $cfg    = load_config();
+    if (!($cfg['telegram_enabled'] ?? false)) return;
+    $token  = $cfg['telegram_bot_token'] ?? '';
+    $chatId = $cfg['telegram_chat_id']   ?? '';
+    if ($token === '' || $chatId === '') return;
+    $url  = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+    $body = json_encode(['chat_id' => $chatId, 'text' => $msg, 'parse_mode' => 'HTML']);
+    $ctx  = stream_context_create(['http' => ['method' => 'POST',
+        'header' => "Content-Type: application/json\r\nUser-Agent: XtreamVault/1.0\r\n",
+        'content' => $body, 'timeout' => 8]]);
+    @file_get_contents($url, false, $ctx);
 }
 
 function xtream_req_srv(array $server, string $action, array $extra = []): array {
@@ -237,6 +250,84 @@ $newReleasesData = [
 ];
 file_put_contents($newReleasesFile, json_encode($newReleasesData, JSON_UNESCAPED_UNICODE));
 blog(sprintf('Neue Releases: %d Filme → %s', count($accMovies), $newReleasesFile));
+
+// Telegram-Benachrichtigung wenn neue Releases gefunden
+$newCount = count($accMovies);
+$prevCount = count(array_filter($prev['movies'] ?? [], fn($m) => !isset($dismissedIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])));
+$actuallyNew = $newCount - $prevCount;
+if (!$isFirstRun && $actuallyNew > 0) {
+    $cfg2 = load_config();
+    if (!($cfg2['tg_notify_new_releases'] ?? false)) goto skip_tg_new_releases;
+    $appTitle = cfg('app_title', 'Xtream Vault');
+    $titles = array_slice(array_values($accMovies), max(0, $newCount - $actuallyNew), min(5, $actuallyNew));
+    $titleList = implode("\n", array_map(
+        fn($m) => '• ' . htmlspecialchars($m['clean_title'] ?? $m['title'] ?? '', ENT_XML1),
+        $titles
+    ));
+    $more = $actuallyNew > 5 ? "\n<i>+ " . ($actuallyNew - 5) . " weitere</i>" : '';
+    cache_tg_notify("🆕 <b>{$appTitle}</b> — {$actuallyNew} neue Filme\n\n{$titleList}{$more}");
+    blog("Telegram: {$actuallyNew} neue Releases gemeldet");
+}
+skip_tg_new_releases:
+
+// ── Auto-Queue neue Releases ──────────────────────────────────────────────────
+$cfgAq = load_config();
+if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) {
+    $aqMax = max(1, (int)($cfgAq['autoqueue_max'] ?? 10));
+
+    // Neue Filme (noch nicht heruntergeladen)
+    $dbAq       = load_db_local();
+    $dlMovieIds = array_flip(array_map('strval', $dbAq['movies'] ?? []));
+    $newMovies  = array_slice(
+        array_filter(array_values($accMovies), fn($m) =>
+            !isset($dlMovieIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])),
+        0, $aqMax
+    );
+
+    if (!empty($newMovies)) {
+        // Queue-Dateien pro Server einmalig laden
+        $queues    = [];
+        $queuedIds = [];
+        foreach ($newMovies as $m) {
+            $srvId = $m['_server_id'] ?? '';
+            if ($srvId === '' || isset($queues[$srvId])) continue;
+            $qf = DATA_DIR . '/queue_' . $srvId . '.json';
+            $queues[$srvId]    = file_exists($qf) ? (json_decode(@file_get_contents($qf), true) ?? []) : [];
+            $queuedIds[$srvId] = array_flip(array_map('strval', array_column($queues[$srvId], 'stream_id')));
+        }
+
+        $added = 0;
+        foreach ($newMovies as $m) {
+            $sid   = (string)($m['stream_id'] ?? $m['id'] ?? '');
+            $srvId = $m['_server_id'] ?? '';
+            if ($sid === '' || $srvId === '' || isset($queuedIds[$srvId][$sid])) continue;
+            $qf = DATA_DIR . '/queue_' . $srvId . '.json';
+            $queues[$srvId][] = [
+                'stream_id'           => $sid,
+                'type'                => 'movie',
+                'title'               => $m['clean_title'] ?? $m['title'] ?? '',
+                'container_extension' => $m['ext'] ?? 'mp4',
+                'cover'               => $m['cover'] ?? '',
+                'dest_subfolder'      => 'Movies',
+                'category'            => $m['category'] ?? '',
+                'added_at'            => date('Y-m-d H:i:s'),
+                'added_by'            => 'auto-queue',
+                'status'              => 'pending',
+                'error'               => null,
+                '_queue_file'         => $qf,
+                '_server_id'          => $srvId,
+            ];
+            $queuedIds[$srvId][$sid] = true;
+            $added++;
+        }
+
+        foreach ($queues as $srvId => $q) {
+            @file_put_contents(DATA_DIR . '/queue_' . $srvId . '.json', json_encode($q, JSON_UNESCAPED_UNICODE));
+        }
+
+        if ($added > 0) blog("Auto-Queue: {$added} neue Filme zur Queue hinzugefügt");
+    }
+}
 
 // ── Downloaded-Index aufbauen ─────────────────────────────────────────────────
 blog('=== Baue Downloaded-Index auf ===');

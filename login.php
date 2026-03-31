@@ -47,6 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($result === 'suspended') {
             $error = 'Dein Konto wurde gesperrt. Bitte kontaktiere einen Administrator.';
+        } elseif (is_string($result) && str_starts_with($result, 'locked:')) {
+            $secs = (int)substr($result, 7);
+            $mins = max(1, (int)ceil($secs / 60));
+            $error = "Zu viele Fehlversuche. Bitte warte {$mins} Minute(n) und versuche es erneut.";
         } elseif ($result) {
             header('Location: index.php');
             exit;

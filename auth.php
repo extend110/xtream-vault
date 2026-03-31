@@ -10,8 +10,73 @@
 
 require_once __DIR__ . '/config.php';
 
-define('USERS_FILE',    DATA_DIR . '/users.json');
-define('RATELIMIT_FILE', DATA_DIR . '/rate_limits.json');
+define('USERS_FILE',         DATA_DIR . '/users.json');
+define('RATELIMIT_FILE',     DATA_DIR . '/rate_limits.json');
+define('LOGIN_ATTEMPTS_FILE', DATA_DIR . '/login_attempts.json');
+
+// ── Brute-Force-Schutz ────────────────────────────────────────────────────────
+const BF_MAX_ATTEMPTS = 5;   // Fehlversuche bevor Sperre
+const BF_LOCKOUT_SEC  = 900; // Sperrdauer in Sekunden (15 Min)
+
+function get_login_attempts(): array {
+    if (!file_exists(LOGIN_ATTEMPTS_FILE)) return [];
+    return json_decode(@file_get_contents(LOGIN_ATTEMPTS_FILE), true) ?? [];
+}
+
+function save_login_attempts(array $data): void {
+    @mkdir(DATA_DIR, 0755, true);
+    file_put_contents(LOGIN_ATTEMPTS_FILE, json_encode($data, JSON_PRETTY_PRINT));
+}
+
+function bf_key(): string {
+    // IP + User-Agent Hash als Key
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $ip = trim(explode(',', $ip)[0]);
+    return md5($ip);
+}
+
+function bf_check(): array {
+    $data   = get_login_attempts();
+    $key    = bf_key();
+    $entry  = $data[$key] ?? null;
+    $now    = time();
+    if (!$entry) return ['allowed' => true];
+    // Sperre abgelaufen?
+    if (($entry['locked_until'] ?? 0) > 0 && $entry['locked_until'] <= $now) {
+        unset($data[$key]);
+        save_login_attempts($data);
+        return ['allowed' => true];
+    }
+    if (($entry['locked_until'] ?? 0) > $now) {
+        return ['allowed' => false, 'seconds' => $entry['locked_until'] - $now];
+    }
+    return ['allowed' => true, 'attempts' => $entry['attempts'] ?? 0];
+}
+
+function bf_record_failure(): void {
+    $data  = get_login_attempts();
+    $key   = bf_key();
+    $now   = time();
+    $entry = $data[$key] ?? ['attempts' => 0, 'locked_until' => 0];
+    // Alte Einträge (> 1h) zurücksetzen
+    if (($entry['last_attempt'] ?? 0) < $now - 3600) $entry['attempts'] = 0;
+    $entry['attempts']++;
+    $entry['last_attempt'] = $now;
+    if ($entry['attempts'] >= BF_MAX_ATTEMPTS) {
+        $entry['locked_until'] = $now + BF_LOCKOUT_SEC;
+    }
+    $data[$key] = $entry;
+    save_login_attempts($data);
+}
+
+function bf_record_success(): void {
+    $data = get_login_attempts();
+    $key  = bf_key();
+    if (isset($data[$key])) {
+        unset($data[$key]);
+        save_login_attempts($data);
+    }
+}
 
 // ── Rollen-Berechtigungen ─────────────────────────────────────────────────────
 const ROLE_PERMISSIONS = [
@@ -294,10 +359,18 @@ function csrf_verify(array $jsonBody = []): bool {
 }
 
 function attempt_login(string $username, string $password): array|false|string {
+    // Brute-Force-Prüfung
+    $bf = bf_check();
+    if (!$bf['allowed']) return 'locked:' . ($bf['seconds'] ?? BF_LOCKOUT_SEC);
+
     $user = find_user($username);
-    if (!$user) return false;
-    if (!password_verify($password, $user['password'])) return false;
+    if (!$user || !password_verify($password, $user['password'])) {
+        bf_record_failure();
+        return false;
+    }
     if (!empty($user['suspended'])) return 'suspended';
+
+    bf_record_success();
 
     // last_login aktualisieren
     $users = load_users();
