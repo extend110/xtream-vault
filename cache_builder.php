@@ -275,6 +275,22 @@ $cfgAq = load_config();
 if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) {
     $aqMax = max(1, (int)($cfgAq['autoqueue_max'] ?? 10));
 
+    // Hilfsfunktionen (analog zu api.php)
+    $aq_sanitize = fn(string $n): string => trim(preg_replace('/\s+/u', ' ',
+        preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '',
+        preg_replace('/[<>:"|?*]/u', '',
+        str_replace(['/', '\\'], '-', $n))))) ?: 'Unknown';
+
+    $aq_stream_url = fn(array $srv, string $sid, string $ext): string =>
+        'http://' . $srv['server_ip'] . ':' . $srv['port']
+        . '/movie/' . $srv['username'] . '/' . ($srv['password'] ?? '') . "/{$sid}.{$ext}";
+
+    // Server-Map für stream_url Aufbau
+    $allSrvMap = [];
+    foreach (file_exists(SERVERS_FILE) ? (json_decode(@file_get_contents(SERVERS_FILE), true) ?? []) : [] as $s) {
+        $allSrvMap[$s['id']] = $s;
+    }
+
     // Neue Filme (noch nicht heruntergeladen)
     $dbAq       = load_db_local();
     $dlMovieIds = array_flip(array_map('strval', $dbAq['movies'] ?? []));
@@ -301,15 +317,21 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
             $sid   = (string)($m['stream_id'] ?? $m['id'] ?? '');
             $srvId = $m['_server_id'] ?? '';
             if ($sid === '' || $srvId === '' || isset($queuedIds[$srvId][$sid])) continue;
-            $qf = DATA_DIR . '/queue_' . $srvId . '.json';
+            $qf    = DATA_DIR . '/queue_' . $srvId . '.json';
+            $ext   = $m['ext'] ?? 'mp4';
+            $srv   = $allSrvMap[$srvId] ?? null;
+            $title = $aq_sanitize($m['clean_title'] ?? $m['title'] ?? 'Unknown');
             $queues[$srvId][] = [
                 'stream_id'           => $sid,
                 'type'                => 'movie',
-                'title'               => $m['clean_title'] ?? $m['title'] ?? '',
-                'container_extension' => $m['ext'] ?? 'mp4',
+                'title'               => $title,
+                'container_extension' => $ext,
                 'cover'               => $m['cover'] ?? '',
                 'dest_subfolder'      => 'Movies',
                 'category'            => $m['category'] ?? '',
+                'category_original'   => $m['category'] ?? '',
+                'priority'            => 2,
+                'stream_url'          => $srv ? $aq_stream_url($srv, $sid, $ext) : '',
                 'added_at'            => date('Y-m-d H:i:s'),
                 'added_by'            => 'auto-queue',
                 'status'              => 'pending',
