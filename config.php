@@ -203,12 +203,14 @@ define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', '
 function extract_country_prefix(string $name): string {
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
+    // Format: ┃DE┃, ┃DE|..┃, |DE|, │DE│ — Prefix eingeschlossen in Sonderzeichen
+    if (preg_match('/^[^\p{L}\p{N}]+([A-Z]{2,4})[^\p{L}\p{N}]+/u', strtoupper($name), $m)) return $m[1];
     // Format: (V|CC), (CC|...), [CC] am Anfang
     if (preg_match('/^[\(\[][^)\]]*[|\/]([A-Z]{2,4})[\)\]]/u', strtoupper($name), $m)) return $m[1];
     if (preg_match('/^[\(\[]([A-Z]{2,4})[\)\]]/u', strtoupper($name), $m)) return $m[1];
-    // Mit Standard-Trennzeichen
+    // Mit Standard-Trennzeichen: DE-, DE|, DE:, DE<space>
     if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) return $m[1];
-    // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃)
+    // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃) nach dem Prefix
     if (preg_match('/^([A-Z]{2,4})[^\p{L}\p{N}\s]+/u', $name, $m)) return $m[1];
     // Ohne Trennzeichen: nur bekannte Kürzel
     foreach (COUNTRY_CODES as $code) {
@@ -224,15 +226,18 @@ function extract_country_prefix(string $name): string {
 function remove_country_prefix(string $name): string {
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
+    // Format: ┃DE┃, |DE|, │DE│ — Prefix eingeschlossen in Sonderzeichen
+    $stripped = preg_replace('/^[^\p{L}\p{N}]+[A-Z]{2,4}[^\p{L}\p{N}]+\s*/u', '', $name);
+    if ($stripped !== $name) return trim($stripped);
     // Format: (V|CC) ... oder (CC) ... am Anfang
     $stripped = preg_replace('/^[\(\[][^)\]]*[|\/][A-Z]{2,4}[\)\]]\s*/u', '', $name);
     if ($stripped !== $name) return trim($stripped);
     $stripped = preg_replace('/^[\(\[][A-Z]{2,4}[\)\]]\s*/u', '', $name);
     if ($stripped !== $name) return trim($stripped);
-    // Mit Standard-Trennzeichen (Leerzeichen, |, :, -)
+    // Mit Standard-Trennzeichen
     $stripped = preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name);
     if ($stripped !== $name) return trim($stripped);
-    // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃ U+2503, │ U+2502, ‖ etc.)
+    // Mit Unicode-Sonderzeichen nach dem Prefix
     $stripped = preg_replace('/^[A-Z]{2,4}[^\p{L}\p{N}\s]+/u', '', $name);
     if ($stripped !== $name) return trim($stripped);
     // Ohne Trennzeichen: bekannte Kürzel
@@ -293,77 +298,53 @@ function safe_filename(string $name): string {
  * @return array       ['rel_path' => string, 'filename' => string, 'safe_title' => string]
  */
 function build_dest_path(array $item): array {
-    $title  = $item['title']  ?? '';
+    $type   = $item['type']                ?? 'movie';
+    $title  = $item['title']               ?? '';
     $ext    = $item['container_extension'] ?? 'mp4';
-    $type   = $item['type']   ?? 'movie';
-    $cat    = !empty($item['category']) ? $item['category'] : 'Uncategorized';
-    $season = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
-    $sub    = $item['dest_subfolder'] ?? ($type === 'movie' ? 'Movies' : 'TV Shows');
+    $cat    = $item['category']            ?: 'Uncategorized';
+    $season = isset($item['season']) ? (int)$item['season'] : null;
+    $sub    = $item['dest_subfolder']      ?? ($type === 'movie' ? 'Movies' : 'TV Shows');
+    $sep    = DIRECTORY_SEPARATOR;
 
-    // Länderkürzel — zuerst aus Originalkategorie, dann aus Kategorie, dann aus Titel
-    $catForPrefix = !empty($item['category_original']) ? $item['category_original'] : $cat;
-    $countryPrefix = extract_country_prefix($catForPrefix);
-    if ($countryPrefix === '') $countryPrefix = extract_country_prefix($cat);
-    if ($countryPrefix === '') $countryPrefix = extract_country_prefix($title);
+    // ── 1. Länderpräfix ermitteln ─────────────────────────────────────────────
+    // Reihenfolge: Originalkategorie → Kategorie → Titel
+    $prefix = extract_country_prefix($item['category_original'] ?? $cat)
+           ?: extract_country_prefix($cat)
+           ?: extract_country_prefix($title);
 
-    // Kategorie bereinigen
-    $catTrimmed = preg_replace('/\xc2\xa0/', ' ', trim($cat));
-    $cleanCat   = remove_country_prefix($catTrimmed);
-    if ($cleanCat === $catTrimmed) {
-        $cleanCat = preg_replace('/^[A-Z]{2,4}\s+/u', '', $catTrimmed);
-    }
-    $cleanCat = trim($cleanCat) ?: $catTrimmed;
-    $safeCat  = safe_filename($cleanCat) ?: 'Uncategorized';
-    $safeCat  = trim($safeCat, ' -_.') ?: 'Uncategorized';
+    // ── 2. Kategoriename bereinigen ───────────────────────────────────────────
+    $cleanCat = safe_filename(
+        trim(remove_country_prefix(preg_replace('/\xc2\xa0/', ' ', $cat)), ' -_.')
+    ) ?: 'Uncategorized';
 
-    $safePrefix = $countryPrefix !== '' ? $countryPrefix : '';
-
-    if ($type === 'episode') {
-        if ($safePrefix !== '' && str_starts_with($safeCat, $safePrefix)) {
-            $safeCat = trim(substr($safeCat, strlen($safePrefix)), ' -_.');
-            $safeCat = $safeCat ?: 'Uncategorized';
-        }
-        if ($safePrefix === '') {
-            $safePrefix = extract_country_prefix($safeCat);
-            $safeCat    = remove_country_prefix($safeCat);
-            $safeCat    = trim($safeCat, ' -_.') ?: 'Uncategorized';
-        }
-    }
-
-    // Dateiname
-    $fileTitle = clean_title($title);
-    if ($type !== 'movie') {
-        $seriesBase = $safeCat ?: 'Unknown';
-        $episode = '';
+    // ── 3. Dateiname bauen ────────────────────────────────────────────────────
+    if ($type === 'movie') {
+        $filename = safe_filename(clean_title($title))
+                 ?: safe_filename($title)
+                 ?: 'item_' . ($item['stream_id'] ?? '0');
+    } else {
+        // Episodennummer aus Titel oder Item-Feldern
         if (preg_match('/[Ss](\d{1,2})[Ee](\d{1,2})/u', $title, $m)) {
             $episode = sprintf('S%02dE%02d', (int)$m[1], (int)$m[2]);
-        }
-        if ($episode === '' && isset($item['season'], $item['episode_num'])) {
+        } elseif (isset($item['season'], $item['episode_num'])) {
             $episode = sprintf('S%02dE%02d', (int)$item['season'], (int)$item['episode_num']);
+        } else {
+            $episode = '';
         }
-        $fileTitle = $episode !== '' ? $seriesBase . '.' . $episode : $seriesBase;
+        $filename = $episode !== '' ? "{$cleanCat}.{$episode}" : $cleanCat;
     }
-    $safeTitle = safe_filename($fileTitle) ?: safe_filename($title) ?: 'item_' . ($item['stream_id'] ?? '0');
-    $safeTitle = trim($safeTitle, ' -_.') ?: 'item_' . ($item['stream_id'] ?? '0');
 
-    // Pfad zusammenbauen
-    $sep = DIRECTORY_SEPARATOR;
-    if ($type === 'episode') {
-        $staffel = $season !== null ? ('Staffel ' . $season) : '';
-        $relPath = $sub
-            . ($safePrefix !== '' ? $sep . $safePrefix : '')
-            . $sep . $safeCat
-            . ($staffel !== '' ? $sep . $staffel : '')
-            . $sep . $safeTitle . '.' . $ext;
-    } else {
-        $relPath = $sub
-            . ($safePrefix !== '' ? $sep . $safePrefix : '')
-            . $sep . $safeCat
-            . $sep . $safeTitle . '.' . $ext;
-    }
+    $safeTitle = trim($filename, ' -_.') ?: 'item_' . ($item['stream_id'] ?? '0');
+
+    // ── 4. Pfad zusammenbauen ─────────────────────────────────────────────────
+    $parts = [$sub];
+    if ($prefix !== '')  $parts[] = $prefix;
+    $parts[] = $cleanCat;
+    if ($type === 'episode' && $season !== null) $parts[] = 'Staffel ' . $season;
+    $parts[] = $safeTitle . '.' . $ext;
 
     return [
-        'rel_path'   => $relPath,
+        'rel_path'   => implode($sep, $parts),
         'filename'   => $safeTitle . '.' . $ext,
         'safe_title' => $safeTitle,
     ];

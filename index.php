@@ -4432,6 +4432,18 @@ async function dashRebuildCache() {
 async function dashClearDone() {
   await api('queue_clear_done');
   showToast('Erledigte Einträge entfernt', 'info');
+  // Done-Items sofort aus der Liste entfernen
+  const list = document.getElementById('dash-queue-list');
+  list?.querySelectorAll('.queue-item.status-done').forEach(el => el.remove());
+  // "+ X weitere" neu berechnen: verbleibende sichtbare Items + gespeicherte Gesamtzahl
+  const moreEl = list?.querySelector('[data-more]');
+  if (moreEl) {
+    const total     = parseInt(moreEl.dataset.more);
+    const visible   = list.querySelectorAll('.queue-item').length;
+    const remaining = total - (total - visible) - 10;
+    // Nach dem Clear: refreshDashboardQueue übernimmt den korrekten Zähler
+    moreEl.remove();
+  }
   refreshDashboardQueue(); loadDashboardData(); refreshQueue(); updateQueueBadge(); loadStats();
 }
 async function dashClearAll() {
@@ -4823,8 +4835,9 @@ async function refreshDashboardQueue() {
   if (needsFull || list.querySelector('.state-box')) {
     list.innerHTML = sorted.map(dashQueueItemHTML).join('');
     if (items.length > 10) {
-      list.innerHTML += `<div style="text-align:center;padding:12px;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted)">
-        + ${items.length - 10} weitere — <span style="color:var(--accent);cursor:pointer" onclick="showView('queue')">Alle anzeigen</span>
+      const extra = items.length - 10;
+      list.innerHTML += `<div data-more="${items.length}" style="text-align:center;padding:12px;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted)">
+        <span>+ ${extra} weitere —</span> <span style="color:var(--accent);cursor:pointer" onclick="showView('queue')">Alle anzeigen</span>
       </div>`;
     }
   } else {
