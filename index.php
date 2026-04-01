@@ -1641,7 +1641,7 @@ function renderSearchHistory() {
   html += `<div style="display:flex;flex-wrap:wrap;gap:6px">`;
   html += history.map(q => {
     const escaped = esc(q).replace(/'/g, '&#39;');
-    return `<button class="history-chip" onclick="doSearchFromHistory('${escaped}')" style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.78rem;cursor:pointer;color:var(--text);font-family:'DM Sans',sans-serif;transition:border-color .15s,color .15s">🔍 ${esc(q)}</button>`;
+    return `<button class="history-chip" onclick="doSearchFromHistory('${jsesc(q)}')" style="background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:4px 12px;font-size:.78rem;cursor:pointer;color:var(--text);font-family:'DM Sans',sans-serif;transition:border-color .15s,color .15s">🔍 ${esc(q)}</button>`;
   }).join('');
   html += `</div>`;
   box.innerHTML = html;
@@ -2126,7 +2126,7 @@ async function openSeriesModal(id, title, cover, category, serverId) {
     const epIds = eps.map(e => e.id).join(',');
     const pendingCount = eps.filter(e => !e.downloaded && !e.queued && !_downloadingIds.has(String(e.id))).length;
     const queueAllBtn = canQueueAdd && pendingCount > 0
-      ? `<span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">⏳ ${t('modal.queue_all')}</span>`
+      ? `<span class="season-queue-all" onclick="queueAllSeasonById('${epIds}',${seasonNum},'${jsesc(title)}','${jsesc(category||'')}','${jsesc(serverId||'')}')">⏳ ${t('modal.queue_all')}</span>`
       : '';
     const markAllBtn = <?= $can_settings ? 'true' : 'false' ?>
       ? `<span class="season-queue-all" style="color:var(--accent2);margin-left:4px" onclick="markAllSeasonDownloaded('${epIds}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}')">✓ ${t('btn.mark_all_downloaded')}</span>`
@@ -2147,12 +2147,12 @@ async function openSeriesModal(id, title, cover, category, serverId) {
         epBtn = `<button class="ep-btn done" disabled>⏳</button>`;
       } else if (!isEditor && canQueueAdd) {
         // Admins/Viewer sehen Einzel-Buttons; Editoren nur den Staffel-Button
-        epBtn = `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${esc(title)}','${esc(category||'')}','${esc(serverId||'')}',this)">+ Q</button>`;
+        epBtn = `<button class="ep-btn add" id="epbtn-${ep.id}" onclick="queueEpisodeById('${ep.id}',${seasonNum},'${jsesc(title)}','${jsesc(category||'')}','${jsesc(serverId||'')}',this)">+ Q</button>`;
       }
       // "Als heruntergeladen markieren" — nur Admins, nur wenn nicht already done/downloading
       const markEpBtn = (<?= $can_settings ? 'true' : 'false' ?> && !ep.downloaded && !_downloadingIds.has(String(ep.id)))
         ? `<button class="ep-btn done" style="opacity:.5;margin-left:2px" title="${t('btn.mark_downloaded')}"
-            onclick="markEpisodeDownloaded('${ep.id}','${esc(ep.clean_title||ep.title)}','${esc(category||'')}','${esc(ep.container_extension||'mp4')}','${esc(serverId||'')}',this)">✓</button>`
+            onclick="markEpisodeDownloaded('${ep.id}','${jsesc(ep.clean_title||ep.title)}','${jsesc(category||'')}','${jsesc(ep.container_extension||'mp4')}','${jsesc(serverId||'')}',this)">✓</button>`
         : '';
       html += `
       <div class="episode-row" id="ep-${ep.id}">
@@ -3136,7 +3136,7 @@ async function loadBackups() {
       <td style="padding:8px 0;text-align:right;color:var(--muted);font-size:.78rem">${fmtBytes(b.size)}</td>
       <td style="padding:8px 0;text-align:right;color:var(--muted);font-size:.78rem">${esc(b.created_at)}</td>
       <td style="padding:8px 4px;text-align:right;display:flex;gap:4px;justify-content:flex-end">
-        <button class="btn-sm" onclick="restoreBackup('${esc(b.name)}')">↩ Restore</button>
+        <button class="btn-sm" onclick="restoreBackup('${jsesc(b.name)}')">↩ Restore</button>
         <button class="btn-sm danger" onclick="deleteBackup('${esc(b.name)}',this.closest('tr'))">✕</button>
       </td>
     </tr>`).join('')}
@@ -3286,10 +3286,10 @@ async function loadServers() {
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;opacity:${enabled?'1':'.5'}" id="srv-card-${esc(s.id)}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <span style="font-size:.9rem;font-weight:600;flex:1">${esc(s.name)}${!enabled?' <span style="font-family:\'DM Mono\',monospace;font-size:.6rem;color:var(--muted)">(deaktiviert)</span>':''}</span>
-        <button class="btn-icon" title="Verbindung testen" ${!enabled?'disabled':''} onclick="testServer('${esc(s.id)}','${esc(s.name)}',this)">🔌</button>
+        <button class="btn-icon" title="Verbindung testen" ${!enabled?'disabled':''} onclick="testServer('${jsesc(s.id)}','${jsesc(s.name)}',this)">🔌</button>
         <button class="btn-icon" title="${enabled?'Deaktivieren':'Aktivieren'}" onclick="toggleServer('${esc(s.id)}',this)">${enabled?'⏸':'▶'}</button>
         <button class="btn-icon" title="Bearbeiten" onclick="openEditServerModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">✏️</button>
-        <button class="btn-icon danger" title="Löschen" onclick="deleteServer('${esc(s.id)}','${esc(s.name)}')">✕</button>
+        <button class="btn-icon danger" title="Löschen" onclick="deleteServer('${jsesc(s.id)}','${jsesc(s.name)}')">✕</button>
       </div>
       <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:10px">
         <span>🌐 ${esc(s.server_ip)}:${esc(s.port)}</span>
@@ -5149,15 +5149,15 @@ async function loadUsers() {
       <td>
         <div style="display:flex;align-items:center;gap:6px">
           ${limitDisplay}
-          <button class="btn-icon" onclick="setUserLimit('${esc(u.id)}','${esc(u.username)}','${limitVal}')" title="Limit ändern">✏️</button>
+          <button class="btn-icon" onclick="setUserLimit('${jsesc(u.id)}','${jsesc(u.username)}','${limitVal}')" title="Limit ändern">✏️</button>
         </div>
       </td>
       <td>
         <div class="user-actions">
-          <button class="btn-icon" onclick="openEditUser('${esc(u.id)}','${esc(u.username)}','${u.role}')">✏️ ${t('btn.edit')}</button>
-          <button class="btn-icon" onclick="openPwResetModal('${esc(u.id)}','${esc(u.username)}')">🔑 ${t('cfg.password')}</button>
+          <button class="btn-icon" onclick="openEditUser('${jsesc(u.id)}','${jsesc(u.username)}','${u.role}')">✏️ ${t('btn.edit')}</button>
+          <button class="btn-icon" onclick="openPwResetModal('${jsesc(u.id)}','${jsesc(u.username)}')">🔑 ${t('cfg.password')}</button>
           ${suspendBtn}
-          <button class="btn-icon danger" onclick="deleteUser('${esc(u.id)}','${esc(u.username)}')">✕ ${t('btn.delete')}</button>
+          <button class="btn-icon danger" onclick="deleteUser('${jsesc(u.id)}','${jsesc(u.username)}')">✕ ${t('btn.delete')}</button>
         </div>
       </td>
     </tr>`}).join('');
