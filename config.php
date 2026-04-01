@@ -203,6 +203,9 @@ define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', '
 function extract_country_prefix(string $name): string {
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
+    // Format: (V|CC), (CC|...), [CC] am Anfang
+    if (preg_match('/^[\(\[][^)\]]*[|\/]([A-Z]{2,4})[\)\]]/u', strtoupper($name), $m)) return $m[1];
+    if (preg_match('/^[\(\[]([A-Z]{2,4})[\)\]]/u', strtoupper($name), $m)) return $m[1];
     // Mit Standard-Trennzeichen
     if (preg_match('/^([A-Z]{2,4})[\s\|:\-]+/', $name, $m)) return $m[1];
     // Mit Unicode-Sonderzeichen als Trennzeichen (z.B. ┃)
@@ -219,9 +222,13 @@ function extract_country_prefix(string $name): string {
 }
 
 function remove_country_prefix(string $name): string {
-    // Normalisieren: non-breaking spaces und alle sonstigen Whitespace-Varianten → normales Leerzeichen
     $name = preg_replace('/\xc2\xa0|\s+/', ' ', $name);
     $name = trim($name);
+    // Format: (V|CC) ... oder (CC) ... am Anfang
+    $stripped = preg_replace('/^[\(\[][^)\]]*[|\/][A-Z]{2,4}[\)\]]\s*/u', '', $name);
+    if ($stripped !== $name) return trim($stripped);
+    $stripped = preg_replace('/^[\(\[][A-Z]{2,4}[\)\]]\s*/u', '', $name);
+    if ($stripped !== $name) return trim($stripped);
     // Mit Standard-Trennzeichen (Leerzeichen, |, :, -)
     $stripped = preg_replace('/^[A-Z]{2,4}[\s\|:\-]+/', '', $name);
     if ($stripped !== $name) return trim($stripped);

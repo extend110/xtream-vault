@@ -85,6 +85,7 @@ if (!$api_key_auth && !in_array($action, $public_actions)) {
     $current_user = require_login();
 }
 
+
 // ─── CSRF-Schutz für alle POST-Requests (außer API-Key-Auth und öffentliche Endpoints) ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$api_key_auth && !in_array($action, $public_actions)) {
     session_start_safe();
@@ -880,6 +881,7 @@ switch ($action) {
             'category_blacklist'     => $c['category_blacklist']      ?? '',
             'autoqueue_enabled'      => (bool)($c['autoqueue_enabled']  ?? false),
             'autoqueue_max'          => (int)($c['autoqueue_max']        ?? 10),
+            'autoqueue_prefix'       => $c['autoqueue_prefix']           ?? '',
             'app_title'              => $c['app_title']               ?? 'Xtream Vault',
         ]);
         break;
@@ -979,6 +981,7 @@ switch ($action) {
             'category_blacklist'    => trim($d['category_blacklist'] ?? $current['category_blacklist'] ?? ''),
             'autoqueue_enabled'     => isset($d['autoqueue_enabled']) ? (bool)$d['autoqueue_enabled'] : (bool)($current['autoqueue_enabled'] ?? false),
             'autoqueue_max'         => max(1, min(100, (int)($d['autoqueue_max'] ?? $current['autoqueue_max'] ?? 10))),
+            'autoqueue_prefix'      => trim($d['autoqueue_prefix'] ?? $current['autoqueue_prefix'] ?? ''),
             'app_title'             => trim($d['app_title'] ?? $current['app_title'] ?? 'Xtream Vault') ?: 'Xtream Vault',
             // Alte Felder für Rückwärtskompatibilität beibehalten falls vorhanden
             'server_ip'             => $current['server_ip'] ?? '',
@@ -1566,13 +1569,44 @@ switch ($action) {
         $srv = null;
         foreach ($servers as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
         if (!$srv) $srv = $servers[0] ?? null;
-        $list = $srv ? xtream_for_server($srv, 'get_series', ['category_id' => $catId]) : [];
+        $resolvedSrvId = $srv['id'] ?? $srvId;
+
+        // Kategorien-Blacklist
         $cfgBlS = load_config();
         $blacklistS = array_filter(array_map('mb_strtolower', array_map('trim',
             explode(',', $cfgBlS['category_blacklist'] ?? ''))));
+        $isBlacklistedS = fn($cat) => !empty($blacklistS) && in_array(mb_strtolower(trim((string)($cat ?? ''))), $blacklistS);
+
+        // Cache nutzen wenn vorhanden
+        $serCacheFile = DATA_DIR . '/series_cache_' . $resolvedSrvId . '.json';
+        if (file_exists($serCacheFile)) {
+            $cache = json_decode(file_get_contents($serCacheFile), true) ?? [];
+            $list  = [];
+            foreach ($cache as $s) {
+                if ($catId !== '' && ($s['category_id'] ?? '') !== (string)$catId) continue;
+                if ($isBlacklistedS($s['category'] ?? '')) continue;
+                $list[] = [
+                    'series_id'   => $s['series_id']   ?? '',
+                    'name'        => $s['clean_title']  ?? '',
+                    'clean_title' => $s['clean_title']  ?? '',
+                    'cover'       => $s['cover']        ?? '',
+                    'category'    => $s['category']     ?? '',
+                    'category_id' => $s['category_id']  ?? '',
+                    'genre'       => $s['genre']        ?? '',
+                    'type'        => 'series',
+                    '_server_id'  => $resolvedSrvId,
+                    '_server_name'=> $srv['name'] ?? '',
+                ];
+            }
+            echo json_encode($list);
+            break;
+        }
+
+        // Fallback: direkt vom Server
+        $list = $srv ? xtream_for_server($srv, 'get_series', ['category_id' => $catId]) : [];
         foreach ($list as &$s) {
             $s['clean_title'] = display_title($s['name'] ?? '');
-            $s['_server_id']  = $srvId ?: ($srv['id'] ?? '');
+            $s['_server_id']  = $resolvedSrvId;
         }
         unset($s);
         if (!empty($blacklistS)) {
@@ -1589,7 +1623,13 @@ switch ($action) {
         $srv = null;
         foreach ($servers as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
         if (!$srv) $srv = $servers[0] ?? null;
-        $data     = $srv ? xtream_for_server($srv, 'get_series_info', ['series_id' => $_GET['series_id'] ?? '']) : [];
+        $seriesId = $_GET['series_id'] ?? '';
+        $seriesId = $_GET['series_id'] ?? '';
+        $params = ['username' => $srv['username'], 'password' => $srv['password'] ?? '', 'action' => 'get_series_info', 'series_id' => $seriesId];
+        $url = 'http://' . $srv['server_ip'] . ':' . $srv['port'] . '/player_api.php?' . http_build_query($params);
+        $ctx = stream_context_create(['http' => ['timeout' => 30, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+        $raw  = @file_get_contents($url, false, $ctx);
+        $data = ($raw && $raw !== '') ? (json_decode($raw, true) ?? []) : [];
         $db       = load_db();
         $queue    = load_queue();
         $qids     = array_map('strval', array_column($queue, 'stream_id'));

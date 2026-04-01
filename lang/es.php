@@ -505,4 +505,6 @@ return [
     'cfg.autoqueue_enable' => 'Añadir novedades automáticamente a la cola',
     'cfg.autoqueue_max' => 'Máximo por ejecución',
     'cfg.autoqueue_max_hint' => 'Cuántas películas nuevas añadir por ejecución de caché como máximo (1–100)',
+    'cfg.autoqueue_prefix' => 'Filtro de prefijo de país',
+    'cfg.autoqueue_prefix_hint' => 'Separado por comas, ej. "DE, EN". Vacío = todas las películas.',
 ];

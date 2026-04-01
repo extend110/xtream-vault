@@ -529,4 +529,6 @@ return [
     'cfg.autoqueue_enable' => 'Neue Releases automatisch queuen',
     'cfg.autoqueue_max' => 'Maximale Anzahl pro Run',
     'cfg.autoqueue_max_hint' => 'Wie viele neue Filme pro Cache-Run maximal zur Queue hinzugefügt werden (1–100)',
+    'cfg.autoqueue_prefix' => 'Länderpräfix-Filter',
+    'cfg.autoqueue_prefix_hint' => 'Kommagetrennt, z.B. "DE, EN". Leer = alle Filme.',
 ];

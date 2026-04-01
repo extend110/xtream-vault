@@ -505,4 +505,6 @@ return [
     'cfg.autoqueue_enable' => 'Metti in coda automaticamente le nuove uscite',
     'cfg.autoqueue_max' => 'Massimo per esecuzione',
     'cfg.autoqueue_max_hint' => 'Quanti nuovi film aggiungere per esecuzione della cache al massimo (1–100)',
+    'cfg.autoqueue_prefix' => 'Filtro prefisso paese',
+    'cfg.autoqueue_prefix_hint' => 'Separato da virgole, es. "DE, EN". Vuoto = tutti i film.',
 ];

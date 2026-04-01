@@ -67,8 +67,25 @@ function xtream_req_srv(array $server, string $action, array $extra = []): array
 }
 
 function load_db_local(): array {
-    if (!file_exists(DOWNLOAD_DB)) return ['movies' => [], 'episodes' => []];
-    return json_decode(file_get_contents(DOWNLOAD_DB), true) ?? ['movies' => [], 'episodes' => []];
+    $movies   = [];
+    $episodes = [];
+    // Server-spezifische DBs zusammenführen
+    foreach (glob(DATA_DIR . '/downloaded_*.json') ?: [] as $f) {
+        if (str_contains(basename($f), 'index')) continue; // downloaded_index_*.json überspringen
+        $data = json_decode(@file_get_contents($f), true) ?? [];
+        $movies   = array_merge($movies,   array_map('strval', $data['movies']   ?? []));
+        $episodes = array_merge($episodes, array_map('strval', $data['episodes'] ?? []));
+    }
+    // Fallback: alte einzelne DOWNLOAD_DB
+    if (empty($movies) && empty($episodes) && file_exists(DOWNLOAD_DB)) {
+        $data     = json_decode(file_get_contents(DOWNLOAD_DB), true) ?? [];
+        $movies   = array_map('strval', $data['movies']   ?? []);
+        $episodes = array_map('strval', $data['episodes'] ?? []);
+    }
+    return [
+        'movies'   => array_values(array_unique($movies)),
+        'episodes' => array_values(array_unique($episodes)),
+    ];
 }
 
 @mkdir(DATA_DIR, 0755, true);
@@ -281,12 +298,51 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
         preg_replace('/[<>:"|?*]/u', '',
         str_replace(['/', '\\'], '-', $n))))) ?: 'Unknown';
 
-    // Neue Filme (noch nicht heruntergeladen)
+    // Server-Map für stream_url Aufbau
+    $aqSrvMap = [];
+    foreach (file_exists(SERVERS_FILE) ? (json_decode(@file_get_contents(SERVERS_FILE), true) ?? []) : [] as $s) {
+        $aqSrvMap[$s['id']] = $s;
+    }
+    $aq_stream_url = fn(string $srvId, string $sid, string $ext): string => isset($aqSrvMap[$srvId])
+        ? 'http://' . $aqSrvMap[$srvId]['server_ip'] . ':' . $aqSrvMap[$srvId]['port']
+          . '/movie/' . $aqSrvMap[$srvId]['username'] . '/' . ($aqSrvMap[$srvId]['password'] ?? '') . "/{$sid}.{$ext}"
+        : '';
+
+    // Länderpräfix-Filter — Präfix wird aus der Kategorie extrahiert
+    $aqPrefixRaw = trim($cfgAq['autoqueue_prefix'] ?? '');
+    $aqPrefixes  = $aqPrefixRaw !== ''
+        ? array_filter(array_map('strtoupper', array_map('trim', explode(',', $aqPrefixRaw))))
+        : [];
+
+    // Präfix aus Kategorie extrahieren — unterstützte Formate:
+    // "(V|DE) Filme", "(DE) Filme", "[DE] Filme", "DE Filme", "DE- Action", "DE| Serien"
+    $aq_extract_prefix = function(string $cat): string {
+        $cat = trim($cat);
+        // Format: (X|CC) oder (CC) oder [CC]
+        if (preg_match('/[\(\[][^)\]]*[|\/]([A-Z]{1,5})[\)\]]/u', strtoupper($cat), $m)) return $m[1];
+        if (preg_match('/[\(\[]([A-Z]{1,5})[\)\]]/u', strtoupper($cat), $m)) return $m[1];
+        // Format: CC am Anfang gefolgt von Trennzeichen oder Leerzeichen
+        if (preg_match('/^([A-Z]{1,5})[|\-_\s]/u', strtoupper($cat), $m)) return $m[1];
+        return '';
+    };
+
+    $aq_prefix_ok = function(string $title, string $cat) use ($aqPrefixes, $aq_extract_prefix): bool {
+        if (empty($aqPrefixes)) return true;
+        $prefix = $aq_extract_prefix($cat);
+        // Fallback: Präfix aus Titel versuchen wenn Kategorie nichts liefert
+        if ($prefix === '') {
+            if (preg_match('/^([A-Z]{1,5})[|\-_\s]/u', strtoupper(trim($title)), $m)) $prefix = $m[1];
+        }
+        return $prefix !== '' && in_array($prefix, $aqPrefixes);
+    };
+
+    // Neue Filme (noch nicht heruntergeladen, optional nach Präfix gefiltert)
     $dbAq       = load_db_local();
     $dlMovieIds = array_flip(array_map('strval', $dbAq['movies'] ?? []));
     $newMovies  = array_slice(
         array_filter(array_values($accMovies), fn($m) =>
-            !isset($dlMovieIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])),
+            !isset($dlMovieIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])
+            && $aq_prefix_ok($m['clean_title'] ?? $m['title'] ?? '', $m['category'] ?? '')),
         0, $aqMax
     );
 
@@ -319,6 +375,7 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
                 'dest_subfolder'      => 'Movies',
                 'category'            => $m['category'] ?? '',
                 'category_original'   => $m['category'] ?? '',
+                'stream_url'          => $aq_stream_url($srvId, $sid, $ext),
                 'added_at'            => date('Y-m-d H:i:s'),
                 'added_by'            => 'auto-queue',
                 'status'              => 'pending',
@@ -334,7 +391,7 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
             @file_put_contents(DATA_DIR . '/queue_' . $srvId . '.json', json_encode($q, JSON_UNESCAPED_UNICODE));
         }
 
-        if ($added > 0) blog("Auto-Queue: {$added} neue Filme zur Queue hinzugefügt");
+        if ($added > 0) blog("Auto-Queue: {$added} neue Filme zur Queue hinzugefügt" . (!empty($aqPrefixes) ? " (Präfix-Filter: " . implode(', ', $aqPrefixes) . ")" : ""));
     }
 }
 
@@ -344,10 +401,16 @@ $db         = load_db_local();
 $dlMovies   = $db['movies']   ?? [];
 $dlEpisodes = $db['episodes'] ?? [];
 
+// Alle vorhandenen Index-Dateien zusammenführen (server-spezifisch + alte Datei)
 $existingIndex = [];
-if (file_exists(DOWNLOADED_INDEX_FILE)) {
-    $raw = @file_get_contents(DOWNLOADED_INDEX_FILE);
-    if ($raw !== false) $existingIndex = json_decode($raw, true) ?? [];
+foreach (array_merge(
+    glob(DATA_DIR . '/downloaded_index_*.json') ?: [],
+    file_exists(DOWNLOADED_INDEX_FILE) ? [DOWNLOADED_INDEX_FILE] : []
+) as $idxFile) {
+    $raw = @file_get_contents($idxFile);
+    if ($raw !== false) {
+        $existingIndex = array_merge($existingIndex, json_decode($raw, true) ?? []);
+    }
 }
 
 // Alle Movie-Caches durchsuchen für Downloaded-Einträge
@@ -369,8 +432,20 @@ foreach ($dlEpisodes as $id) {
         ?? ['id'=>(string)$id,'title'=>'Episode #'.$id,'cover'=>'','category'=>'','ext'=>'mp4','type'=>'episode'];
 }
 
+// In alle server-spezifischen Index-Dateien schreiben (jede enthält alle Einträge ihres Servers)
+// Einfacher: alles in die alte DOWNLOADED_INDEX_FILE schreiben — api.php liest beide
 file_put_contents(DOWNLOADED_INDEX_FILE, json_encode($index, JSON_UNESCAPED_UNICODE));
-blog(sprintf('Downloaded-Index: %d Einträge → %s', count($index), basename(DOWNLOADED_INDEX_FILE)));
+// Auch die manuell markierten Einträge in den server-spezifischen Dateien erhalten
+// (nicht überschreiben — nur fehlende ergänzen)
+foreach (glob(DATA_DIR . '/downloaded_index_*.json') ?: [] as $idxFile) {
+    $existing = json_decode(@file_get_contents($idxFile), true) ?? [];
+    $changed  = false;
+    foreach ($index as $id => $entry) {
+        if (!isset($existing[$id])) { $existing[$id] = $entry; $changed = true; }
+    }
+    if ($changed) file_put_contents($idxFile, json_encode($existing, JSON_UNESCAPED_UNICODE));
+}
+blog(sprintf('Downloaded-Index: %d Einträge', count($index)));
 
 $totalTime = microtime(true) - $_cbStartTime;
 blog(sprintf('=== Done (%.1fs gesamt) ===', $totalTime));

@@ -828,7 +828,11 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <input type="number" id="cfg-autoqueue-max" min="1" max="100" step="1" value="10" style="max-width:100px">
               <span class="hint"><?= t('cfg.autoqueue_max_hint') ?></span>
             </div>
-
+            <div class="field">
+              <label><?= t('cfg.autoqueue_prefix') ?></label>
+              <input type="text" id="cfg-autoqueue-prefix" placeholder="DE, EN, FR" style="max-width:260px">
+              <span class="hint"><?= t('cfg.autoqueue_prefix_hint') ?></span>
+            </div>
           </div>
         </div>
 
@@ -1457,6 +1461,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <script>
 const API = 'api.php';
 const CSRF_TOKEN = <?= json_encode(csrf_token()) ?>;
+
 const LANG = <?= json_encode(load_lang()) ?>;
 const CURRENT_LANG = <?= json_encode(get_user_lang()) ?>;
 function t(key, vars = {}) {
@@ -2089,7 +2094,7 @@ function seriesCard(s, showServer = false) {
     onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb"><div class="card-thumb-placeholder">📺</div>${thumb}${favBtn}</div>
     <div class="card-body"><div class="card-title">${s.clean_title}</div><div class="card-meta">${s.genre??''}</div>${serverBadge}</div>
-    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${esc(s.clean_title)}','${esc(s.cover||'')}','${esc(s.category||'')}','${esc(s._server_id||'')}')">📋 Episodes</button></div>
+    <div class="card-actions" onclick="event.stopPropagation()"><button class="btn-q add" onclick="openSeriesModal(${s.series_id},'${jsesc(s.clean_title)}','${jsesc(s.cover||'')}','${jsesc(s.category||'')}','${jsesc(s._server_id||'')}')">📋 Episodes</button></div>
   </div>`;
 }
 
@@ -2687,7 +2692,7 @@ function renderFavourites() {
       if (!serverAvail) {
         actionBtn = `<button class="btn-q done" disabled title="${t('fav.server_unavailable')}">⚠ ${t('fav.unavailable')}</button>`;
       } else {
-        actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${esc(f.title)}','${esc(f.cover||'')}','${esc(f.category||'')}','${esc(f.server_id||'')}')">📋 Episodes</button>`;
+        actionBtn = `<button class="btn-q add" onclick="openSeriesModal('${f.stream_id}','${jsesc(f.title)}','${jsesc(f.cover||'')}','${jsesc(f.category||'')}','${jsesc(f.server_id||'')}')">📋 Episodes</button>`;
       }
     }
 
@@ -3452,6 +3457,8 @@ async function loadConfig() {
   const aqFields = document.getElementById('autoqueue-fields');
   if (aqChk) { aqChk.checked = c.autoqueue_enabled ?? false; if (aqFields) aqFields.style.display = aqChk.checked ? '' : 'none'; }
   if (aqMax) aqMax.value = c.autoqueue_max ?? 10;
+  const aqPfx = document.getElementById('cfg-autoqueue-prefix');
+  if (aqPfx) aqPfx.value = c.autoqueue_prefix ?? '';
   // Aktuelle IP anzeigen
   const yourIpEl = document.getElementById('your-ip');
   if (yourIpEl) api('get_my_ip').then(d => { if (d.ip) yourIpEl.textContent = d.ip; });
@@ -3530,6 +3537,7 @@ function collectConfig() {
     category_blacklist:    (document.getElementById('cfg-category-blacklist')?.value ?? '').split('\n').map(s=>s.trim()).filter(Boolean).join(','),
     autoqueue_enabled:     document.getElementById('cfg-autoqueue-enabled')?.checked ?? false,
     autoqueue_max:         parseInt(document.getElementById('cfg-autoqueue-max')?.value ?? '10') || 10,
+    autoqueue_prefix:      document.getElementById('cfg-autoqueue-prefix')?.value.trim() ?? '',
   };
 }
 
@@ -4024,7 +4032,7 @@ async function openTmdbModal(title, type, year, queueData) {
     const sid = String(queueData.stream_id ?? queueData.series_id ?? '');
     let actionHtml = '';
     if (type === 'series') {
-      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${esc(queueData.clean_title)}','${esc(queueData.cover||'')}','${esc(queueData.category||'')}','${esc(queueData._server_id||'')}')">📋 Episodes</button>`;
+      actionHtml = `<button class="btn-primary" onclick="closeTmdbModal();openSeriesModal('${queueData.series_id}','${jsesc(queueData.clean_title)}','${jsesc(queueData.cover||'')}','${jsesc(queueData.category||'')}','${jsesc(queueData._server_id||'')}')">📋 Episodes</button>`;
     } else if (_downloadedIds.has(sid) && canQueueRemove) {
       actionHtml = `<button class="btn-secondary" onclick="closeTmdbModal();resetDownload('${sid}','movie',null)">↺ Reset</button>`;
     } else if (_downloadedIds.has(sid)) {
@@ -4897,6 +4905,7 @@ async function apiPost(action, body) {
 function loadingHTML() { return `<div class="state-box" style="grid-column:1/-1"><div class="spinner"></div><p>Loading…</p></div>`; }
 function emptyHTML(m)  { return `<div class="state-box" style="grid-column:1/-1"><div class="icon">📭</div><p>${m}</p></div>`; }
 function esc(s)        { return String(s).replace(/'/g,"&#39;").replace(/"/g,'&quot;'); }
+function jsesc(s)      { return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'\\"'); }
 function htmlJson(o)   { return JSON.stringify(o).replace(/"/g,'&quot;'); }
 function lazyLoadImages() {
   document.querySelectorAll('[data-src]').forEach(img => {
@@ -5009,7 +5018,7 @@ async function loadUserDashboard() {
           _server_id: srvId,
         }).replace(/"/g, '&quot;') : 'null';
         const onClick = isSeries
-          ? `openSeriesModal('${sid}','${title}','${cover}','${cat}','${esc(srvId)}')`
+          ? `openSeriesModal('${sid}','${jsesc(title)}','${jsesc(cover)}','${jsesc(cat)}','${jsesc(srvId)}')`
           : `openTmdbModal('${title}','movie','',${qd})`;
         return `
         <div style="flex-shrink:0;width:100px;cursor:pointer" onclick="${onClick}">
