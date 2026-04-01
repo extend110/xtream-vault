@@ -11,10 +11,11 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 - Suche über alle konfigurierten Server gleichzeitig
 - Suchverlauf als klickbare Vorschläge (löschbar)
 - TMDB-Integration — Cover, Beschreibung, Bewertung, Erscheinungsjahr
-- Sortierung nach Name (A–Z), Bewertung oder neuesten Einträgen
+- Sortierung nach Name (A–Z / Z–A) oder Bewertung
 - Neue Releases — Überblick über Filme die seit dem letzten Cache-Run hinzugekommen sind
 - Favoriten — Titel merken und separat verwalten
 - „Zuletzt gesehen" — Badge auf bereits betrachteten Filmkarten
+- Kategorien-Blacklist — unerwünschte Kategorien aus der Anzeige ausblenden
 
 **Downloads**
 - Download-Queue mit Prioritätsstufen (Hoch / Normal / Niedrig)
@@ -22,17 +23,30 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 - Parallele Downloads — mehrere Server laden gleichzeitig, pro Server sequenziell
 - Fortschrittsanzeige direkt im Queue-Item (Bytes, Geschwindigkeit, ETA)
 - Dubletten-Erkennung — verhindert doppelte Downloads anhand von Titel-Ähnlichkeit
-- Automatisches Naming — `Movies/[CC]/Kategorie/Titel.Jahr.mkv` und `TV Shows/[CC]/Serie/Staffel N/`
+- Automatisches Naming mit Länderpräfix-Erkennung:
+  - Filme: `Movies/[CC]/Kategorie/Titel.Jahr.mkv`
+  - Serien: `TV Shows/[CC]/Serie/Staffel N/Serie.S01E01.mkv`
+- Unterstützte Kategorie-Formate für Länderpräfix: `(V|DE)`, `(DE)`, `[DE]`, `┃DE┃`, `DE-`, `DE|`
 - Filme und Episoden manuell als heruntergeladen markieren
-- Cloud-Speicher — Downloads direkt nach Google Drive, OneDrive, MEGA u.v.m. streamen (via rclone)
-- VPN-Unterstützung — Downloads optional über WireGuard leiten (manuell oder automatisch)
+- Cloud-Speicher — Downloads direkt in Google Drive, OneDrive, MEGA u.v.m. streamen (via rclone)
+
+**Auto-Queue**
+- Neue Filme werden nach jedem Cache-Run automatisch in die Queue eingetragen
+- Länderpräfix-Filter — nur Filme bestimmter Länder automatisch queuen (z.B. `DE, EN`)
+- Maximale Anzahl automatisch gequeueter Filme pro Run einstellbar
+
+**VPN**
+- WireGuard-Steuerung direkt aus der Oberfläche — Verbinden/Trennen per Klick auf das Badge in der Topbar
+- Bestätigungsdialog vor dem Trennen
+- VPN-Status-Anzeige mit öffentlicher IP, Interface und Verbindungsdauer
+- Erkennt VPN-Abbruch während laufender Downloads und bricht diese ab
 
 **Multi-Server**
 - Beliebig viele Xtream-Server gleichzeitig aktiv
 - Suche, Kategorien und Queue laufen über alle Server
 - Cache, Queue und Download-Verlauf sind pro Server getrennt gespeichert
 - Parallele oder sequenzielle Download-Strategie konfigurierbar
-- Server können einzeln oder alle gleichzeitig auf Erreichbarkeit getestet werden
+- Server können einzeln auf Erreichbarkeit getestet werden
 - Dashboard-Kacheln mit Live-Infos vom Xtream-Server (Ablaufdatum, Verbindungen, Status)
 
 **Benutzerverwaltung**
@@ -57,8 +71,9 @@ Ein Web-Frontend zum Browsen und Herunterladen von Filmen und Serien von Xtream-
 **UI & Sonstiges**
 - 7 Themes — Dark, AMOLED, Midnight, Nord, Tokyo Night, Rosé Pine, Light
 - 5 Sprachen — Deutsch, Englisch, Französisch, Spanisch, Italienisch (pro Benutzer wählbar)
+- Floating Topbar mit VPN-Badge, Queue-Anzeige, Download-Fortschritt und User-Menü
 - App-Titel frei konfigurierbar
-- Listenansicht und Grid-Ansicht
+- Grid- und Listenansicht
 - In-App-Updates mit automatischem Backup
 - API-Keys für externe Benutzerverwaltung
 
@@ -92,8 +107,8 @@ Das Installationsskript richtet Apache-Konfiguration, PHP-Einstellungen, Cronjob
 1. **Admin-Konto anlegen** — beim ersten Aufruf erscheint automatisch der Setup-Assistent
 2. **Server hinzufügen** — unter Einstellungen → Server den ersten Xtream-Server eintragen und testen
 3. **Zielordner konfigurieren** — lokaler Pfad oder rclone-Remote eintragen
-4. **Cache aufbauen** — einmalig den Medien-Cache aufbauen damit Suche und neue Releases funktionieren
-5. **Loslegen** — Filme oder Serien suchen, in die Queue legen und den Download starten
+4. **Cache aufbauen** — einmalig manuell starten damit Suche und neue Releases funktionieren
+5. **Loslegen** — Filme oder Serien suchen, in die Queue legen, Download starten
 
 ---
 
@@ -116,7 +131,7 @@ Das Installationsskript richtet folgende Cronjobs ein:
 
 ## Parallele Downloads
 
-Wenn mehrere Server konfiguriert sind, kann `cron.php` pro Server einen eigenen Worker-Prozess starten — alle laufen parallel, aber jeder Server arbeitet seine Items sequenziell ab.
+Wenn mehrere Server konfiguriert sind, startet `cron.php` pro Server einen eigenen Worker-Prozess — alle laufen parallel, aber jeder Server arbeitet seine Items sequenziell ab.
 
 Einstellbar unter Einstellungen → Parallele Downloads:
 - **Aktivieren/Deaktivieren** — bei Deaktivierung laufen alle Server nacheinander
@@ -126,13 +141,25 @@ Einstellbar unter Einstellungen → Parallele Downloads:
 
 ## VPN
 
-Wenn VPN für Downloads aktiviert ist, verbindet der Cron-Worker WireGuard automatisch vor dem ersten Download und trennt die Verbindung danach. Wird VPN manuell über die Einstellungen verbunden, bleibt die Verbindung nach Downloads erhalten.
+VPN wird ausschließlich manuell über die Oberfläche gesteuert:
+
+- **Badge in der Topbar** — zeigt den aktuellen Status (grün = aktiv, orange = inaktiv)
+- **Klick auf Badge** — öffnet einen Bestätigungsdialog zum Verbinden oder Trennen
+- **Einstellungsseite** — zeigt öffentliche IP, Interface und Verbindungsdauer
+
+Das WireGuard-Interface wird unter Einstellungen → VPN konfiguriert (z.B. `wg0`). `sudo`-Rechte für `www-data` sind erforderlich:
+
+```
+www-data ALL=(ALL) NOPASSWD: /usr/bin/wg-quick, /usr/sbin/ip
+```
+
+Wird das VPN während eines laufenden Downloads unterbrochen, wird der Download sofort abgebrochen — sofern VPN beim Start des Downloads aktiv war.
 
 ---
 
 ## Cloud-Speicher (rclone)
 
-Wenn rclone installiert und konfiguriert ist, können Downloads direkt in die Cloud gestreamt werden — ohne temporäre lokale Kopie.
+Downloads können direkt in die Cloud gestreamt werden — ohne temporäre lokale Kopie.
 
 ```bash
 sudo -u www-data rclone config
@@ -163,7 +190,7 @@ X-API-Key: xv_...
 | `external_update_user` | POST | Passwort oder Rolle ändern |
 | `external_delete_user` | POST | Benutzer löschen |
 
-API-Keys werden unter Einstellungen → API-Keys erstellt. Die IP-Whitelist (Einstellungen → API IP-Whitelist) schränkt den Zugriff auf bestimmte IPs oder CIDR-Blöcke ein.
+API-Keys werden unter Einstellungen → API-Keys erstellt. Die IP-Whitelist schränkt den Zugriff auf bestimmte IPs oder CIDR-Blöcke ein.
 
 ---
 
@@ -192,6 +219,7 @@ data/
 
 - Passwortgeschützte Benutzer mit bcrypt-Hashing
 - CSRF-Schutz für alle schreibenden Aktionen
+- Brute-Force-Schutz — nach 5 Fehlversuchen 15 Minuten Sperre (IP-basiert)
 - Session-basierte Authentifizierung mit SameSite-Cookies
 - Zugriff auf `data/` ist per Apache-Konfiguration gesperrt
 - Wartungsmodus sperrt alle Nicht-Admins sofort aus
@@ -216,7 +244,7 @@ Unter Einstellungen → Datensicherung können Backups erstellt und wiederherges
 
 - PHP 8.1 oder neuer mit `php-curl`, `php-json`, `php-zip`, `php-mbstring`
 - Apache (empfohlen) oder Nginx
-- Optional: `rclone` für Cloud-Speicher, `wireguard` für VPN, `ffmpeg` für Stream-Info
+- Optional: `rclone` für Cloud-Speicher, `wireguard` für VPN
 
 ---
 

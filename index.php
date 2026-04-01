@@ -4415,13 +4415,15 @@ async function cancelDownload() {
 
 async function startQueue(btn) {
   if (btn) { btn.disabled = true; btn.textContent = '▶ Startet…'; }
-  try {
-    const d = await apiPost('queue_start', {});
-    if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
-    showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
-  } finally {
-    if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = btn.dataset.label || '▶ Starten'; }, 3000);
+  const d = await apiPost('queue_start', {});
+  if (d.error) {
+    showToast('❌ ' + d.error, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.label || '▶ Starten'; }
+    return;
   }
+  showToast(`▶ Download-Worker gestartet (${d.pending} ausstehend)`, 'success');
+  // pollProgress übernimmt den Button-Reset sobald der Worker aktiv ist
+  setTimeout(pollProgress, 1500);
 }
 
 async function dashRebuildCache() {
@@ -4678,6 +4680,8 @@ async function pollProgress() {
 function applyQueueStartButtons(p) {
   const running = p.active === true;
   document.querySelectorAll('[onclick*="startQueue"]').forEach(btn => {
+    // Nicht zurücksetzen wenn gerade "Startet…" angezeigt wird
+    if (!running && btn.textContent.includes('Startet')) return;
     btn.disabled = running;
     if (running) {
       btn.textContent = '⏳ Läuft…';

@@ -194,6 +194,30 @@ define('COUNTRY_CODES', ['DE', 'AT', 'CH', 'US', 'UK', 'GB', 'FR', 'IT', 'ES', '
                          'KR', 'IN', 'AU', 'CA', 'SE', 'NO', 'DK', 'FI', 'CZ', 'HU',
                          'RO', 'GR', 'IL', 'ZA', 'AE', 'SA', 'DACH', 'LATAM', 'MULTI']);
 
+// Vollständige Ländernamen → Kürzel (für Kategorien wie "GERMANY - ACTION")
+define('COUNTRY_NAMES', [
+    'GERMAN' => 'DE', 'GERMANY' => 'DE', 'DEUTSCH' => 'DE', 'DEUTSCHE' => 'DE',
+    'FRENCH' => 'FR', 'FRANCE' => 'FR', 'FRANCAIS' => 'FR', 'FRANÇAISE' => 'FR',
+    'SPANISH' => 'ES', 'SPAIN' => 'ES', 'ESPANOL' => 'ES', 'ESPAÑOL' => 'ES',
+    'ITALIAN' => 'IT', 'ITALY' => 'IT', 'ITALIANO' => 'IT',
+    'TURKISH' => 'TR', 'TURKEY' => 'TR', 'TÜRKISCH' => 'TR',
+    'RUSSIAN' => 'RU', 'RUSSIA' => 'RU',
+    'POLISH' => 'PL', 'POLAND' => 'PL',
+    'DUTCH' => 'NL', 'NETHERLANDS' => 'NL',
+    'SWEDISH' => 'SE', 'SWEDEN' => 'SE',
+    'NORWEGIAN' => 'NO', 'NORWAY' => 'NO',
+    'DANISH' => 'DK', 'DENMARK' => 'DK',
+    'FINNISH' => 'FI', 'FINLAND' => 'FI',
+    'PORTUGUESE' => 'PT', 'PORTUGAL' => 'PT',
+    'ARABIC' => 'AR', 'ARAB' => 'AR',
+    'HINDI' => 'IN', 'INDIAN' => 'IN', 'INDIA' => 'IN',
+    'KOREAN' => 'KR', 'KOREA' => 'KR',
+    'JAPANESE' => 'JP', 'JAPAN' => 'JP',
+    'CHINESE' => 'CN', 'CHINA' => 'CN',
+    'BRITISH' => 'GB', 'UK' => 'GB', 'ENGLISH' => 'GB',
+    'AMERICAN' => 'US', 'USA' => 'US',
+]);
+
 /**
  * Extrahiert das führende Länderkürzel aus einem Titel.
  * Erkennt sowohl mit Trennzeichen ('DE | Film', 'US: Movie')
@@ -219,6 +243,15 @@ function extract_country_prefix(string $name): string {
             $rest = substr($name, $len);
             if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) return $code;
         }
+    }
+    // Fallback: Prefix am Ende — z.B. "Titel (2005) (DE)" oder "Titel [DE]"
+    if (preg_match('/[\(\[]([A-Z]{2,4})[\)\]]\s*$/u', strtoupper($name), $m)) return $m[1];
+    // Fallback: Kürzel am Ende ohne Klammern — z.B. "Titel 2005 DE"
+    if (preg_match('/\s([A-Z]{2,4})$/u', $name, $m) && in_array($m[1], COUNTRY_CODES)) return $m[1];
+    // Fallback: Ländername am Anfang der Kategorie — z.B. "GERMANY - ACTION"
+    $upper = strtoupper($name);
+    foreach (COUNTRY_NAMES as $word => $code) {
+        if (str_starts_with($upper, $word) && (strlen($name) === strlen($word) || !ctype_alpha($name[strlen($word)]))) return $code;
     }
     return '';
 }
@@ -248,6 +281,18 @@ function remove_country_prefix(string $name): string {
             if ($rest !== '' && (ctype_upper($rest[0]) || $rest[0] === ' ')) {
                 return trim($rest);
             }
+        }
+    }
+    // Fallback: Prefix am Ende entfernen — z.B. "Titel (2005) (DE)" oder "Titel [DE]"
+    $stripped = preg_replace('/\s*[\(\[][A-Z]{2,4}[\)\]]\s*$/u', '', $name);
+    if ($stripped !== $name) return trim($stripped);
+    // Fallback: Kürzel am Ende ohne Klammern — z.B. "Titel 2005 DE"
+    if (preg_match('/^(.*)\s([A-Z]{2,4})$/u', $name, $m) && in_array($m[2], COUNTRY_CODES)) return trim($m[1]);
+    // Fallback: Ländername am Anfang entfernen — z.B. "GERMANY - ACTION"
+    $upper = strtoupper($name);
+    foreach (COUNTRY_NAMES as $word => $code) {
+        if (str_starts_with($upper, $word) && (strlen($name) === strlen($word) || !ctype_alpha($name[strlen($word)]))) {
+            return trim(substr($name, strlen($word)), ' -–_|');
         }
     }
     return $name;
@@ -283,8 +328,8 @@ function display_title(string $name): string {
  * Bereinigt einen String für die Verwendung als Dateiname.
  */
 function safe_filename(string $name): string {
-    $name = str_replace(':', '-', $name);
-    $name = preg_replace('/[<>"|?*\/\\\\]/', '', $name);
+    $name = str_replace([':', '/'], '-', $name);
+    $name = preg_replace('/[<>"|?*\\\\]/', '', $name);
     $name = preg_replace('/[\x00-\x1F\x7F]/', '', $name);
     $name = preg_replace('/[^\p{L}\p{N}\s\-_\.]/u', '', $name);
     return trim(preg_replace('/\s+/', ' ', $name)) ?: 'file';
