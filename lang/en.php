@@ -531,4 +531,10 @@ return [
     'cfg.autoqueue_max_hint' => 'How many new movies to add per cache run at most (1–100)',
     'cfg.autoqueue_prefix' => 'Country prefix filter',
     'cfg.autoqueue_prefix_hint' => 'Comma-separated, e.g. "DE, EN". Empty = all movies.',
+    'nav.about' => 'About',
+    'about.desc' => 'Xtream Vault is a web frontend for browsing and downloading movies and series from Xtream Codes compatible servers. Content can be queued, prioritized, and downloaded either locally or to the cloud via rclone. Multiple servers, user roles, and automatic naming by language and category are supported.',
+    'cfg.custom_filter_title' => 'Title filters',
+    'cfg.custom_filter_desc' => 'Terms that are automatically removed or replaced in the filename when downloading. Case-insensitive.',
+    'cfg.custom_filter_label' => 'Filters (one rule per line)',
+    'cfg.custom_filter_hint' => 'Search term only to remove, or "Search => Replacement" to replace.',
 ];

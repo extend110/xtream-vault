@@ -507,4 +507,10 @@ return [
     'cfg.autoqueue_max_hint' => 'Quanti nuovi film aggiungere per esecuzione della cache al massimo (1–100)',
     'cfg.autoqueue_prefix' => 'Filtro prefisso paese',
     'cfg.autoqueue_prefix_hint' => 'Separato da virgole, es. "DE, EN". Vuoto = tutti i film.',
+    'nav.about' => 'Informazioni',
+    'about.desc' => 'Xtream Vault è un\'interfaccia web per sfogliare e scaricare film e serie da server compatibili con Xtream Codes. I contenuti possono essere gestiti in una coda, prioritizzati e scaricati localmente o nel cloud tramite rclone.',
+    'cfg.custom_filter_title' => 'Filtri titolo',
+    'cfg.custom_filter_desc' => 'Termini rimossi o sostituiti automaticamente nel nome file. Senza distinzione maiuscole/minuscole.',
+    'cfg.custom_filter_label' => 'Filtri (una regola per riga)',
+    'cfg.custom_filter_hint' => 'Solo termine per rimuovere, o "Cerca => Sostituisci".',
 ];

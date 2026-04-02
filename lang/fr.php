@@ -507,4 +507,10 @@ return [
     'cfg.autoqueue_max_hint' => 'Combien de nouveaux films ajouter par exécution du cache (1–100)',
     'cfg.autoqueue_prefix' => 'Filtre de préfixe pays',
     'cfg.autoqueue_prefix_hint' => 'Séparé par virgules, ex. "DE, EN". Vide = tous les films.',
+    'nav.about' => 'À propos',
+    'about.desc' => 'Xtream Vault est une interface web pour parcourir et télécharger des films et séries depuis des serveurs compatibles Xtream Codes. Les contenus peuvent être gérés dans une file d\'attente, priorisés et téléchargés en local ou dans le cloud via rclone.',
+    'cfg.custom_filter_title' => 'Filtres de titre',
+    'cfg.custom_filter_desc' => 'Termes automatiquement supprimés ou remplacés dans le nom de fichier. Insensible à la casse.',
+    'cfg.custom_filter_label' => 'Filtres (une règle par ligne)',
+    'cfg.custom_filter_hint' => 'Terme seul pour supprimer, ou "Recherche => Remplacement".',
 ];

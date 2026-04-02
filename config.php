@@ -251,7 +251,11 @@ function extract_country_prefix(string $name): string {
     // Fallback: Ländername am Anfang der Kategorie — z.B. "GERMANY - ACTION"
     $upper = strtoupper($name);
     foreach (COUNTRY_NAMES as $word => $code) {
-        if (str_starts_with($upper, $word) && (strlen($name) === strlen($word) || !ctype_alpha($name[strlen($word)]))) return $code;
+        $wlen = strlen($word);
+        if (strncmp($upper, $word, $wlen) === 0) {
+            $nextChar = $upper[$wlen] ?? '';
+            if ($nextChar === '' || !ctype_alpha($nextChar)) return $code;
+        }
     }
     return '';
 }
@@ -288,13 +292,6 @@ function remove_country_prefix(string $name): string {
     if ($stripped !== $name) return trim($stripped);
     // Fallback: Kürzel am Ende ohne Klammern — z.B. "Titel 2005 DE"
     if (preg_match('/^(.*)\s([A-Z]{2,4})$/u', $name, $m) && in_array($m[2], COUNTRY_CODES)) return trim($m[1]);
-    // Fallback: Ländername am Anfang entfernen — z.B. "GERMANY - ACTION"
-    $upper = strtoupper($name);
-    foreach (COUNTRY_NAMES as $word => $code) {
-        if (str_starts_with($upper, $word) && (strlen($name) === strlen($word) || !ctype_alpha($name[strlen($word)]))) {
-            return trim(substr($name, strlen($word)), ' -–_|');
-        }
-    }
     return $name;
 }
 
@@ -358,9 +355,23 @@ function build_dest_path(array $item): array {
            ?: extract_country_prefix($title);
 
     // ── 2. Kategoriename bereinigen ───────────────────────────────────────────
-    $cleanCat = safe_filename(
-        trim(remove_country_prefix(preg_replace('/\xc2\xa0/', ' ', $cat)), ' -_.')
-    ) ?: 'Uncategorized';
+    $catNorm = preg_replace('/\xc2\xa0/', ' ', $cat);
+    $catStripped = remove_country_prefix($catNorm);
+    // Ländername am Anfang der Kategorie entfernen (z.B. "GERMANY - ACTION")
+    if ($catStripped === $catNorm) {
+        $upper = strtoupper(trim($catNorm));
+        foreach (COUNTRY_NAMES as $word => $code) {
+            $wlen = strlen($word);
+            if (strncmp($upper, $word, $wlen) === 0) {
+                $nextChar = $upper[$wlen] ?? '';
+                if ($nextChar === '' || !ctype_alpha($nextChar)) {
+                    $catStripped = trim(substr($catNorm, $wlen), ' -–_|');
+                    break;
+                }
+            }
+        }
+    }
+    $cleanCat = safe_filename(trim($catStripped, ' -_.')) ?: 'Uncategorized';
 
     // ── 3. Dateiname bauen ────────────────────────────────────────────────────
     if ($type === 'movie') {
@@ -401,9 +412,31 @@ function build_dest_path(array $item): array {
  * - Behält Jahreszahl (wird als .YYYY ans Ende gestellt, Plex/Jellyfin-kompatibel)
  * Beispiel: 'DE Der Pate - 1972' → 'Der Pate.1972'
  */
+function load_custom_filters(): array {
+    static $filters = null;
+    if ($filters === null) {
+        $file = DATA_DIR . '/custom_filter.json';
+        $filters = file_exists($file)
+            ? (json_decode(file_get_contents($file), true) ?? [])
+            : [];
+    }
+    return $filters;
+}
+
+function apply_custom_filters(string $name): string {
+    foreach (load_custom_filters() as $f) {
+        $find    = $f['find']    ?? '';
+        $replace = $f['replace'] ?? '';
+        if ($find === '') continue;
+        $name = str_ireplace($find, $replace, $name);
+    }
+    return trim(preg_replace('/\s{2,}/', ' ', $name));
+}
+
 function clean_title(string $name): string {
     $year  = extract_year($name);
     $name  = remove_country_prefix($name);
+    $name  = apply_custom_filters($name);
     $name  = remove_year_suffix($name);
     $name  = trim($name);
     if ($year !== '') {

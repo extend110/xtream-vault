@@ -488,7 +488,7 @@ body::before {
   .topbar { padding: 6px 10px; }
   .topbar-inner { padding: 0 10px; gap: 8px; border-radius: 10px; }
   .topbar-logo-block { padding-right: 10px; }
-  .topbar-logo-block .logo-text { display: flex; align-items: center; }
+  .topbar-logo-block .logo-text { display: none; }
   .topbar-right { padding-left: 10px; gap: 6px; }
   /* Auf Mobile nur Queue + User-Chip zeigen, Rest ausblenden */
   #topbar-dl { display: none !important; }

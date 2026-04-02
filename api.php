@@ -851,6 +851,22 @@ switch ($action) {
         echo json_encode(get_activity_log($uid, $limit));
         break;
 
+    case 'get_custom_filters':
+        require_permission('settings');
+        $file    = DATA_DIR . '/custom_filter.json';
+        $filters = file_exists($file) ? (json_decode(file_get_contents($file), true) ?? []) : [];
+        echo json_encode(['filters' => $filters]);
+        break;
+
+    case 'save_custom_filters':
+        require_permission('settings');
+        $filters = array_values(array_filter($_JSON_BODY['filters'] ?? [], fn($f) => trim($f['find'] ?? '') !== ''));
+        @mkdir(DATA_DIR, 0755, true);
+        file_put_contents(DATA_DIR . '/custom_filter.json', json_encode($filters, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        log_activity($current_user['id'], $current_user['username'], 'save_custom_filters', ['count' => count($filters)]);
+        echo json_encode(['ok' => true]);
+        break;
+
     case 'get_config':
         require_permission('settings');
         $c = load_config();
@@ -1186,6 +1202,44 @@ switch ($action) {
 
     // ── VPN ───────────────────────────────────────────────────────────────────
     // ── Updates ───────────────────────────────────────────────────────────────
+    case 'get_version_info': {
+        $versionFile = __DIR__ . '/version.json';
+        $local = file_exists($versionFile)
+            ? (json_decode(file_get_contents($versionFile), true) ?? [])
+            : [];
+        echo json_encode([
+            'commit' => $local['commit'] ?? 'unknown',
+            'date'   => $local['date']   ?? '',
+        ]);
+        break;
+    }
+
+    case 'get_changelog': {
+        $ctx = stream_context_create(['http' => [
+            'method'  => 'GET',
+            'header'  => "User-Agent: XtreamVault/1.0\r\nAccept: application/vnd.github.v3+json\r\n",
+            'timeout' => 8,
+        ]]);
+        $raw = @file_get_contents(
+            'https://api.github.com/repos/extend110/xtream-vault/commits?per_page=20',
+            false, $ctx
+        );
+        if ($raw === false) { echo json_encode(['error' => 'GitHub nicht erreichbar']); break; }
+        $commits = json_decode($raw, true) ?? [];
+        $result  = [];
+        foreach ($commits as $c) {
+            $msg = trim(explode("\n", $c['commit']['message'] ?? '')[0]); // nur erste Zeile
+            $result[] = [
+                'sha'     => $c['sha'] ?? '',
+                'message' => $msg,
+                'date'    => $c['commit']['committer']['date'] ?? $c['commit']['author']['date'] ?? '',
+                'author'  => $c['commit']['author']['name'] ?? '',
+            ];
+        }
+        echo json_encode(['commits' => $result]);
+        break;
+    }
+
     case 'check_update':
         require_permission('settings');
         $versionFile = __DIR__ . '/version.json';

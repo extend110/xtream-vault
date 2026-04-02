@@ -36,7 +36,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div class="logo-text"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:22px;height:18px;vertical-align:middle;margin-right:8px;color:var(--accent)" fill="none" stroke="currentColor"><rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/><line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/><path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/><line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/></svg><?= htmlspecialchars(cfg('app_title', 'Xtream Vault')) ?></div>
-    <div class="logo-sub">VOD Downloader</div>
+    <div class="logo-sub" style="font-size:.62rem;color:var(--muted);letter-spacing:.04em;margin-top:2px">by <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:var(--muted);text-decoration:none;opacity:.7">Xtream-Vault</a></div>
   </div>
   <div class="sidebar-stats">
     <div class="stat-box"><div class="stat-num" id="stat-movies">–</div><div class="stat-label"><?= t('nav.movies') ?></div></div>
@@ -81,6 +81,7 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <?php if ($can_settings): ?>
     <div class="nav-item" onclick="showView('settings')" style="margin-top:auto;border-top:1px solid var(--border)"><span class="nav-icon">⚙️</span><?= t('nav.settings') ?></div>
     <?php endif; ?>
+    <div class="nav-item" onclick="showView('about')" style="<?php if (!$can_settings): ?>margin-top:auto;border-top:1px solid var(--border);<?php endif; ?>"><span class="nav-icon">ℹ️</span><?= t('nav.about') ?></div>
   </nav>
 </aside>
 
@@ -1004,6 +1005,22 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
         </div>
 
         <div class="settings-card">
+          <h3>✂️ <?= t('cfg.custom_filter_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            <?= t('cfg.custom_filter_desc') ?>
+          </div>
+          <div class="field">
+            <label><?= t('cfg.custom_filter_label') ?></label>
+            <textarea id="cfg-custom-filters" rows="6"
+              style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:.75rem;resize:vertical;outline:none"
+              placeholder="EXTENDED CUT&#10;German&#10;Remastered =&gt; (leer lassen zum Entfernen)"></textarea>
+            <span class="hint"><?= t('cfg.custom_filter_hint') ?></span>
+          </div>
+          <button class="btn-primary" onclick="saveCustomFilters()"><?= t('btn.save') ?></button>
+          <div class="settings-msg" id="custom-filter-msg" style="margin-top:10px"></div>
+        </div>
+
+        <div class="settings-card">
           <h3>🛡 <?= t('cfg.ip_whitelist_title') ?></h3>
           <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
             <?= t('cfg.ip_whitelist_desc') ?>
@@ -1190,8 +1207,38 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       </div>
     </div>
 
+    <!-- ── About ───────────────────────────────────────────────── -->
+    <div id="view-about" style="display:none">
+      <div class="settings-grid">
+
+        <!-- Logo + Version -->
+        <div class="settings-card" style="text-align:center;padding:32px 24px">
+          <div style="margin-bottom:16px">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" style="width:48px;height:38px;color:var(--accent)" fill="none" stroke="currentColor">
+              <rect x="2.5" y="2.5" width="195" height="155" rx="30" stroke-width="10"/>
+              <line x1="100" y1="25" x2="100" y2="92" stroke-width="18" stroke-linecap="round"/>
+              <path d="M52 68 L100 116 L148 68" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="48" y1="135" x2="152" y2="135" stroke-width="18" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:2rem;letter-spacing:.1em;color:var(--accent)">Xtream Vault</div>
+          <div id="about-version" style="font-family:'DM Mono',monospace;font-size:.72rem;color:var(--muted);margin-top:6px">–</div>
+          <div style="font-size:.84rem;color:var(--muted);line-height:1.8;margin-top:20px;max-width:480px;margin-left:auto;margin-right:auto;text-align:left">
+            <?= t('about.desc') ?>
+          </div>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap">
+            <a href="https://github.com/extend110/xtream-vault" target="_blank" class="btn-secondary" style="text-decoration:none;font-size:.78rem">⭐ GitHub</a>
+            <a href="https://github.com/extend110/xtream-vault/blob/main/LICENSE" target="_blank" class="btn-secondary" style="text-decoration:none;font-size:.78rem">📄 MIT License</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
   </div>
-</div>
+  <footer style="text-align:center;padding:18px 16px;font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);border-top:1px solid var(--border);opacity:.6">
+    © <?= date('Y') ?> <a href="https://github.com/extend110/xtream-vault" target="_blank" style="color:inherit;text-decoration:none">Xtream-Vault</a> · MIT License
+  </footer>
 </div>
 
 <!-- ── User Create/Edit Modal ─────────────────────────────────── -->
@@ -1742,7 +1789,7 @@ startBadgePolling();
 // ── URL-Parameter und Hash beim Start lesen ───────────────────
 // setTimeout(0) stellt sicher dass alle let-Deklarationen geparst sind
 setTimeout(function applyUrlParams() {
-  const validViews = ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats'];
+  const validViews = ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about'];
   const params = new URLSearchParams(window.location.search);
   const hash   = window.location.hash.replace('#', '');
   const view   = params.get('view') || (validViews.includes(hash) ? hash : null);
@@ -3070,7 +3117,7 @@ function showView(v) {
   if (history.replaceState) history.replaceState(null, '', '#' + v);
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
-  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats'].forEach(name => {
+  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about'].forEach(name => {
     const el = document.getElementById('view-' + name);
     if (el) el.style.display = name === v ? '' : 'none';
   });
@@ -3093,10 +3140,11 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = t('nav.dashboard'); <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); <?php if ($can_settings): ?>startProgressPolling();<?php endif; ?> }
   if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); checkVpnStatus();<?php endif; ?> }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); checkVpnStatus(); loadCustomFilters();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = t('nav.activity_log'); loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = t('profile.title'); document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
+  if (v === 'about')        { document.getElementById('page-title').textContent = t('nav.about'); loadAbout(); }
   if (v === 'favourites')    { document.getElementById('page-title').textContent = t('nav.favourites'); renderFavourites(); loadStats(); updateQueueBadge(); }
   if (v === 'new-releases')  { document.getElementById('page-title').textContent = t('new.title'); loadNewReleases(); }
   if (v === 'api-docs')     { document.getElementById('page-title').textContent = t('nav.api_docs'); }
@@ -3399,6 +3447,46 @@ async function deleteServer(serverId, name) {
   if (d.error) { showToast('❌ ' + d.error, 'error'); return; }
   showToast('🗑 Server entfernt', 'info');
   loadServers();
+}
+
+async function loadAbout() {
+  const verEl = document.getElementById('about-version');
+  if (!verEl) return;
+  const v = await api('get_version_info');
+  if (v && !v.error) {
+    const short = (v.commit || 'unknown').slice(0, 7);
+    const date  = v.date ? new Date(v.date).toLocaleDateString('de-DE', {day:'2-digit', month:'2-digit', year:'numeric'}) : '';
+    verEl.textContent = `Commit ${short}${date ? ' · ' + date : ''}`;
+  }
+}
+
+async function loadCustomFilters() {
+  const el = document.getElementById('cfg-custom-filters');
+  if (!el) return;
+  const d = await api('get_custom_filters');
+  if (d.error) return;
+  // Anzeige: eine Regel pro Zeile, "find => replace" oder nur "find" zum Entfernen
+  el.value = (d.filters ?? []).map(f =>
+    f.replace !== '' ? `${f.find} => ${f.replace}` : f.find
+  ).join('\n');
+}
+
+async function saveCustomFilters() {
+  const el  = document.getElementById('cfg-custom-filters');
+  const msg = document.getElementById('custom-filter-msg');
+  if (!el || !msg) return;
+  // Parsen: "find => replace" oder nur "find" (→ replace = '')
+  const filters = el.value.split('\n')
+    .map(l => l.trim()).filter(l => l !== '')
+    .map(l => {
+      const idx = l.indexOf('=>');
+      if (idx !== -1) return {find: l.slice(0, idx).trim(), replace: l.slice(idx + 2).trim()};
+      return {find: l, replace: ''};
+    }).filter(f => f.find !== '');
+  const d = await apiPost('save_custom_filters', {filters});
+  if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+  msg.textContent = '✓ ' + t('status.saved'); msg.className = 'settings-msg ok';
+  setTimeout(() => { msg.textContent = ''; msg.className = 'settings-msg'; }, 3000);
 }
 
 async function loadConfig() {
@@ -4061,11 +4149,19 @@ async function openTmdbModal(title, type, year, queueData) {
   }
 
   const cacheKey = `${type}:${title}:${year||''}`;
+  // Titel für TMDB-Suche bereinigen — Länderpräfix und Klammern am Ende entfernen
+  const searchTitle = title
+    .replace(/\s*[\(\[][A-Z]{2,4}[\)\]]\s*$/gi, '')  // (DE), [DE] am Ende
+    .replace(/\s*[\(\[]\d{4}[\)\]]\s*$/g, '')          // (2025) am Ende
+    .replace(/\s+\d{4}\s+[A-Z]{2,4}$/g, '')            // "2025 DE" am Ende
+    .replace(/\s+[A-Z]{2,4}$/g, s =>                   // "DE" am Ende — nur bekannte Kürzel
+      ['DE','EN','FR','ES','IT','NL','PL','TR','RU','PT','AR','MX','BR','JP','CN','KR','IN','AU','CA','SE','NO','DK','FI','CZ','HU','RO','GR'].includes(s.trim()) ? '' : s)
+    .trim();
   let d;
   if (_tmdbCache.has(cacheKey)) {
     d = _tmdbCache.get(cacheKey);
   } else {
-    d = await api('tmdb_info', {title, type, year: year || ''});
+    d = await api('tmdb_info', {title: searchTitle, type, year: year || ''});
     if (d && !d.error) _tmdbCache.set(cacheKey, d);
   }
 
