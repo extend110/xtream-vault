@@ -67,10 +67,14 @@ define('API_KEYS_FILE',      DATA_DIR . '/api_keys.json');
 define('ACTIVITY_LOG_FILE',  DATA_DIR . '/activity.json');
 define('TMDB_API_KEY',       $_cfg['tmdb_api_key']    ?? '');
 define('SERVERS_FILE',       DATA_DIR . '/servers.json');
+define('M3U_SOURCES_FILE',   DATA_DIR . '/m3u_sources.json');
 define('INVITES_FILE',       DATA_DIR . '/invites.json');
 define('NEW_RELEASES_FILE',  DATA_DIR . '/new_releases.json');
 
-// ── VPN (WireGuard) ───────────────────────────────────────────────────────────
+// ── Cloudflare Turnstile (CAPTCHA) ────────────────────────────────────────────
+define('TURNSTILE_ENABLED',    !empty($_cfg['turnstile_site_key']) && !empty($_cfg['turnstile_secret_key']));
+define('TURNSTILE_SITE_KEY',   $_cfg['turnstile_site_key']   ?? '');
+define('TURNSTILE_SECRET_KEY', $_cfg['turnstile_secret_key'] ?? '');
 define('VPN_INTERFACE',  preg_replace('/[^a-zA-Z0-9_\-]/', '', $_cfg['vpn_interface'] ?? 'wg0'));
 define('VPN_ENABLED',    VPN_INTERFACE !== ''); // immer aktiv wenn Interface konfiguriert
 define('VPN_RT_TABLE',   51820);
@@ -174,7 +178,57 @@ function vpn_is_manual(): bool {
     return file_exists(DATA_DIR . '/vpn_manual.flag');
 }
 
-// ── Prüfen ob Grundkonfiguration vorhanden ────────────────────────────────────
+/**
+ * Prüft ein Cloudflare Turnstile Token.
+ * Gibt true zurück wenn gültig, false bei Fehler oder wenn Turnstile nicht aktiviert.
+ */
+function turnstile_verify(string $token): bool {
+    if (!TURNSTILE_ENABLED) return true; // Turnstile nicht konfiguriert → immer erlauben
+    if ($token === '') return false;
+    $ctx = stream_context_create(['http' => [
+        'method'  => 'POST',
+        'header'  => "Content-Type: application/x-www-form-urlencoded\r\n",
+        'content' => http_build_query([
+            'secret'   => TURNSTILE_SECRET_KEY,
+            'response' => $token,
+            'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '',
+        ]),
+        'timeout' => 8,
+    ]]);
+    $raw = @file_get_contents('https://challenges.cloudflare.com/turnstile/v0/siteverify', false, $ctx);
+    if (!$raw) return false;
+    $data = json_decode($raw, true);
+    return (bool)($data['success'] ?? false);
+}
+
+// ── M3U-Quellen ───────────────────────────────────────────────────────────────
+function load_m3u_sources(): array {
+    return file_exists(M3U_SOURCES_FILE)
+        ? (json_decode(file_get_contents(M3U_SOURCES_FILE), true) ?? [])
+        : [];
+}
+
+function parse_m3u(string $content): array {
+    $entries = [];
+    $lines   = preg_split('/\r?\n/', $content);
+    $current = null;
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (str_starts_with($line, '#EXTINF:')) {
+            $name  = preg_match('/,(.+)$/', $line, $m) ? trim($m[1]) : 'Unknown';
+            $group = preg_match('/group-title="([^"]*)"/', $line, $m) ? $m[1] : 'Uncategorized';
+            $logo  = preg_match('/tvg-logo="([^"]*)"/', $line, $m)    ? $m[1] : '';
+            $current = compact('name', 'group', 'logo');
+        } elseif ($line !== '' && !str_starts_with($line, '#') && $current !== null) {
+            $current['url'] = $line;
+            $entries[]      = $current;
+            $current        = null;
+        }
+    }
+    return $entries;
+}
+
+// ── VPN (WireGuard) ───────────────────────────────────────────────────────────
 function is_configured(): bool {
     // Primär: config.json hat Server-Zugangsdaten (Rückwärtskompatibilität)
     if (SERVER_IP !== '' && USERNAME !== '' && PASSWORD !== '') return true;

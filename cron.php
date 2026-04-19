@@ -88,6 +88,18 @@ if (RCLONE_ENABLED) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+function cron_heartbeat(string $type, string $status, string $msg = ''): void {
+    $file = DATA_DIR . '/cron_status.json';
+    $data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?? []) : [];
+    $data[$type] = [
+        'last_run'  => date('Y-m-d H:i:s'),
+        'timestamp' => time(),
+        'status'    => $status, // 'running' | 'ok' | 'error'
+        'msg'       => $msg,
+    ];
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+}
+
 function clog(string $msg): void {
     $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg;
     echo $line . PHP_EOL;
@@ -307,6 +319,8 @@ function download_file(string $url, string $destPath, string $title, int $queueP
         CURLOPT_LOW_SPEED_LIMIT => 1,
         CURLOPT_LOW_SPEED_TIME  => 60,
         CURLOPT_BUFFERSIZE      => CHUNK_SIZE,
+        CURLOPT_SSL_VERIFYPEER  => false,
+        CURLOPT_SSL_VERIFYHOST  => 0,
     ]);
 
     $fh = fopen($tmpPath, $resumeFrom > 0 ? 'ab' : 'wb');
@@ -628,11 +642,13 @@ function parse_rclone_eta(string $eta): ?int {
 if ($serverFilter === null) {
     // Koordinator-Modus: prüfe welche Server pending Items haben
     clog("=== Xtream Vault Cron Coordinator started ===");
+    cron_heartbeat('cron', 'running', 'Coordinator gestartet');
     $allQueue    = load_queue();
     $pendingAll  = array_filter($allQueue, fn($i) => $i['status'] === 'pending');
 
     if (empty($pendingAll)) {
         clog("Queue is empty – nothing to do.");
+        cron_heartbeat('cron', 'ok', 'Queue leer');
         clear_progress();
         exit(0);
     }
@@ -675,6 +691,7 @@ if ($serverFilter === null) {
             shell_exec(escapeshellarg(PHP_BINARY ?: 'php') . ' ' . escapeshellarg(__DIR__ . '/cache_builder.php') . ' > ' . escapeshellarg(DATA_DIR . '/cache_build.log') . ' 2>&1 &');
         }
         clog("=== Coordinator done (sequential) ===");
+        cron_heartbeat('cron', 'ok', 'Sequential run abgeschlossen');
         exit(0);
     }
 
@@ -763,6 +780,7 @@ if ($serverFilter === null) {
     }
 
     clog("=== Coordinator done ===");
+    cron_heartbeat('cron', 'ok', 'Parallel run abgeschlossen');
     exit(0);
 }
 
@@ -783,6 +801,7 @@ $pending = array_filter($queue, fn($item) => $item['status'] === 'pending');
 
 if (empty($pending)) {
     clog("Queue is empty – nothing to do.");
+    cron_heartbeat('cron', 'ok', 'Queue leer');
     clear_progress();
     exit(0);
 }
@@ -821,7 +840,10 @@ foreach ($queue as &$item) {
     $sid        = $item['stream_id'];
     $ext        = $item['container_extension'] ?? 'mp4';
     $type       = $item['type'] ?? 'movie';
-    $url        = $item['stream_url'];
+    $url        = $item['stream_url'] ?? '';
+    if ($url === '') {
+        clog("  WARN: stream_url ist leer für '$title' (sid=$sid, server=" . ($item['_server_id'] ?? '?') . ")");
+    }
     $sub        = $item['dest_subfolder'] ?? ($type === 'movie' ? 'Movies' : 'TV Shows');
     $cat        = !empty($item['category']) ? $item['category'] : 'Uncategorized';
     $season     = isset($item['season']) && $item['season'] !== null ? (int)$item['season'] : null;
@@ -905,6 +927,8 @@ foreach ($queue as &$item) {
                 CURLOPT_TIMEOUT        => 15,
                 CURLOPT_HTTPHEADER     => ['User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)'],
                 CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
             ]);
             curl_exec($ch);
             $contentLength = (int)curl_getinfo($ch, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
@@ -1132,7 +1156,10 @@ clog(sprintf("=== Worker done (server: %s): %d downloaded, %d errors ===", $serv
 
 // Im Worker-Modus (hat --server= Argument): Cleanup übernimmt der Coordinator
 $isWorker = ($serverFilter !== null);
-if ($isWorker) exit(0);
+if ($isWorker) {
+    cron_heartbeat('cron', 'ok', sprintf('Worker done: %d downloads, %d errors', $processed, $errors));
+    exit(0);
+}
 
 // ── Automatische Bereinigung: done-Einträge älter als 7 Tage entfernen ────────
 $queue = load_queue();
@@ -1192,6 +1219,8 @@ if ($processed > 0) {
     $log    = escapeshellarg(DATA_PATH . '/cache_build.log');
     shell_exec("php {$script} > {$log} 2>&1 &");
 }
+
+cron_heartbeat('cron', 'ok', sprintf('%d downloads, %d errors', $processed, $errors));
 
 
 

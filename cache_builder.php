@@ -31,6 +31,18 @@ if ($existingPid > 0 && is_process_running($existingPid)) {
 file_put_contents($lockFile, getmypid());
 register_shutdown_function(function() use ($lockFile) { @unlink($lockFile); });
 
+function cache_heartbeat(string $status, string $msg = ''): void {
+    $file = DATA_DIR . '/cron_status.json';
+    $data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?? []) : [];
+    $data['cache'] = [
+        'last_run'  => date('Y-m-d H:i:s'),
+        'timestamp' => time(),
+        'status'    => $status,
+        'msg'       => $msg,
+    ];
+    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+}
+
 function blog(string $msg): void {
     $line = '[' . date('H:i:s') . '] [CACHE] ' . $msg;
     echo $line . PHP_EOL;
@@ -112,6 +124,7 @@ if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
 }
 
 blog(sprintf('=== Cache für %d Server ===', count($servers)));
+cache_heartbeat('running', 'Cache-Build gestartet');
 
 // ── Pro Server: Movie-Cache + Serien-Cache aufbauen ──────────────────────────
 $allMovieCaches = []; // server_id => movieCache array
@@ -187,9 +200,89 @@ foreach ($servers as $srv) {
     blog(sprintf('  Serien-Cache: %d Einträge → %s (%.1fs)',
         count($seriesCache), basename($serCacheFile), microtime(true) - $t1));
 
+    // Live-TV-Cache
+    $t2 = microtime(true);
+    if (($srv['live_cache'] ?? false) !== true) {
+        blog('  Live-TV-Cache: deaktiviert für diesen Server');
+    } else {
+    blog('  Starte Live-TV-Cache…');
+    $liveCache    = [];
+    $liveCacheFile = DATA_DIR . '/live_cache_' . $srvId . '.json';
+    $liveCats = xtream_req_srv($srv, 'get_live_categories');
+    if (!empty($liveCats)) {
+        blog(sprintf('  %d Live-Kategorien gefunden', count($liveCats)));
+        foreach ($liveCats as $cat) {
+            $streams = xtream_req_srv($srv, 'get_live_streams', ['category_id' => $cat['category_id']]);
+            if (empty($streams)) continue;
+            foreach ($streams as $s) {
+                $liveCache[] = [
+                    'stream_id'      => (string)($s['stream_id'] ?? ''),
+                    'name'           => $s['name'] ?? '',
+                    'stream_icon'    => $s['stream_icon'] ?? '',
+                    'category'       => $cat['category_name'],
+                    'category_id'    => (string)$cat['category_id'],
+                    'epg_channel_id' => $s['epg_channel_id'] ?? '',
+                    '_server_id'     => $srvId,
+                ];
+            }
+        }
+        file_put_contents($liveCacheFile, json_encode($liveCache, JSON_UNESCAPED_UNICODE));
+        blog(sprintf('  Live-TV-Cache: %d Sender → %s (%.1fs)',
+            count($liveCache), basename($liveCacheFile), microtime(true) - $t2));
+    } else {
+        blog('  WARN: Keine Live-Kategorien empfangen');
+    }
+    } // end live_cache check
+
     // Fallback-Kopie für LIBRARY_CACHE_FILE (Rückwärtskompatibilität)
     if ($srvId === SERVER_ID) {
         file_put_contents(LIBRARY_CACHE_FILE, json_encode($movieCache, JSON_UNESCAPED_UNICODE));
+    }
+}
+
+// ── M3U-Quellen cachen ────────────────────────────────────────────────────────
+$m3uSources = load_m3u_sources();
+$m3uSources = array_values(array_filter($m3uSources, fn($s) => ($s['enabled'] ?? true) !== false));
+if (!empty($m3uSources)) {
+    blog('=== M3U-Quellen ===');
+    foreach ($m3uSources as $src) {
+        $srcId     = $src['id'];
+        $srcName   = $src['name'] ?? $srcId;
+        $cacheFile = DATA_DIR . '/library_cache_m3u_' . $srcId . '.json';
+        $t0 = microtime(true);
+        // Inhalt laden: URL oder lokale Datei
+        $content = '';
+        if (!empty($src['url'])) {
+            $ctx     = stream_context_create(['http' => ['timeout' => 30, 'header' => "User-Agent: Mozilla/5.0\r\n"]]);
+            $content = @file_get_contents($src['url'], false, $ctx) ?: '';
+        } elseif (!empty($src['file']) && file_exists($src['file'])) {
+            $content = file_get_contents($src['file']);
+        }
+        if ($content === '') {
+            blog("  WARN: M3U '{$srcName}' konnte nicht geladen werden");
+            continue;
+        }
+        $entries = parse_m3u($content);
+        $cache   = [];
+        foreach ($entries as $i => $e) {
+            $streamId = 'm3u_' . $srcId . '_' . $i;
+            $ext = pathinfo(parse_url($e['url'] ?? '', PHP_URL_PATH) ?? '', PATHINFO_EXTENSION) ?: 'mp4';
+            $cache[$streamId] = [
+                'id'          => $streamId,
+                'title'       => display_title($e['name'] ?? 'Unknown'),
+                'cover'       => $e['logo']  ?? '',
+                'category'    => $e['group'] ?? 'Uncategorized',
+                'category_id' => substr(md5($e['group'] ?? 'Uncategorized'), 0, 8),
+                'ext'         => strtolower($ext),
+                'type'        => 'movie',
+                'stream_url'  => $e['url']   ?? '',
+                '_server_id'  => 'm3u_' . $srcId,
+                '_m3u'        => true,
+            ];
+        }
+        file_put_contents($cacheFile, json_encode($cache, JSON_UNESCAPED_UNICODE));
+        $allMovieCaches['m3u_' . $srcId] = $cache;
+        blog(sprintf("  M3U '%s': %d Einträge → %s (%.1fs)", $srcName, count($cache), basename($cacheFile), microtime(true) - $t0));
     }
 }
 
@@ -243,6 +336,7 @@ foreach ($prev['movies'] ?? [] as $m) {
 }
 
 // Neue Filme aus allen Servern hinzufügen (dismissed ebenfalls ausschließen)
+$newlyAddedMovies = []; // nur die in diesem Run neu hinzugekommenen — für Auto-Queue
 if (!$isFirstRun) {
     foreach ($allCurrentIds as $id => $srvId) {
         $sid = (string)$id;
@@ -252,6 +346,7 @@ if (!$isFirstRun) {
                 $m['stream_id'] = $sid;
                 $m['_server_id'] = $srvId;
                 $accMovies[$sid] = $m;
+                $newlyAddedMovies[$sid] = $m;
             }
         }
     }
@@ -289,7 +384,7 @@ skip_tg_new_releases:
 
 // ── Auto-Queue neue Releases ──────────────────────────────────────────────────
 $cfgAq = load_config();
-if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) {
+if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && !empty($newlyAddedMovies)) {
     $aqMax = max(1, (int)($cfgAq['autoqueue_max'] ?? 10));
 
     // Hilfsfunktionen (analog zu api.php)
@@ -336,15 +431,27 @@ if (!$isFirstRun && ($cfgAq['autoqueue_enabled'] ?? false) && $actuallyNew > 0) 
         return $prefix !== '' && in_array($prefix, $aqPrefixes);
     };
 
-    // Neue Filme (noch nicht heruntergeladen, optional nach Präfix gefiltert)
+    // Neue Filme (nur in diesem Run neu hinzugekommen, noch nicht heruntergeladen)
     $dbAq       = load_db_local();
     $dlMovieIds = array_flip(array_map('strval', $dbAq['movies'] ?? []));
-    $newMovies  = array_slice(
-        array_filter(array_values($accMovies), fn($m) =>
-            !isset($dlMovieIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])
-            && $aq_prefix_ok($m['clean_title'] ?? $m['title'] ?? '', $m['category'] ?? '')),
+    $candidates = array_values(array_filter($newlyAddedMovies, fn($m) =>
+        !isset($dlMovieIds[(string)($m['stream_id'] ?? $m['id'] ?? '')])));
+    blog(sprintf('Auto-Queue: %d neue Filme vor Präfix-Filter', count($candidates)));
+    if (!empty($aqPrefixes)) {
+        $sample = array_slice($candidates, 0, 3);
+        foreach ($sample as $m) {
+            $cat    = $m['category'] ?? '';
+            $title  = $m['clean_title'] ?? $m['title'] ?? '';
+            $prefix = $aq_extract_prefix($cat);
+            blog("  Beispiel: cat='{$cat}' prefix='{$prefix}' ok=" . ($aq_prefix_ok($title, $cat) ? 'ja' : 'nein'));
+        }
+    }
+    $newMovies = array_slice(
+        array_filter($candidates, fn($m) =>
+            $aq_prefix_ok($m['clean_title'] ?? $m['title'] ?? '', $m['category'] ?? '')),
         0, $aqMax
     );
+    blog(sprintf('Auto-Queue: %d Filme nach Präfix-Filter (%s)', count($newMovies), implode(',', $aqPrefixes) ?: 'kein Filter'));
 
     if (!empty($newMovies)) {
         // Queue-Dateien pro Server einmalig laden
@@ -449,3 +556,4 @@ blog(sprintf('Downloaded-Index: %d Einträge', count($index)));
 
 $totalTime = microtime(true) - $_cbStartTime;
 blog(sprintf('=== Done (%.1fs gesamt) ===', $totalTime));
+cache_heartbeat('ok', sprintf('%d Filme, %.1fs', count($allCurrentIds), $totalTime));

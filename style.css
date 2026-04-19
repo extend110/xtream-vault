@@ -1029,3 +1029,17 @@ body::before {
 }
 .view-mode-btn:hover { color: var(--text); border-color: var(--accent); }
 .view-mode-btn.active { color: var(--accent); border-color: var(--accent); }
+
+/* ── Live TV ──────────────────────────────────────────────────── */
+.live-cat-item {
+  padding: 8px 12px; font-size: .78rem; cursor: pointer; color: var(--muted);
+  transition: background .12s, color .12s;
+}
+.live-cat-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.live-cat-item.active { color: var(--accent); background: rgba(232,255,71,.04); border-left: 2px solid var(--accent); padding-left: 10px; }
+.live-ch-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 12px; cursor: pointer; transition: background .12s; color: var(--muted);
+}
+.live-ch-item:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.live-ch-item.active { background: rgba(255,255,255,.05); color: var(--text); border-left: 2px solid var(--accent); padding-left: 10px; }

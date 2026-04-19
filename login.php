@@ -34,6 +34,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'login') {
+        // Turnstile prüfen falls aktiviert
+        if (TURNSTILE_ENABLED && !turnstile_verify($_POST['cf-turnstile-response'] ?? '')) {
+            $error = 'Captcha-Prüfung fehlgeschlagen — bitte erneut versuchen.';
+        } else {
         $result = attempt_login(trim($_POST['username'] ?? ''), $_POST['password'] ?? '');
         // Wartungsmodus: erfolgreicher Login nur für Admins
         if ($result === true && file_exists(DATA_DIR . '/maintenance.lock')) {
@@ -57,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = 'Ungültiger Benutzername oder Passwort';
         }
+        } // end turnstile check
     }
 
     if ($action === 'setup' && !users_exist()) {
@@ -221,6 +226,9 @@ body::before {
 .btn-submit:hover { opacity: .88; }
 .btn-submit:active { opacity: .75; }
 </style>
+<?php if (TURNSTILE_ENABLED): ?>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<?php endif; ?>
 </head>
 <body>
 <div class="card">
@@ -282,6 +290,9 @@ body::before {
         <input type="password" name="password" autocomplete="current-password" required>
       </div>
       <button type="submit" class="btn-submit">Anmelden</button>
+      <?php if (TURNSTILE_ENABLED): ?>
+      <div class="cf-turnstile" data-sitekey="<?= htmlspecialchars(TURNSTILE_SITE_KEY) ?>" data-theme="dark" style="margin-top:16px"></div>
+      <?php endif; ?>
     </form>
   <?php endif; ?>
 </div>

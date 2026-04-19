@@ -25,6 +25,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<?php if ($can_settings): ?>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.7/hls.min.js"></script>
+<?php endif; ?>
 <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__.'/style.css') ?>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 </head>
@@ -57,6 +60,9 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     <div class="category-list" id="cats-series"></div>
     <?php endif; ?>
     <div class="nav-section-title" style="margin-top:8px">Tools</div>
+    <?php if ($can_settings): ?>
+    <div class="nav-item" data-view="live" onclick="showView('live')"><span class="nav-icon">📡</span><?= t('nav.live') ?></div>
+    <?php endif; ?>
     <div class="nav-item" onclick="showView('favourites')"><span class="nav-icon">♥</span><?= t('nav.favourites') ?> <span class="nav-badge" id="fav-badge" style="display:none">0</span></div>
     <div class="nav-item" onclick="showView('new-releases')"><span class="nav-icon">🆕</span><?= t('nav.new') ?> <span class="nav-badge" id="new-releases-badge" style="display:none">0</span></div>
     <div class="nav-item" onclick="showView('search')"><span class="nav-icon">🔍</span><?= t('nav.search') ?></div>
@@ -232,6 +238,20 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
       </div>
 
       <!-- 4. Laufender Download -->
+      <?php if ($can_settings): ?>
+      <!-- Cronjob-Status -->
+      <div id="dash-cron-status" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="dkpi" id="cron-card-download" style="grid-column:1">
+          <div class="dkpi-l">⏱ <?= t('dash.cron_download') ?></div>
+          <div id="cron-dl-status" style="font-size:.78rem;line-height:1.75;margin-top:4px"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div>
+        </div>
+        <div class="dkpi" id="cron-card-cache" style="grid-column:2">
+          <div class="dkpi-l">🔄 <?= t('dash.cron_cache') ?></div>
+          <div id="cron-cache-status" style="font-size:.78rem;line-height:1.75;margin-top:4px"><div style="color:var(--muted)"><?= t('status.loading') ?></div></div>
+        </div>
+      </div>
+      <?php endif; ?>
+
       <div class="progress-card" id="dash-progress-card" style="margin-bottom:14px">
         <div class="pc-header">
           <div class="pc-dot"></div>
@@ -392,6 +412,45 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
     </div>
     <?php endif; ?>
     <!-- Search -->
+    <!-- ── Live TV ──────────────────────────────────────────────── -->
+    <?php if ($can_settings): ?>
+    <div id="view-live" style="display:none">
+      <div style="display:grid;grid-template-columns:220px 1fr;height:calc(100vh - 80px);overflow:hidden">
+
+        <!-- Sidebar -->
+        <div style="background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
+          <div style="padding:10px 12px;border-bottom:1px solid var(--border)">
+            <input type="text" id="live-search" placeholder="<?= t('live.search') ?>"
+              style="width:100%;background:rgba(255,255,255,.05);border:none;border-radius:4px;padding:6px 10px;color:var(--text);font-size:.75rem;outline:none"
+              oninput="filterLiveChannels(this.value)">
+          </div>
+          <div id="live-cats" style="overflow-y:auto;flex:1;padding:8px 0"></div>
+        </div>
+
+        <!-- Player -->
+        <div style="background:#000;position:relative;display:flex;align-items:center;justify-content:center">
+          <video id="live-player" controls style="width:100%;height:100%;max-height:calc(100vh - 80px);display:none"></video>
+
+          <!-- Placeholder -->
+          <div id="live-placeholder" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+            <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:22px">📡</div>
+            <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:rgba(255,255,255,.25);letter-spacing:.1em"><?= t('live.select_channel') ?></div>
+          </div>
+
+          <!-- Overlay Infobar -->
+          <div id="live-overlay" style="display:none;position:absolute;bottom:0;left:0;right:0;padding:12px 18px;background:linear-gradient(transparent,rgba(0,0,0,.75))">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+              <span style="background:#ff4757;color:#fff;font-family:'DM Mono',monospace;font-size:.55rem;padding:2px 7px;border-radius:3px;letter-spacing:.08em">● LIVE</span>
+              <span id="live-now-name" style="font-size:.9rem;font-weight:500;color:#fff"></span>
+              <span id="live-now-cat" style="font-family:'DM Mono',monospace;font-size:.62rem;color:rgba(255,255,255,.4);margin-left:auto"></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <?php endif; ?>
+
     <div id="view-search" style="display:none">
       <!-- Suchfeld -->
       <div class="search-wrap" style="margin-bottom:16px;display:flex">
@@ -736,6 +795,35 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
           <span style="display:none" id="cfg-server-id-display"></span>
         </div>
 
+        <!-- M3U-Quellen -->
+        <div class="settings-card">
+          <h3>📋 <?= t('cfg.m3u_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            <?= t('cfg.m3u_desc') ?>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button class="btn-sm" onclick="openAddM3uForm()" id="btn-add-m3u">+ <?= t('cfg.m3u_add') ?></button>
+          </div>
+          <!-- Inline-Formular -->
+          <div id="add-m3u-form" style="display:none;background:var(--bg3);border-radius:8px;padding:16px;margin-bottom:14px">
+            <div class="field"><label><?= t('cfg.m3u_name') ?></label><input type="text" id="m3u-name" placeholder="Meine M3U"></div>
+            <div class="field"><label><?= t('cfg.m3u_url') ?></label><input type="text" id="m3u-url" placeholder="http://…/playlist.m3u"></div>
+            <div style="text-align:center;font-size:.78rem;color:var(--muted);margin:8px 0"><?= t('cfg.m3u_or') ?></div>
+            <div class="field">
+              <label><?= t('cfg.m3u_file') ?></label>
+              <input type="file" id="m3u-file" accept=".m3u,.m3u8,.txt" style="font-size:.8rem">
+            </div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn-primary" onclick="saveM3uSource()"><?= t('btn.save') ?></button>
+              <button class="btn-secondary" onclick="closeAddM3uForm()"><?= t('btn.cancel') ?></button>
+            </div>
+            <div class="settings-msg" id="m3u-form-msg" style="margin-top:8px"></div>
+          </div>
+          <div id="saved-m3u-list" style="display:flex;flex-direction:column;gap:8px">
+            <div style="color:var(--muted);font-size:.8rem"><?= t('status.loading') ?></div>
+          </div>
+        </div>
+
         <div class="settings-card">
           <h3><?= t('cfg.dest') ?></h3>
           <div id="rclone-disabled-fields">
@@ -911,6 +999,23 @@ $show_series = $can_settings || (bool)($_cfg['editor_series_enabled'] ?? true);
               <div><div style="font-family:'DM Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><?= t('cfg.vpn_iface') ?></div><div id="vpn-stat-iface" style="font-family:'DM Mono',monospace;font-size:.82rem;margin-top:3px">–</div></div>
             </div>
           </div>
+        </div>
+
+        <div class="settings-card">
+          <h3>🛡 <?= t('cfg.turnstile_title') ?></h3>
+          <div style="font-size:.82rem;color:var(--muted);margin-bottom:14px;line-height:1.6">
+            <?= t('cfg.turnstile_desc') ?>
+            <a href="https://dash.cloudflare.com/?to=/:account/turnstile" target="_blank" style="color:var(--accent2)">Cloudflare Dashboard →</a>
+          </div>
+          <div class="field">
+            <label><?= t('cfg.turnstile_site_key') ?></label>
+            <input type="text" id="cfg-turnstile-site-key" placeholder="0x4AAAAAAA..." style="max-width:400px" autocomplete="off">
+          </div>
+          <div class="field">
+            <label><?= t('cfg.turnstile_secret_key') ?></label>
+            <input type="password" id="cfg-turnstile-secret-key" placeholder="0x4AAAAAAA..." style="max-width:400px" autocomplete="off">
+          </div>
+          <span class="hint"><?= t('cfg.turnstile_hint') ?></span>
         </div>
 
         <div class="settings-card">
@@ -1789,7 +1894,7 @@ startBadgePolling();
 // ── URL-Parameter und Hash beim Start lesen ───────────────────
 // setTimeout(0) stellt sicher dass alle let-Deklarationen geparst sind
 setTimeout(function applyUrlParams() {
-  const validViews = ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about'];
+  const validViews = ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about','live'];
   const params = new URLSearchParams(window.location.search);
   const hash   = window.location.hash.replace('#', '');
   const view   = params.get('view') || (validViews.includes(hash) ? hash : null);
@@ -2026,6 +2131,8 @@ function renderPagination(containerId, current, total, onPage) {
 }
 
 function movieCard(m, showServer = false) {
+  // m-Objekt als data-Attribut speichern um onclick-Escaping-Probleme zu vermeiden
+  const mEncoded = encodeURIComponent(JSON.stringify(m));
   registerFavItem('movie', m.stream_id, m);
   const thumb = m.stream_icon ? `<img data-src="${m.stream_icon}" alt="">` : '';
   const badge = m.downloaded
@@ -2047,18 +2154,18 @@ function movieCard(m, showServer = false) {
         : m.queued
           ? `<button class="btn-q done" disabled>⏳ Queued</button>`
           : canQueueAdd
-            ? `<button class="btn-q add" onclick="addMovieToQueue(${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))">+ Queue</button>`
+            ? `<button class="btn-q add" onclick="addMovieToQueue(JSON.parse(decodeURIComponent(this.closest('.card').dataset.m)),this.closest('.card'))">+ Queue</button>`
             : '';
 
   // "Als heruntergeladen markieren"-Button (nur Admins, nur wenn nicht already done)
   const markBtn = (<?= $can_settings ? 'true' : 'false' ?> && !m.downloaded && !isDownloading)
     ? `<button class="btn-q add" style="font-size:.65rem;padding:4px 6px;opacity:.6" title="${t('btn.mark_downloaded')}"
-        onclick="event.stopPropagation();markDownloaded('${m.stream_id}','movie',${JSON.stringify(m.clean_title).replace(/"/g,'&quot;')},'${esc(m.stream_icon||'')}','${esc(m.category||m._category||'')}','${esc(m.container_extension||'mp4')}','${esc(m._server_id||'')}',this.closest('.card'))">✓</button>`
+        onclick="event.stopPropagation();const _m=JSON.parse(decodeURIComponent(this.closest('.card').dataset.m));markDownloaded(_m.stream_id,'movie',_m.clean_title,_m.stream_icon||'',_m.category||'',_m.container_extension||'mp4',_m._server_id||'',this.closest('.card'))">✓</button>`
     : '';
 
   // Multi-select checkbox (only in search view, only if can add to queue)
   const selectBox = (currentView === 'search' && canQueueAdd && !m.downloaded && !m.queued)
-    ? `<div class="select-check" onclick="event.stopPropagation();toggleSelectItem('${m.stream_id}',${JSON.stringify(m).replace(/"/g,'&quot;')},this.closest('.card'))"></div>`
+    ? `<div class="select-check" onclick="event.stopPropagation();toggleSelectItem('${m.stream_id}',JSON.parse(decodeURIComponent(this.closest('.card').dataset.m)),this.closest('.card'))"></div>`
     : '';
 
   const isFav = favourites.has('movie:' + m.stream_id);
@@ -2078,6 +2185,7 @@ function movieCard(m, showServer = false) {
   <div class="card ${m.downloaded?'downloaded':m.queued?'queued':''}" id="card-m-${m.stream_id}"
     data-tmdb-title="${esc(m.clean_title)}" data-tmdb-type="movie" data-tmdb-year="${esc(year)}"
     data-tmdb-queue="${esc(JSON.stringify(m))}"
+    data-m="${mEncoded}"
     onclick="handleCardClick(event,this)" style="cursor:pointer">
     <div class="card-thumb">
       <div class="card-thumb-placeholder">🎬</div>
@@ -2319,7 +2427,7 @@ async function queueAllSeason(eps, season, seriesTitle, category, serverId) {
 
 // ── Queue Add/Remove ──────────────────────────────────────────
 async function addMovieToQueue(m, card) {
-  const result = await queueItem({
+  const payload = {
     stream_id:           m.stream_id,
     type:                'movie',
     title:               m.clean_title,
@@ -2328,7 +2436,9 @@ async function addMovieToQueue(m, card) {
     dest_subfolder:      'Movies',
     category:            m.category ?? m._category ?? '',
     _server_id:          m._server_id ?? '',
-  }, card || document.getElementById('card-m-' + m.stream_id));
+  };
+  if (m.stream_url) payload.stream_url = m.stream_url;
+  const result = await queueItem(payload, card || document.getElementById('card-m-' + m.stream_id));
   if (!result) return;
   // Karte per ID suchen falls nicht direkt übergeben (z.B. aus TMDB-Modal)
   if (!card) card = document.getElementById('card-m-' + m.stream_id);
@@ -3117,7 +3227,7 @@ function showView(v) {
   if (history.replaceState) history.replaceState(null, '', '#' + v);
   // Auf mobilen Geräten Sidebar schließen wenn eine View gewählt wird
   if (window.innerWidth <= 768) closeSidebar();
-  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about'].forEach(name => {
+  ['dashboard','movies','series','search','queue','log','settings','users','activity-log','profile','favourites','new-releases','api-docs','stats','about','live'].forEach(name => {
     const el = document.getElementById('view-' + name);
     if (el) el.style.display = name === v ? '' : 'none';
   });
@@ -3140,11 +3250,15 @@ function showView(v) {
   if (v === 'dashboard')    { document.getElementById('page-title').textContent = t('nav.dashboard'); <?php if (!$can_settings): ?>loadUserDashboard();<?php endif; ?> <?php if ($can_settings): ?>startDashboardPolling();<?php endif; ?> }
   if (v === 'queue')        { document.getElementById('page-title').textContent = t('nav.queue'); refreshQueue(); <?php if ($can_settings): ?>startProgressPolling();<?php endif; ?> }
   if (v === 'log')          { document.getElementById('page-title').textContent = t('nav.log'); startLogPolling(); }
-  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); checkVpnStatus(); loadCustomFilters();<?php endif; ?> }
+  if (v === 'settings')     { document.getElementById('page-title').textContent = t('nav.settings'); <?php if ($can_settings): ?>loadConfig(); loadCacheStatus(); loadApiKeys(); loadMaintenance(); loadBackups(); loadServers(); loadM3uSources(); checkVpnStatus(); loadCustomFilters();<?php endif; ?> }
   if (v === 'users')        { document.getElementById('page-title').textContent = t('nav.users'); loadUsers(); <?php if ($can_users): ?>loadInvites();<?php endif; ?> }
   if (v === 'activity-log') { document.getElementById('page-title').textContent = t('nav.activity_log'); loadActivityLog(); }
   if (v === 'profile')      { document.getElementById('page-title').textContent = t('profile.title'); document.getElementById('profile-msg').className = 'settings-msg'; const tp = document.getElementById('theme-picker'); if (tp) tp.innerHTML = renderThemePicker(); }
   if (v === 'about')        { document.getElementById('page-title').textContent = t('nav.about'); loadAbout(); }
+  <?php if ($can_settings): ?>
+  if (v === 'live')         { document.getElementById('page-title').textContent = t('nav.live'); loadLiveCats(); }
+  if (v !== 'live')         { stopLivePlayer(); }
+  <?php endif; ?>
   if (v === 'favourites')    { document.getElementById('page-title').textContent = t('nav.favourites'); renderFavourites(); loadStats(); updateQueueBadge(); }
   if (v === 'new-releases')  { document.getElementById('page-title').textContent = t('new.title'); loadNewReleases(); }
   if (v === 'api-docs')     { document.getElementById('page-title').textContent = t('nav.api_docs'); }
@@ -3320,6 +3434,78 @@ async function testAllServers() {
   if (btn) { btn.disabled = false; btn.textContent = '🔌 Alle testen'; }
 }
 
+// ── M3U-Quellen ──────────────────────────────────────────────
+async function loadM3uSources() {
+  const list = document.getElementById('saved-m3u-list');
+  if (!list) return;
+  const sources = await api('list_m3u_sources');
+  if (!sources?.length) {
+    list.innerHTML = `<div style="color:var(--muted);font-size:.8rem">${t('cfg.m3u_none')}</div>`;
+    return;
+  }
+  list.innerHTML = sources.map(s =>
+    `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="flex:1;font-size:.88rem;font-weight:500">📋 ${esc(s.name)}</span>
+        <button class="btn-icon" title="Löschen" onclick="deleteM3uSource('${jsesc(s.id)}','${jsesc(s.name)}')">✕</button>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-top:4px">
+        ${s.url ? esc(s.url) : '📁 Lokale Datei'}
+      </div>
+    </div>`
+  ).join('');
+}
+
+function openAddM3uForm() {
+  document.getElementById('add-m3u-form').style.display = '';
+  document.getElementById('btn-add-m3u').style.display = 'none';
+  document.getElementById('m3u-name').focus();
+}
+function closeAddM3uForm() {
+  document.getElementById('add-m3u-form').style.display = 'none';
+  document.getElementById('btn-add-m3u').style.display = '';
+  document.getElementById('m3u-name').value = '';
+  document.getElementById('m3u-url').value = '';
+  document.getElementById('m3u-file').value = '';
+  document.getElementById('m3u-form-msg').textContent = '';
+}
+
+async function saveM3uSource() {
+  const msg  = document.getElementById('m3u-form-msg');
+  const name = document.getElementById('m3u-name').value.trim();
+  const url  = document.getElementById('m3u-url').value.trim();
+  const file = document.getElementById('m3u-file').files[0];
+  if (!name) { msg.textContent = 'Name ist ein Pflichtfeld'; msg.className = 'settings-msg err'; return; }
+  if (!url && !file) { msg.textContent = 'URL oder Datei erforderlich'; msg.className = 'settings-msg err'; return; }
+
+  msg.textContent = t('status.loading'); msg.className = 'settings-msg info';
+
+  if (file) {
+    // Datei-Upload
+    const content = await file.text();
+    const r = await fetch(`${API}?action=upload_m3u&name=${encodeURIComponent(name)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain', 'X-CSRF-Token': CSRF_TOKEN},
+      body: content
+    }).then(r => r.json()).catch(() => ({error: 'Upload fehlgeschlagen'}));
+    if (r.error) { msg.textContent = '❌ ' + r.error; msg.className = 'settings-msg err'; return; }
+    msg.textContent = `✓ ${r.entries} Einträge importiert`; msg.className = 'settings-msg ok';
+  } else {
+    const d = await apiPost('save_m3u_source', {name, url});
+    if (d.error) { msg.textContent = '❌ ' + d.error; msg.className = 'settings-msg err'; return; }
+    msg.textContent = t('status.saved'); msg.className = 'settings-msg ok';
+  }
+  setTimeout(closeAddM3uForm, 1500);
+  loadM3uSources();
+}
+
+async function deleteM3uSource(id, name) {
+  if (!await showConfirm(`M3U-Quelle "${name}" wird gelöscht.`, {title:'M3U löschen?', icon:'🗑', okLabel:'Löschen', danger:true})) return;
+  await apiPost('delete_m3u_source', {source_id: id});
+  showToast('M3U-Quelle gelöscht', 'info');
+  loadM3uSources();
+}
+
 async function loadServers() {
   const list = document.getElementById('saved-servers-list');
   if (!list) return;
@@ -3330,6 +3516,7 @@ async function loadServers() {
   }
   list.innerHTML = servers.map(s => {
     const enabled = s.enabled !== false;
+    const liveCache = s.live_cache === true;
     return `
     <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 14px;opacity:${enabled?'1':'.5'}" id="srv-card-${esc(s.id)}">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -3347,8 +3534,20 @@ async function loadServers() {
         </span>
         <span id="srv-test-${esc(s.id)}"></span>
       </div>
+      <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:.75rem;color:var(--muted)">
+          <input type="checkbox" ${liveCache ? 'checked' : ''}
+            onchange="toggleServerLiveCache('${esc(s.id)}',this.checked)"
+            style="accent-color:var(--accent)">
+          📡 ${t('cfg.server_live_cache')}
+        </label>
+      </div>
     </div>`;
   }).join('');
+}
+
+async function toggleServerLiveCache(serverId, enabled) {
+  await apiPost('save_server', {server_id: serverId, live_cache: enabled});
 }
 
 let _editServerId = '';
@@ -3449,6 +3648,124 @@ async function deleteServer(serverId, name) {
   loadServers();
 }
 
+// ── Live TV ───────────────────────────────────────────────────
+<?php if ($can_settings): ?>
+let _hls = null;
+let _liveChannels = [];
+let _liveActiveCat = null;
+let _liveActiveSrv = null;
+
+async function loadLiveCats() {
+  const catsEl = document.getElementById('live-cats');
+  if (!catsEl) return;
+  catsEl.innerHTML = `<div style="padding:12px 16px;font-family:'DM Mono',monospace;font-size:.7rem;color:var(--muted)">${t('status.loading')}</div>`;
+  const groups = await api('get_live_cats');
+  if (!Array.isArray(groups) || !groups.length) {
+    catsEl.innerHTML = `<div style="padding:12px 16px;font-size:.8rem;color:var(--muted)">${t('live.no_cache')}</div>`;
+    return;
+  }
+  const multi = groups.length > 1;
+  catsEl.innerHTML = groups.map(g => {
+    const header = multi
+      ? `<div style="padding:8px 12px 3px;font-family:'DM Mono',monospace;font-size:.58rem;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase">${esc(g.server_name)}</div>`
+      : '';
+    const cats = (g.categories ?? []).map(c =>
+      `<div class="live-cat-item" id="lcat-${esc(g.server_id)}-${esc(c.category_id)}"
+        onclick="selectLiveCat('${esc(c.category_id)}','${esc(g.server_id)}',this)">
+        ${esc(c.category_name)}
+      </div>`
+    ).join('');
+    return header + cats;
+  }).join('');
+}
+
+async function selectLiveCat(catId, srvId, el) {
+  if (_liveActiveCat === catId && _liveActiveSrv === srvId) return;
+  document.querySelectorAll('.live-cat-item').forEach(i => i.classList.remove('active'));
+  el?.classList.add('active');
+  _liveActiveCat = catId;
+  _liveActiveSrv = srvId;
+  // Sender-Bereich temporär mit Ladeindikator ersetzen
+  const existing = document.querySelectorAll('.live-ch-item, .live-ch-loading');
+  existing.forEach(e => e.remove());
+  const loading = document.createElement('div');
+  loading.className = 'live-ch-loading';
+  loading.style.cssText = 'padding:10px 12px;font-family:"DM Mono",monospace;font-size:.7rem;color:var(--muted)';
+  loading.textContent = '…';
+  document.getElementById('live-cats').appendChild(loading);
+
+  const channels = await api('get_live_channels', {category_id: catId, server_id: srvId});
+  loading.remove();
+  _liveChannels = Array.isArray(channels) ? channels : [];
+  renderLiveChannels(_liveChannels);
+  // Suchfeld leeren
+  const s = document.getElementById('live-search');
+  if (s) s.value = '';
+}
+
+function renderLiveChannels(list) {
+  // Bestehende Sender-Items entfernen
+  document.querySelectorAll('.live-ch-item').forEach(e => e.remove());
+  if (!list.length) return;
+  // Aktives Kategorie-Item finden und Sender direkt danach einfügen
+  const activeCat = document.querySelector('.live-cat-item.active');
+  const insertAfter = activeCat ?? document.getElementById('live-cats').lastElementChild;
+  list.forEach(ch => {
+    const div = document.createElement('div');
+    div.className = 'live-ch-item';
+    div.id = 'lch-' + ch.stream_id;
+    div.innerHTML = `${ch.stream_icon
+      ? `<img src="${esc(ch.stream_icon)}" style="width:26px;height:17px;object-fit:contain;border-radius:2px;background:rgba(255,255,255,.05);flex-shrink:0" onerror="this.style.display='none'">`
+      : `<div style="width:26px;height:17px;background:rgba(255,255,255,.06);border-radius:2px;flex-shrink:0"></div>`}
+    <span style="font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ch.name)}</span>`;
+    div.onclick = () => playLiveChannel(ch);
+    insertAfter.insertAdjacentElement('afterend', div);
+  });
+}
+
+function filterLiveChannels(q) {
+  if (!_liveChannels.length) return;
+  const lq = q.toLowerCase();
+  const filtered = lq ? _liveChannels.filter(ch => ch.name.toLowerCase().includes(lq)) : _liveChannels;
+  renderLiveChannels(filtered);
+}
+
+async function playLiveChannel(ch) {
+  document.querySelectorAll('.live-ch-item').forEach(i => i.classList.remove('active'));
+  document.getElementById('lch-' + ch.stream_id)?.classList.add('active');
+
+  const placeholder = document.getElementById('live-placeholder');
+  const overlay     = document.getElementById('live-overlay');
+  const video       = document.getElementById('live-player');
+  const nameEl      = document.getElementById('live-now-name');
+  const catEl       = document.getElementById('live-now-cat');
+
+  if (placeholder) placeholder.style.display = 'none';
+  if (overlay)     overlay.style.display = '';
+  if (video)       video.style.display = '';
+  if (nameEl)      nameEl.textContent = ch.name;
+  if (catEl)       catEl.textContent  = ch.category;
+
+  stopLivePlayer();
+
+  if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+    _hls = new Hls({enableWorker: false});
+    _hls.loadSource(ch.stream_url);
+    _hls.attachMedia(video);
+    _hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = ch.stream_url;
+    video.play().catch(() => {});
+  }
+}
+
+function stopLivePlayer() {
+  if (_hls) { _hls.destroy(); _hls = null; }
+  const video = document.getElementById('live-player');
+  if (video) { video.pause(); video.src = ''; }
+}
+<?php endif; ?>
+
 async function loadAbout() {
   const verEl = document.getElementById('about-version');
   if (!verEl) return;
@@ -3547,6 +3864,10 @@ async function loadConfig() {
   if (aqMax) aqMax.value = c.autoqueue_max ?? 10;
   const aqPfx = document.getElementById('cfg-autoqueue-prefix');
   if (aqPfx) aqPfx.value = c.autoqueue_prefix ?? '';
+  const tsKey = document.getElementById('cfg-turnstile-site-key');
+  const tsSec = document.getElementById('cfg-turnstile-secret-key');
+  if (tsKey) tsKey.value = c.turnstile_site_key ?? '';
+  if (tsSec) tsSec.value = c.turnstile_secret_key ?? '';
   // Aktuelle IP anzeigen
   const yourIpEl = document.getElementById('your-ip');
   if (yourIpEl) api('get_my_ip').then(d => { if (d.ip) yourIpEl.textContent = d.ip; });
@@ -3626,6 +3947,8 @@ function collectConfig() {
     autoqueue_enabled:     document.getElementById('cfg-autoqueue-enabled')?.checked ?? false,
     autoqueue_max:         parseInt(document.getElementById('cfg-autoqueue-max')?.value ?? '10') || 10,
     autoqueue_prefix:      document.getElementById('cfg-autoqueue-prefix')?.value.trim() ?? '',
+    turnstile_site_key:    document.getElementById('cfg-turnstile-site-key')?.value.trim()   ?? '',
+    turnstile_secret_key:  document.getElementById('cfg-turnstile-secret-key')?.value.trim() ?? '',
   };
 }
 
@@ -4494,6 +4817,35 @@ async function loadDashboardData() {
       }
     }
   }
+  // Cron-Status laden
+  loadCronStatus();
+}
+
+async function loadCronStatus() {
+  const dlEl    = document.getElementById('cron-dl-status');
+  const cacheEl = document.getElementById('cron-cache-status');
+  if (!dlEl && !cacheEl) return;
+  const d = await api('get_cron_status');
+  if (!d) return;
+
+  const fmtCron = (entry, intervalMin) => {
+    if (!entry) return `<span style="color:var(--muted);font-size:.75rem">${t('dash.cron_never')}</span>`;
+    const last    = entry.last_run ?? '–';
+    const nextIn  = entry.next_in_secs ?? 0;
+    const overdue = entry.overdue;
+    const running = entry.status === 'running';
+    const statusCol = running ? 'var(--accent2)' : overdue ? 'var(--red)' : 'var(--green)';
+    const statusTxt = running ? t('status.downloading') : overdue ? '⚠ ' + t('dash.cron_overdue') : '✓ OK';
+    const nextTxt   = running ? t('dash.cron_running') : nextIn > 0
+      ? (nextIn < 60 ? t('dash.cron_in_secs', {s: nextIn}) : t('dash.cron_in_mins', {m: Math.round(nextIn / 60)}))
+      : t('dash.cron_overdue');
+    return `<div style="color:${statusCol};font-size:.78rem;font-weight:500">${statusTxt}</div>
+      <div style="color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace;margin-top:2px">${esc(last)}</div>
+      <div style="color:var(--muted);font-size:.68rem;font-family:'DM Mono',monospace">${nextTxt}</div>`;
+  };
+
+  if (dlEl)    dlEl.innerHTML    = fmtCron(d.cron,  30);
+  if (cacheEl) cacheEl.innerHTML = fmtCron(d.cache, 1440);
 }
 
 // ── Dashboard Schnellzugriff ──────────────────────────────────
@@ -5125,10 +5477,11 @@ async function loadUserDashboard() {
         const cat    = esc(item.category ?? '');
         // queueData für TMDB-Modal
         const qd = !isSeries ? JSON.stringify({
-          stream_id: sid, type: 'movie', clean_title: item.clean_title ?? item.title ?? '',
+          stream_id: item.stream_id, type: 'movie', clean_title: item.clean_title ?? item.title ?? '',
           cover: item.stream_icon ?? item.cover ?? '',
           category: item.category ?? '', container_extension: ext,
           _server_id: srvId,
+          ...(item.stream_url ? {stream_url: item.stream_url} : {}),
         }).replace(/"/g, '&quot;') : 'null';
         const onClick = isSeries
           ? `openSeriesModal('${sid}','${jsesc(title)}','${jsesc(cover)}','${jsesc(cat)}','${jsesc(srvId)}')`

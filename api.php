@@ -162,13 +162,11 @@ function xtream_for_server(array $server, string $action, array $extra = []): ar
  * Deaktivierte Server (enabled === false) werden ausgeschlossen.
  * Fällt auf config.json zurück wenn servers.json leer ist.
  */
-function load_all_servers(): array {
+function load_all_servers(bool $includM3u = true): array {
     $servers = file_exists(SERVERS_FILE)
         ? (json_decode(file_get_contents(SERVERS_FILE), true) ?? [])
         : [];
-    // Nur aktivierte Server zurückgeben (enabled fehlt → gilt als aktiv)
     $servers = array_values(array_filter($servers, fn($s) => ($s['enabled'] ?? true) !== false));
-    // Fallback: aktiver Server aus config.json wenn servers.json leer
     if (empty($servers) && SERVER_IP !== '' && USERNAME !== '') {
         $servers = [[
             'id'        => SERVER_ID,
@@ -179,6 +177,19 @@ function load_all_servers(): array {
             'password'  => PASSWORD,
             'enabled'   => true,
         ]];
+    }
+    // M3U-Quellen als virtuelle Server anhängen
+    if ($includM3u) {
+        foreach (load_m3u_sources() as $src) {
+            if (($src['enabled'] ?? true) === false) continue;
+            $servers[] = [
+                'id'       => 'm3u_' . $src['id'],
+                'name'     => $src['name'] ?? $src['id'],
+                'enabled'  => true,
+                '_m3u'     => true,
+                '_m3u_id'  => $src['id'],
+            ];
+        }
     }
     return $servers;
 }
@@ -898,6 +909,8 @@ switch ($action) {
             'autoqueue_enabled'      => (bool)($c['autoqueue_enabled']  ?? false),
             'autoqueue_max'          => (int)($c['autoqueue_max']        ?? 10),
             'autoqueue_prefix'       => $c['autoqueue_prefix']           ?? '',
+            'turnstile_site_key'     => $c['turnstile_site_key']       ?? '',
+            'turnstile_secret_key'   => $c['turnstile_secret_key']     ?? '',
             'app_title'              => $c['app_title']               ?? 'Xtream Vault',
         ]);
         break;
@@ -998,6 +1011,8 @@ switch ($action) {
             'autoqueue_enabled'     => isset($d['autoqueue_enabled']) ? (bool)$d['autoqueue_enabled'] : (bool)($current['autoqueue_enabled'] ?? false),
             'autoqueue_max'         => max(1, min(100, (int)($d['autoqueue_max'] ?? $current['autoqueue_max'] ?? 10))),
             'autoqueue_prefix'      => trim($d['autoqueue_prefix'] ?? $current['autoqueue_prefix'] ?? ''),
+            'turnstile_site_key'    => trim($d['turnstile_site_key']   ?? $current['turnstile_site_key']   ?? ''),
+            'turnstile_secret_key'  => trim($d['turnstile_secret_key'] ?? $current['turnstile_secret_key'] ?? ''),
             'app_title'             => trim($d['app_title'] ?? $current['app_title'] ?? 'Xtream Vault') ?: 'Xtream Vault',
             // Alte Felder für Rückwärtskompatibilität beibehalten falls vorhanden
             'server_ip'             => $current['server_ip'] ?? '',
@@ -1075,6 +1090,86 @@ switch ($action) {
         echo json_encode(['ok' => true]);
         break;
 
+    case 'list_m3u_sources':
+        require_permission('settings');
+        echo json_encode(load_m3u_sources());
+        break;
+
+    case 'save_m3u_source': {
+        require_permission('settings');
+        $d    = $_JSON_BODY;
+        $name = trim($d['name'] ?? '');
+        $url  = trim($d['url']  ?? '');
+        $sid  = trim($d['source_id'] ?? '');
+        if ($name === '') { echo json_encode(['error' => 'Name ist ein Pflichtfeld']); break; }
+        if ($url === '' && empty($_FILES['file'])) { echo json_encode(['error' => 'URL oder Datei erforderlich']); break; }
+        $sources = load_m3u_sources();
+        // Neue ID berechnen wenn keine vorhanden
+        if ($sid === '') $sid = substr(md5($name . $url . time()), 0, 8);
+        $found = false;
+        foreach ($sources as &$s) {
+            if ($s['id'] === $sid) {
+                $s['name']    = $name;
+                $s['url']     = $url;
+                $s['enabled'] = $d['enabled'] ?? true;
+                $found = true; break;
+            }
+        }
+        unset($s);
+        if (!$found) $sources[] = ['id' => $sid, 'name' => $name, 'url' => $url, 'enabled' => true, 'type' => 'movie'];
+        file_put_contents(M3U_SOURCES_FILE, json_encode($sources, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true, 'source_id' => $sid]);
+        break;
+    }
+
+    case 'delete_m3u_source': {
+        require_permission('settings');
+        $sid = trim($_JSON_BODY['source_id'] ?? '');
+        if ($sid === '') { echo json_encode(['error' => 'source_id fehlt']); break; }
+        $sources = array_values(array_filter(load_m3u_sources(), fn($s) => $s['id'] !== $sid));
+        file_put_contents(M3U_SOURCES_FILE, json_encode($sources, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        // Cache löschen
+        @unlink(DATA_DIR . '/library_cache_m3u_' . $sid . '.json');
+        echo json_encode(['ok' => true]);
+        break;
+    }
+
+    case 'upload_m3u': {
+        require_permission('settings');
+        // Multipart-Upload — RAW Body ist die M3U-Datei
+        $content = $_RAW_BODY;
+        $name    = trim($_GET['name'] ?? 'M3U Upload');
+        if (empty($content)) { echo json_encode(['error' => 'Leere Datei']); break; }
+        $sid     = substr(md5($name . time()), 0, 8);
+        // M3U lokal speichern
+        $path = DATA_DIR . '/m3u_' . $sid . '.m3u';
+        file_put_contents($path, $content);
+        $sources   = load_m3u_sources();
+        $sources[] = ['id' => $sid, 'name' => $name, 'url' => '', 'file' => $path, 'enabled' => true, 'type' => 'movie'];
+        file_put_contents(M3U_SOURCES_FILE, json_encode($sources, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        // Cache sofort aufbauen
+        $entries = parse_m3u($content);
+        $cache   = [];
+        foreach ($entries as $i => $e) {
+            $streamId = 'm3u_' . $sid . '_' . $i;
+            $cache[$streamId] = [
+                'id'          => $streamId,
+                'title'       => display_title($e['name']),
+                'cover'       => $e['logo']  ?? '',
+                'category'    => $e['group'] ?? 'Uncategorized',
+                'category_id' => md5($e['group'] ?? 'Uncategorized'),
+                'ext'         => pathinfo(parse_url($e['url'], PHP_URL_PATH) ?? '', PATHINFO_EXTENSION) ?: 'mp4',
+                'type'        => 'movie',
+                'stream_url'  => $e['url'],
+                '_server_id'  => 'm3u_' . $sid,
+                '_m3u'        => true,
+            ];
+        }
+        file_put_contents(DATA_DIR . '/library_cache_m3u_' . $sid . '.json', json_encode($cache, JSON_UNESCAPED_UNICODE));
+        echo json_encode(['ok' => true, 'source_id' => $sid, 'entries' => count($entries)]);
+        break;
+    }
+
     case 'list_servers':
         require_permission('settings');
         $servers = file_exists(SERVERS_FILE)
@@ -1092,13 +1187,16 @@ switch ($action) {
     case 'save_server':
         require_permission('settings');
         $d    = json_decode($_RAW_BODY, true) ?? [];
+        $sid  = trim($d['server_id'] ?? '');
         $name = trim($d['name'] ?? '');
-        if ($name === '') {
+
+        // Partielles Update (z.B. nur live_cache) — kein Name nötig
+        $partialUpdate = isset($d['live_cache']) && !isset($d['server_ip']) && $name === '';
+
+        if (!$partialUpdate && $name === '') {
             echo json_encode(['error' => 'Name ist ein Pflichtfeld']); break;
         }
-        // Server-ID: aus gesendeter ID oder automatisch aus IP+Port+Username berechnen
-        $sid = trim($d['server_id'] ?? '');
-        if ($sid === '') {
+        if ($sid === '' && !$partialUpdate) {
             $ip   = trim($d['server_ip'] ?? '');
             $port = trim($d['port']      ?? '80');
             $user = trim($d['username']  ?? '');
@@ -1114,11 +1212,12 @@ switch ($action) {
         $found = false;
         foreach ($servers as &$s) {
             if ($s['id'] === $sid) {
-                $s['name']       = $name;
-                $s['server_ip']  = $d['server_ip'] ?? $s['server_ip'];
-                $s['port']       = $d['port']       ?? $s['port'];
-                $s['username']   = $d['username']   ?? $s['username'];
-                if (!empty($d['password'])) $s['password'] = $d['password'];
+                if ($name !== '') $s['name'] = $name;
+                if (isset($d['server_ip']))  $s['server_ip']  = $d['server_ip'];
+                if (isset($d['port']))       $s['port']       = $d['port'];
+                if (isset($d['username']))   $s['username']   = $d['username'];
+                if (!empty($d['password']))  $s['password']   = $d['password'];
+                if (isset($d['live_cache'])) $s['live_cache'] = (bool)$d['live_cache'];
                 $found = true; break;
             }
         }
@@ -1202,6 +1301,25 @@ switch ($action) {
 
     // ── VPN ───────────────────────────────────────────────────────────────────
     // ── Updates ───────────────────────────────────────────────────────────────
+    case 'get_cron_status': {
+        require_permission('settings');
+        $file = DATA_DIR . '/cron_status.json';
+        $data = file_exists($file) ? (json_decode(file_get_contents($file), true) ?? []) : [];
+        // Nächste geplante Runs berechnen (basierend auf typischen Cronjob-Intervallen)
+        $now = time();
+        foreach (['cron' => 30, 'cache' => 1440] as $type => $intervalMin) {
+            if (isset($data[$type]['timestamp'])) {
+                $last = (int)$data[$type]['timestamp'];
+                $next = $last + ($intervalMin * 60);
+                $data[$type]['next_run']       = date('Y-m-d H:i:s', $next);
+                $data[$type]['next_in_secs']   = max(0, $next - $now);
+                $data[$type]['overdue']        = $now > $next + ($intervalMin * 60 * 0.5); // 50% überfällig
+            }
+        }
+        echo json_encode($data);
+        break;
+    }
+
     case 'get_version_info': {
         $versionFile = __DIR__ . '/version.json';
         $local = file_exists($versionFile)
@@ -1501,6 +1619,69 @@ switch ($action) {
         break;
 
     // ── Categories ────────────────────────────────────────────────────────────
+    case 'get_live_cats': {
+        require_permission('settings');
+        $servers = load_all_servers();
+        $result  = [];
+        foreach ($servers as $srv) {
+            $srvId     = $srv['id'];
+            $srvName   = $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']);
+            if (($srv['live_cache'] ?? false) !== true) continue; // Live-Cache deaktiviert
+            $cacheFile = DATA_DIR . '/live_cache_' . $srvId . '.json';
+            if (!file_exists($cacheFile)) continue;
+            $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
+            $seen  = []; $cats = [];
+            foreach ($cache as $item) {
+                $catId = $item['category_id'] ?? '';
+                $catNm = $item['category']    ?? '';
+                if ($catId === '' || $catNm === '' || isset($seen[$catId])) continue;
+                $seen[$catId] = true;
+                $cats[] = ['category_id' => $catId, 'category_name' => $catNm];
+            }
+            usort($cats, fn($a, $b) => strcmp($a['category_name'], $b['category_name']));
+            if (!empty($cats)) $result[] = ['server_id' => $srvId, 'server_name' => $srvName, 'categories' => $cats];
+        }
+        echo json_encode($result);
+        break;
+    }
+
+    case 'get_live_channels': {
+        require_permission('settings');
+        $catId = $_GET['category_id'] ?? '';
+        $srvId = $_GET['server_id']   ?? '';
+        $servers = load_all_servers();
+        $srv = null;
+        foreach ($servers as $s) { if ($s['id'] === $srvId) { $srv = $s; break; } }
+        if (!$srv) $srv = $servers[0] ?? null;
+        if (!$srv || ($srv['live_cache'] ?? false) !== true) { echo json_encode([]); break; }
+        $resolvedSrvId = $srv['id'] ?? $srvId;
+        $cacheFile = DATA_DIR . '/live_cache_' . $resolvedSrvId . '.json';
+        if (!file_exists($cacheFile)) { echo json_encode([]); break; }
+        $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
+        $list  = [];
+        foreach ($cache as $ch) {
+            if ($catId !== '' && ($ch['category_id'] ?? '') !== $catId) continue;
+            $streamUrl = 'http://' . $srv['server_ip'] . ':' . $srv['port']
+                . '/live/' . $srv['username'] . '/' . ($srv['password'] ?? '')
+                . '/' . ($ch['stream_id'] ?? '') . '.m3u8';
+            // HTTP-Streams über Proxy leiten um Mixed-Content zu vermeiden
+            $proxyUrl = str_starts_with($streamUrl, 'http://')
+                ? 'stream.php?url=' . urlencode($streamUrl)
+                : $streamUrl;
+            $list[] = [
+                'stream_id'   => $ch['stream_id']   ?? '',
+                'name'        => $ch['name']         ?? '',
+                'stream_icon' => $ch['stream_icon']  ?? '',
+                'category'    => $ch['category']     ?? '',
+                'category_id' => $ch['category_id']  ?? '',
+                'stream_url'  => $proxyUrl,
+                '_server_id'  => $resolvedSrvId,
+            ];
+        }
+        echo json_encode($list);
+        break;
+    }
+
     case 'get_all_movie_categories':
     case 'get_all_series_categories': {
         $isMovies   = ($action === 'get_all_movie_categories');
@@ -1510,10 +1691,15 @@ switch ($action) {
         foreach ($servers as $srv) {
             $srvId   = $srv['id'];
             $srvName = $srv['name'] ?? ($srv['server_ip'] . ':' . $srv['port']);
-            // Cache nutzen wenn vorhanden (schnell, kein Server-Request)
-            $cacheFile = $isMovies
+            $isM3u   = !empty($srv['_m3u']);
+            // M3U-Quellen haben nur Film-Cache, keine Serien
+            if ($isM3u && !$isMovies) continue;
+            // Cache-Pfad: M3U nutzt library_cache_m3u_{id}.json
+            $cacheFile = $isM3u
                 ? DATA_DIR . '/library_cache_' . $srvId . '.json'
-                : DATA_DIR . '/series_cache_'  . $srvId . '.json';
+                : ($isMovies
+                    ? DATA_DIR . '/library_cache_' . $srvId . '.json'
+                    : DATA_DIR . '/series_cache_'  . $srvId . '.json');
             if (file_exists($cacheFile)) {
                 $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
                 $seen  = [];
@@ -1532,8 +1718,9 @@ switch ($action) {
                     $result[] = ['server_id' => $srvId, 'server_name' => $srvName, 'categories' => $cats];
                     continue;
                 }
-                // Kein category_id im Cache (z.B. Serien-Cache) → Fallback auf Server
             }
+            // M3U-Server haben keinen Live-API-Fallback
+            if ($isM3u) continue;
             // Fallback: direkt vom Server
             $cats = xtream_for_server($srv, $catAction);
             if (!is_array($cats)) continue;
@@ -1564,20 +1751,20 @@ switch ($action) {
         $isBlacklisted = fn($cat) => !empty($blacklist) && in_array(mb_strtolower(trim((string)($cat ?? ''))), $blacklist);
 
         // Cache nutzen wenn vorhanden
+        $isM3u     = !empty($srv['_m3u']);
         $cacheFile = DATA_DIR . '/library_cache_' . $resolvedSrvId . '.json';
         $useCache  = file_exists($cacheFile);
 
         if ($useCache) {
             $cache = json_decode(file_get_contents($cacheFile), true) ?? [];
-            // Cache muss category_id enthalten — sonst Fallback auf Server
             $cacheHasCatId = !empty($cache) && isset(reset($cache)['category_id']);
-            if ($cacheHasCatId) {
+            if ($cacheHasCatId || $isM3u) {
                 $movies = [];
                 foreach ($cache as $sid => $m) {
                     if ($catId !== '' && ($m['category_id'] ?? '') !== (string)$catId) continue;
                     if ($isBlacklisted($m['category'] ?? '')) continue;
-                    $sidStr = (string)($m['stream_id'] ?? $sid);
-                    $movies[] = [
+                    $sidStr = (string)($m['stream_id'] ?? $m['id'] ?? $sid);
+                    $entry = [
                         'stream_id'           => $sidStr,
                         'clean_title'         => $m['title'] ?? $m['clean_title'] ?? '',
                         'name'                => $m['title'] ?? $m['clean_title'] ?? '',
@@ -1592,12 +1779,17 @@ switch ($action) {
                         'queued'              => in_array($sidStr, $qids),
                         '_server_id'          => $resolvedSrvId,
                     ];
+                    // M3U: stream_url direkt aus Cache
+                    if (!empty($m['stream_url'])) $entry['stream_url'] = $m['stream_url'];
+                    $movies[] = $entry;
                 }
                 echo json_encode($movies);
                 break;
             }
-            // Cache hat kein category_id → Fallback auf Server
         }
+
+        // M3U-Server haben keinen Live-API-Fallback
+        if ($isM3u) { echo json_encode([]); break; }
 
         // Fallback: direkt vom Server laden
         $movies = $srv ? xtream_for_server($srv, 'get_vod_streams', ['category_id' => $catId]) : [];
@@ -1955,9 +2147,12 @@ switch ($action) {
             if ($s['id'] === $qServerSid) { $qSrv = $s; break; }
         }
         if (!$qSrv) $qSrv = $allServers[0] ?? null;
-        $server_stream_url = $qSrv
-            ? stream_url_for_server($qSrv, $type === 'episode' ? 'series' : 'movie', $sid, $ext)
-            : '';
+        // M3U: stream_url aus dem Request übernehmen, sonst von Server berechnen
+        $server_stream_url = !empty($d['stream_url'])
+            ? $d['stream_url']
+            : ($qSrv && empty($qSrv['_m3u'])
+                ? stream_url_for_server($qSrv, $type === 'episode' ? 'series' : 'movie', $sid, $ext)
+                : '');
 
         // ── Dubletten-Erkennung (nur Movies, nur wenn nicht force_add) ─────────
         if ($type === 'movie' && empty($_JSON_BODY['force_add'])) {
